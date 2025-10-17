@@ -717,45 +717,59 @@ async function handleExecucaoSubmit(event) {
     };
 
     try {
-        // 1. Atualizar a solicitação principal
+        // 1. Atualizar a solicitação principal (SEM os anexos ainda)
         await supabaseRequest(`solicitacoes_baixa?id=eq.${solicitacaoId}`, 'PATCH', updateData);
+        showNotification('Dados da execução salvos. Iniciando upload de anexos...', 'info');
 
-        // 2. Lidar com Upload de Anexos (se houver)
+        // --- INÍCIO DA NOVA LÓGICA DE UPLOAD ---
+        // 2. Lidar com Upload de Anexos via API Vercel (se houver)
+        let anexoUrls = [];
         if (anexoFiles.length > 0) {
-            showNotification('Atualizando solicitação... Iniciando upload de anexos...', 'info');
-             // *** LÓGICA DE UPLOAD REAL (Exemplo com Supabase Storage) ***
-             // Você precisará configurar o Supabase Storage e adaptar este trecho.
-            /*
+            alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Enviando anexos...</div>';
             for (const file of anexoFiles) {
-                const filePath = `anexos_baixa/${solicitacaoId}/${Date.now()}_${file.name}`;
-                const { data: uploadData, error: uploadError } = await supabase.storage
-                    .from('seu-bucket-name') // Nome do seu bucket
-                    .upload(filePath, file);
+                try {
+                    // Monta a URL da API com query params
+                    const apiUrl = `/api/upload?fileName=${encodeURIComponent(file.name)}&solicitacaoId=${solicitacaoId}&fileType=anexo`;
 
-                if (uploadError) {
-                    throw new Error(`Erro no upload do arquivo ${file.name}: ${uploadError.message}`);
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': file.type || 'application/octet-stream', // Envia o tipo MIME correto
+                        },
+                        body: file, // Envia o arquivo diretamente no corpo
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`Erro ${response.status} ao enviar ${file.name}: ${errorData.details || errorData.error}`);
+                    }
+
+                    const result = await response.json();
+                    if (result.publicUrl) {
+                        anexoUrls.push({
+                             solicitacao_id: parseInt(solicitacaoId), // Garante que é número
+                             url_arquivo: result.publicUrl,
+                             nome_arquivo: file.name,
+                             uploader_id: currentUser.id
+                        });
+                        showNotification(`Anexo ${file.name} enviado com sucesso!`, 'success', 2000);
+                    }
+                } catch (uploadError) {
+                    console.error(`Falha no upload do anexo ${file.name}:`, uploadError);
+                    showNotification(`Falha no upload do anexo ${file.name}: ${uploadError.message}`, 'error');
+                    // Decide se quer parar ou continuar com os outros arquivos
+                    // throw uploadError; // Descomente para parar em caso de erro
                 }
-
-                // Obter a URL pública (ou assinada)
-                const { data: urlData } = supabase.storage
-                    .from('seu-bucket-name')
-                    .getPublicUrl(filePath);
-
-                // Salvar referência no banco de dados
-                await supabaseRequest('anexos_baixa', 'POST', {
-                    solicitacao_id: solicitacaoId,
-                    url_arquivo: urlData.publicUrl,
-                    nome_arquivo: file.name,
-                    uploader_id: currentUser.id
-                });
             }
-            */
-            // Simulação de sucesso (REMOVA EM PRODUÇÃO)
-            console.log(`${anexoFiles.length} arquivos selecionados (simulação de upload)`);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Simula tempo de upload
-             showNotification('Anexos processados (simulação).', 'success');
 
+            // 3. Salvar as referências dos anexos no banco de dados (tabela anexos_baixa)
+            if (anexoUrls.length > 0) {
+                alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Salvando referências...</div>';
+                await supabaseRequest('anexos_baixa', 'POST', anexoUrls);
+                showNotification('Referências dos anexos salvas.', 'success');
+            }
         }
+        // --- FIM DA NOVA LÓGICA DE UPLOAD ---
 
         showNotification(`Baixa da solicitação #${solicitacaoId} executada com sucesso! Aguardando retirada.`, 'success');
         closeModal('executarModal');
@@ -764,8 +778,8 @@ async function handleExecucaoSubmit(event) {
     } catch (error) {
         console.error("Erro ao executar baixa:", error);
         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao executar: ${error.message}</div>`;
+        // Opcional: Reverter a atualização da solicitação principal em caso de erro no upload? (Mais complexo)
     }
-
 }
 
 // Abre modal de Retirada (Operação)
@@ -808,35 +822,46 @@ async function handleRetiradaSubmit(event) {
 
     try {
         let fotoUrl = '';
-        // *** LÓGICA DE UPLOAD REAL DA FOTO (Exemplo com Supabase Storage) ***
-        /*
-        const fotoPath = `fotos_retirada/${solicitacaoId}/${Date.now()}_${fotoFile.name}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('seu-bucket-name') // Nome do seu bucket
-            .upload(fotoPath, fotoFile);
+        alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Enviando foto...</div>';
 
-        if (uploadError) {
-            throw new Error(`Erro no upload da foto: ${uploadError.message}`);
+        // --- INÍCIO DA NOVA LÓGICA DE UPLOAD ---
+        try {
+            // Monta a URL da API com query params
+            const apiUrl = `/api/upload?fileName=${encodeURIComponent(fotoFile.name)}&solicitacaoId=${solicitacaoId}&fileType=foto_retirada`;
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': fotoFile.type || 'application/octet-stream',
+                },
+                body: fotoFile,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Erro ${response.status} ao enviar foto: ${errorData.details || errorData.error}`);
+            }
+
+            const result = await response.json();
+            if (result.publicUrl) {
+                fotoUrl = result.publicUrl;
+                showNotification('Foto enviada com sucesso!', 'success');
+            } else {
+                throw new Error('API de upload não retornou a URL da foto.');
+            }
+        } catch (uploadError) {
+             console.error('Falha no upload da foto:', uploadError);
+             throw uploadError; // Re-lança o erro para ser pego pelo catch principal
         }
-
-        const { data: urlData } = supabase.storage
-            .from('seu-bucket-name')
-            .getPublicUrl(fotoPath);
-        fotoUrl = urlData.publicUrl;
-        */
-        // Simulação de URL (REMOVA EM PRODUÇÃO)
-        fotoUrl = `https://example.com/simulacao/foto_${solicitacaoId}.jpg`;
-        console.log("Simulando upload da foto:", fotoFile.name);
-        await new Promise(resolve => setTimeout(resolve, 500)); // Simula tempo
-        showNotification('Foto processada (simulação).', 'info');
+        // --- FIM DA NOVA LÓGICA DE UPLOAD ---
 
 
-        // Atualizar a solicitação
+        // Atualizar a solicitação com a URL da foto e o status final
         const updateData = {
             status: 'finalizada', // Status final
             retirada_por_id: currentUser.id,
             data_retirada: new Date().toISOString(),
-            foto_retirada_url: fotoUrl
+            foto_retirada_url: fotoUrl // Salva a URL retornada pela API
         };
         await supabaseRequest(`solicitacoes_baixa?id=eq.${solicitacaoId}`, 'PATCH', updateData);
 
@@ -851,16 +876,7 @@ async function handleRetiradaSubmit(event) {
 }
 
 
-// --- Funções Utilitárias ---
 
-/**
- * Função genérica para fazer requisições através do proxy Vercel para o Supabase.
- * @param {string} endpoint Com parâmetros de query. Ex: 'produtos?codigo=eq.MP001&select=id,descricao'
- * @param {string} method 'GET', 'POST', 'PATCH', 'DELETE'
- * @param {object|null} data Corpo da requisição para POST/PATCH
- * @returns {Promise<any>} Dados da resposta ou null
- * @throws {Error} Em caso de falha na requisição
- */
 async function supabaseRequest(endpoint, method = 'GET', data = null) {
     // Separa o nome da tabela dos parâmetros de query existentes
     const [endpointBase, queryParams] = endpoint.split('?', 2);
@@ -883,8 +899,7 @@ async function supabaseRequest(endpoint, method = 'GET', data = null) {
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            // O header 'Prefer' será adicionado no proxy se necessário (como no upsert)
-            // Não precisa mais de apikey/Authorization aqui, pois o proxy cuidará disso
+           
         }
     };
 
