@@ -96,6 +96,10 @@
                  <a href="#historicoBaixas" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('historicoBaixasView', this)" data-role="gestor,prevencao,admin"> <i data-feather="archive" class="h-5 w-5 mr-3"></i>
                     <span>Histórico Geral</span>
                 </a>
+                <a href="#gerenciarUsuarios" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarUsuariosView', this)" data-role="admin">
+                    <i data-feather="users" class="h-5 w-5 mr-3"></i>
+                    <span>Gerenciar Usuários</span>
+                </a>
                  <div id="logoutLink" class="p-3 rounded-lg mt-auto flex items-center text-red-400 cursor-pointer hover:bg-gray-700" onclick="logout()">
                     <i data-feather="log-out" class="h-5 w-5 mr-3"></i>
                     <span>Sair</span>
@@ -232,6 +236,33 @@
                     </div>
                 </div>
 
+                <div id="gerenciarUsuariosView" class="view-content">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Gerenciar Usuários</h1>
+                        <button class="btn btn-success" onclick="abrirUsuarioModal(null)">
+                            <i data-feather="plus" class="h-4 w-4 inline-block -mt-1 mr-1"></i>
+                            Novo Usuário
+                        </button>
+                    </div>
+                    <div class="table-container bg-white rounded-lg shadow-md">
+                        <table class="w-full">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nome</th>
+                                    <th>Usuário (login)</th>
+                                    <th>Grupo (Role)</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usuariosTableBody">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+
+
             </div>
         </main>
     </div>
@@ -316,6 +347,59 @@
              </form>
         </div>
     </div>
+
+    <div id="usuarioModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3 class="text-xl font-semibold mb-4" id="usuarioModalTitle">Novo Usuário</h3>
+            <form id="usuarioForm">
+                <input type="hidden" id="usuarioId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label for="usuarioNome">Nome Completo:</label>
+                        <input type="text" id="usuarioNome" required class="w-full">
+                    </div>
+                    <div class="form-group">
+                        <label for="usuarioUsername">Usuário (login):</label>
+                        <input type="text" id="usuarioUsername" required class="w-full">
+                    </div>
+                </div>
+                <div class="form-group mb-4">
+                    <label for="usuarioSenha">Senha:</label>
+                    <input type="password" id="usuarioSenha" class="w-full">
+                    <small class="text-gray-500" id="usuarioSenhaHelp">Deixe em branco para não alterar a senha (ao editar).</small>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="form-group">
+                        <label for="usuarioRole">Grupo (Role):</label>
+                        <select id="usuarioRole" required class="w-full">
+                            <option value="" disabled>Selecione...</option>
+                            <option value="admin">Admin</option>
+                            <option value="gestor">Gestor</option>
+                            <option value="prevencao">Prevenção</option>
+                            <option value="operacao">Operação</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex items-center pt-6">
+                        <input type="checkbox" id="usuarioAtivo" class="h-5 w-5" checked>
+                        <label for="usuarioAtivo" class="ml-2 font-normal">Usuário Ativo</label>
+                    </div>
+                </div>
+                <div class="form-group mb-4">
+                    <label class="block mb-1">Filiais Associadas:</label>
+                    <div id="usuarioFiliaisCheckboxes" class="max-h-32 overflow-y-auto bg-gray-50 p-3 border rounded-md grid grid-cols-2 gap-2">
+                        <div class="loading text-sm">Carregando filiais...</div>
+                    </div>
+                </div>
+
+                <div id="usuarioAlert" class="mt-4"></div>
+                <div class="flex gap-4 mt-6">
+                    <button type="submit" class="btn btn-success flex-1">Salvar Usuário</button>
+                    <button type="button" class="btn btn-danger flex-1" onclick="closeModal('usuarioModal')">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 
     <div id="notificationContainer"></div>
 
