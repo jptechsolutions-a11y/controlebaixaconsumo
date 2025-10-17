@@ -843,42 +843,55 @@ async function supabaseRequest(endpoint, method = 'GET', data = null) {
 
         const response = await fetch(proxyUrl, options);
 
+        // --- START: CORRECTED ERROR HANDLING ---
         if (!response.ok) {
-            let errorData;
-            try {
-                // Tenta ler o erro como JSON (o proxy deve retornar JSON em caso de erro Supabase)
-                errorData = await response.json();
-                console.error('Proxy/Supabase Error (JSON):', errorData);
-                // Usa a mensagem de erro específica do Supabase se disponível
-                throw new Error(errorData.message || errorData.error || `Erro ${response.status}`);
-            } catch (e) {
-                // Se não for JSON, lê como texto
-                const errorText = await response.text();
-                console.error('Proxy/Supabase Error (Text):', response.status, errorText);
-                throw new Error(errorText || `Erro ${response.status} na comunicação com o servidor.`);
-            }
-        }
+            // Read the body ONLY ONCE as text
+            const errorText = await response.text();
+            console.error('[Frontend] Proxy/Supabase Error Response Text:', response.status, errorText);
 
-        // Processa a resposta bem-sucedida
+            let errorJson;
+            let errorMessage = errorText || `Erro ${response.status} na comunicação.`; // Default message
+
+            try {
+                // Try parsing the text as JSON
+                errorJson = JSON.parse(errorText);
+                // Use specific Supabase error message if available
+                errorMessage = errorJson.message || errorJson.error || errorMessage;
+            } catch (parseError) {
+                // If parsing fails, use the raw text as the error message
+                console.warn('[Frontend] Could not parse error response as JSON.');
+            }
+            // Throw a new error with the best available message
+            throw new Error(errorMessage);
+        }
+        // --- END: CORRECTED ERROR HANDLING ---
+
+        // Processa a resposta bem-sucedida (Only if response.ok is true)
         if (response.status === 204 || method === 'DELETE') {
              return null; // No Content ou DELETE
         }
 
         // Tenta retornar como JSON
         try {
+            // response.json() reads the body stream
             return await response.json();
         } catch (e) {
-             console.warn("Resposta não era JSON válido, retornando null.");
-             return null; // Retorna null se a resposta não for JSON (raro para GET/POST/PATCH bem-sucedidos)
+             console.warn("Resposta bem-sucedida não era JSON válido, retornando null.");
+             // Ler como texto como fallback se o parse JSON falhar em sucesso (improvável, mas seguro)
+             // Tentar ler de novo causaria 'already read', então retornamos null diretamente.
+             return null;
         }
 
     } catch (error) {
+        // Este bloco catch lida com erros lançados acima (como o bloco !response.ok)
+        // ou erros de rede do próprio fetch.
         console.error(`Falha na requisição via Proxy [${method} ${endpoint}]:`, error);
         // Exibe o erro na interface do usuário através da notificação
         showNotification(`Erro de comunicação: ${error.message}`, 'error');
-        throw error; // Re-lança o erro para interromper a execução se necessário
+        throw error; // Re-lança o erro para interromper a execução se necessário (e capturado por handleLogin)
     }
 }
+
 
 // Função de Notificação (reutilizada do sistema anterior)
 function showNotification(message, type = 'info', timeout = 4000) {
