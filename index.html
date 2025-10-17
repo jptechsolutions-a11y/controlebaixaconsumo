@@ -36,7 +36,7 @@
                     </div>
                     <div class="form-group" id="filialSelectGroup" style="display: none; margin-bottom: 30px;">
                         <label for="filialSelect" class="block mb-1 font-semibold text-sm text-gray-700">Selecione a Filial:</label>
-                        <select id="filialSelect" required style="width: 100%; padding: 14px; border: 1px solid #ccc; border-radius: 8px;"></select>
+                        <select id="filialSelect" style="width: 100%; padding: 14px; border: 1px solid #ccc; border-radius: 8px;"></select>
                     </div>
                     <button type="submit" class="btn btn-primary w-full" style="background: var(--primary-gradient); color: white; padding: 14px; border-radius: 8px; font-weight: 700; font-size: 1rem;">ENTRAR</button>
                 </form>
@@ -77,23 +77,23 @@
                 <p class="text-sm text-gray-300 mt-1">Filial: <span class="font-medium" id="sidebarFilial">N/A</span></p>
             </div>
             <nav class="p-4">
-                <a href="#novaSolicitacao" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('novaSolicitacao', this)" data-role="operacao">
+                <a href="#novaSolicitacao" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('novaSolicitacaoView', this)" data-role="operacao">
                     <i data-feather="plus-circle" class="h-5 w-5 mr-3"></i>
                     <span>Nova Solicitação</span>
                 </a>
-                 <a href="#minhasSolicitacoes" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('minhasSolicitacoes', this)" data-role="operacao">
+                 <a href="#minhasSolicitacoes" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('minhasSolicitacoesView', this)" data-role="operacao">
                     <i data-feather="list" class="h-5 w-5 mr-3"></i>
                     <span>Minhas Solicitações</span>
                 </a>
-                 <a href="#aprovarSolicitacoes" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('aprovarSolicitacoes', this)" data-role="gestor">
+                 <a href="#aprovarSolicitacoes" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('aprovarSolicitacoesView', this)" data-role="gestor">
                     <i data-feather="check-square" class="h-5 w-5 mr-3"></i>
                     <span>Aprovar Baixas</span>
                 </a>
-                 <a href="#executarSolicitacoes" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('executarSolicitacoes', this)" data-role="prevencao">
+                 <a href="#executarSolicitacoes" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('executarSolicitacoesView', this)" data-role="prevencao">
                     <i data-feather="tool" class="h-5 w-5 mr-3"></i>
                     <span>Executar Baixas</span>
                 </a>
-                 <a href="#historicoBaixas" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('historicoBaixas', this)" data-role="gestor,prevencao,admin"> <i data-feather="archive" class="h-5 w-5 mr-3"></i>
+                 <a href="#historicoBaixas" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('historicoBaixasView', this)" data-role="gestor,prevencao,admin"> <i data-feather="archive" class="h-5 w-5 mr-3"></i>
                     <span>Histórico Geral</span>
                 </a>
                  <div id="logoutLink" class="p-3 rounded-lg mt-auto flex items-center text-red-400 cursor-pointer hover:bg-gray-700" onclick="logout()">
@@ -320,10 +320,9 @@
     <div id="notificationContainer"></div>
 
     <script>
-        // Configuração Inicial (Ex: URL da API/Proxy)
-        // const API_PROXY_URL = '/api/proxy'; // Se estiver usando um proxy Vercel
-        const SUPABASE_URL = 'SEU_SUPABASE_URL'; // Substitua pelo URL do seu Supabase
-        const SUPABASE_ANON_KEY = 'SUA_SUPABASE_ANON_KEY'; // Substitua pela sua chave Anon
+        // Configuração Inicial - Use o Proxy
+        const SUPABASE_PROXY_URL = '/api/proxy'; // Aponta para a sua serverless function
+        // Não precisa mais das constantes SUPABASE_URL e SUPABASE_ANON_KEY aqui no frontend
     </script>
     <script src="script.js"></script>
     <script>
