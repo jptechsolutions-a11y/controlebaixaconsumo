@@ -555,10 +555,12 @@ async function abrirDetalhesModal(id) {
     content.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
     modal.style.display = 'flex';
 
+    
     try {
         const s = await supabaseRequest(
-            `solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),produtos(codigo,descricao),usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),usuarios!solicitacoes_baixa_aprovador_id_fkey(nome),usuarios!solicitacoes_baixa_executor_id_fkey(nome),usuarios!solicitacoes_baixa_retirada_por_id_fkey(nome),anexos_baixa(url_arquivo,nome_arquivo)`, 'GET'
+            `solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),produtos(codigo,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),usuarios_aprovador:usuarios!solicitacoes_baixa_aprovador_id_fkey(nome),usuarios_executor:usuarios!solicitacoes_baixa_executor_id_fkey(nome),usuarios_retirada:usuarios!solicitacoes_baixa_retirada_por_id_fkey(nome),anexos_baixa(url_arquivo,nome_arquivo)`, 'GET'
         );
+
 
         if (!s || s.length === 0) throw new Error('Solicitação não encontrada.');
         const sol = s[0];
