@@ -9,6 +9,7 @@
   "author": "JP Tech Solutions",
   "license": "ISC",
   "dependencies": {
-    "@supabase/supabase-js": "^2.43.5", 
-    "resend": "^3.4.0" 
+    "@supabase/supabase-js": "^2.43.5",
+    "resend": "^3.4.0"
+  }
 }
