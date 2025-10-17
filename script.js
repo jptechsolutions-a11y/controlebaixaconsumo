@@ -33,8 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('novaSolicitacaoForm')?.addEventListener('submit', handleNovaSolicitacaoSubmit);
     document.getElementById('executarForm')?.addEventListener('submit', handleExecucaoSubmit);
     document.getElementById('retiradaForm')?.addEventListener('submit', handleRetiradaSubmit);
-    // NOVO LISTENER
     document.getElementById('usuarioForm')?.addEventListener('submit', handleUsuarioFormSubmit);
+    // NOVO LISTENER
+    document.getElementById('filialForm')?.addEventListener('submit', handleFilialFormSubmit);
 
 });
 
@@ -148,7 +149,7 @@ function filterSidebarNav() {
         // CORREÇÃO: Garante que admin veja tudo corretamente
         if (roles.length === 0 || roles.includes(currentUser.role) || currentUser.role === 'admin') {
             item.style.display = 'flex';
-            if (!firstVisibleLink && item.getAttribute('href') !== '#gerenciarUsuarios') { // Não define admin como padrão
+            if (!firstVisibleLink && !item.dataset.role?.includes('admin')) { // Não define admin como padrão
                 firstVisibleLink = item; // Guarda o primeiro link visível
             }
         } else {
@@ -208,9 +209,12 @@ function showView(viewId, element = null) {
         case 'historicoBaixasView':
             loadHistoricoGeral();
             break;
-        // NOVO CASE
+        // NOVOS CASES
         case 'gerenciarUsuariosView':
             loadGerenciarUsuarios();
+            break;
+        case 'gerenciarFiliaisView':
+            loadGerenciarFiliais();
             break;
         // Adicione mais casos conforme necessário
     }
@@ -563,6 +567,11 @@ function closeModal(modalId) {
         if (modalId === 'usuarioModal') {
             document.getElementById('usuarioForm').reset();
             document.getElementById('usuarioId').value = '';
+        }
+         // Limpar form específico do modal de filial
+        if (modalId === 'filialModal') {
+            document.getElementById('filialForm').reset();
+            document.getElementById('filialId').value = '';
         }
     }
 }
@@ -991,8 +1000,20 @@ function showNotification(message, type = 'info', timeout = 4000) {
 
 
 // =======================================================
-// === NOVAS FUNÇÕES - GERENCIAMENTO DE USUÁRIOS (ADMIN) ===
+// === FUNÇÕES DE GERENCIAMENTO (ADMIN) ===
 // =======================================================
+
+/**
+ * Helper para buscar e cachear todas as filiais.
+ */
+async function getFiliaisCache() {
+    if (todasFiliaisCache.length === 0) {
+        todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc');
+    }
+    return todasFiliaisCache;
+}
+
+// --- Gerenciamento de Usuários ---
 
 /**
  * Carrega a lista de usuários e filiais para a view de admin.
@@ -1005,11 +1026,6 @@ async function loadGerenciarUsuarios() {
         // 1. Buscar todos os usuários
         const usuarios = await supabaseRequest('usuarios?select=id,nome,username,role,ativo&order=nome.asc');
         renderUsuariosTable(tbody, usuarios || []);
-
-        // 2. Preencher o cache de filiais (se vazio)
-        if (todasFiliaisCache.length === 0) {
-            todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc');
-        }
     } catch (error) {
         console.error("Erro ao carregar usuários:", error);
         tbody.innerHTML = `<tr><td colspan="6" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
@@ -1061,18 +1077,17 @@ async function abrirUsuarioModal(id = null) {
 
     // 1. Garantir que o cache de filiais está preenchido
     filiaisContainer.innerHTML = '<div class="loading text-sm">Carregando filiais...</div>';
+    let filiais = [];
     try {
-        if (todasFiliaisCache.length === 0) {
-            todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc');
-        }
+        filiais = await getFiliaisCache(); // Usa a função helper
     } catch (e) {
         alertContainer.innerHTML = `<div class="alert alert-error">Falha fatal ao carregar filiais: ${e.message}</div>`;
         return;
     }
     
     // 2. Popular checkboxes de filiais
-    if (todasFiliaisCache.length > 0) {
-         filiaisContainer.innerHTML = todasFiliaisCache.map(f => `
+    if (filiais.length > 0) {
+         filiaisContainer.innerHTML = filiais.map(f => `
             <label class="flex items-center space-x-2 text-sm">
                 <input type="checkbox" value="${f.id}" name="filiais">
                 <span>${f.nome} (${f.descricao})</span>
@@ -1214,5 +1229,148 @@ async function handleUsuarioFormSubmit(event) {
     } catch (error) {
         console.error("Erro ao salvar usuário:", error);
         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
+    }
+}
+
+
+// --- Gerenciamento de Filiais ---
+
+/**
+ * Carrega a lista de filiais para a view de admin.
+ */
+async function loadGerenciarFiliais() {
+    const tbody = document.getElementById('filiaisTableBody');
+    tbody.innerHTML = `<tr><td colspan="4" class="loading"><div class="spinner"></div>Carregando filiais...</td></tr>`;
+    try {
+        const filiais = await getFiliaisCache(); // Usa a função helper
+        renderFiliaisTable(tbody, filiais || []);
+    } catch (error) {
+        console.error("Erro ao carregar filiais:", error);
+        tbody.innerHTML = `<tr><td colspan="4" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
+    }
+}
+
+/**
+ * Renderiza a tabela de filiais na view de admin.
+ */
+function renderFiliaisTable(tbody, filiais) {
+    if (!filiais || filiais.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">Nenhuma filial encontrada.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = filiais.map(f => `
+        <tr class="text-sm">
+            <td>${f.id}</td>
+            <td>${f.nome}</td>
+            <td>${f.descricao}</td>
+            <td>
+                <button class="btn btn-primary btn-small" onclick="abrirFilialModal(${f.id})">Editar</button>
+                <button class="btn btn-danger btn-small ml-1" onclick="removerFilial(${f.id})">Remover</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+/**
+ * Abre o modal para criar (id=null) ou editar (id=valor) uma filial.
+ */
+async function abrirFilialModal(id = null) {
+    const modal = document.getElementById('filialModal');
+    const form = document.getElementById('filialForm');
+    const alertContainer = document.getElementById('filialAlert');
+    const title = document.getElementById('filialModalTitle');
+    alertContainer.innerHTML = '';
+    form.reset();
+    document.getElementById('filialId').value = id || '';
+
+    if (id) {
+        // --- MODO EDIÇÃO ---
+        title.textContent = `Editar Filial #${id}`;
+        try {
+            // Busca a filial específica no cache
+            const filiais = await getFiliaisCache();
+            const filial = filiais.find(f => f.id === id);
+            if (!filial) throw new Error("Filial não encontrada no cache.");
+
+            document.getElementById('filialNome').value = filial.nome;
+            document.getElementById('filialDescricao').value = filial.descricao;
+
+        } catch(error) {
+             alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
+             return;
+        }
+    } else {
+        // --- MODO CRIAÇÃO ---
+        title.textContent = 'Nova Filial';
+    }
+
+    modal.style.display = 'flex';
+}
+
+/**
+ * Trata a submissão do formulário de criação/edição de filial.
+ */
+async function handleFilialFormSubmit(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('filialAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
+
+    const id = document.getElementById('filialId').value;
+    const nome = document.getElementById('filialNome').value;
+    const descricao = document.getElementById('filialDescricao').value;
+    const isEdit = !!id;
+
+    if (!nome || !descricao) {
+         alertContainer.innerHTML = '<div class="alert alert-error">Nome e Descrição são obrigatórios.</div>';
+         return;
+    }
+
+    const filialData = { nome, descricao };
+
+    try {
+        if (isEdit) {
+            await supabaseRequest(`filiais?id=eq.${id}`, 'PATCH', filialData);
+        } else {
+            await supabaseRequest('filiais', 'POST', filialData);
+        }
+        
+        // Limpar o cache para forçar a atualização na próxima vez
+        todasFiliaisCache = []; 
+        
+        showNotification(`Filial ${isEdit ? 'atualizada' : 'criada'} com sucesso!`, 'success');
+        closeModal('filialModal');
+        loadGerenciarFiliais(); // Recarrega a tabela de filiais
+
+    } catch (error) {
+         console.error("Erro ao salvar filial:", error);
+         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
+    }
+}
+
+/**
+ * Remove uma filial após confirmação.
+ */
+async function removerFilial(id) {
+    if (!confirm(`Tem certeza que deseja remover a Filial #${id}? \n\nAVISO: Isso pode falhar se a filial estiver associada a usuários ou solicitações.`)) {
+        return;
+    }
+
+    try {
+        await supabaseRequest(`filiais?id=eq.${id}`, 'DELETE');
+        
+        // Limpar o cache para forçar a atualização na próxima vez
+        todasFiliaisCache = []; 
+        
+        showNotification(`Filial #${id} removida com sucesso!`, 'success');
+        loadGerenciarFiliais(); // Recarrega a tabela
+
+    } catch (error) {
+         console.error("Erro ao remover filial:", error);
+         // Erro comum é violação de chave estrangeira
+         if (error.message.includes('foreign key constraint')) {
+             showNotification(`Erro: Não é possível remover a filial #${id} pois ela está em uso (associada a usuários ou solicitações).`, 'error', 6000);
+         } else {
+             showNotification(`Erro ao remover filial: ${error.message}`, 'error');
+         }
     }
 }
