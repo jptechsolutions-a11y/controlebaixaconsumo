@@ -34,7 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('executarForm')?.addEventListener('submit', handleExecucaoSubmit);
     document.getElementById('retiradaForm')?.addEventListener('submit', handleRetiradaSubmit);
     document.getElementById('usuarioForm')?.addEventListener('submit', handleUsuarioFormSubmit);
-    // NOVO LISTENER
     document.getElementById('filialForm')?.addEventListener('submit', handleFilialFormSubmit);
 
 });
@@ -1020,15 +1019,16 @@ async function getFiliaisCache() {
  */
 async function loadGerenciarUsuarios() {
     const tbody = document.getElementById('usuariosTableBody');
-    tbody.innerHTML = `<tr><td colspan="6" class="loading"><div class="spinner"></div>Carregando usuários...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="loading"><div class="spinner"></div>Carregando usuários...</td></tr>`;
 
     try {
         // 1. Buscar todos os usuários
-        const usuarios = await supabaseRequest('usuarios?select=id,nome,username,role,ativo&order=nome.asc');
+        // ATUALIZADO: Buscar e-mail também
+        const usuarios = await supabaseRequest('usuarios?select=id,nome,username,email,role,ativo&order=nome.asc');
         renderUsuariosTable(tbody, usuarios || []);
     } catch (error) {
         console.error("Erro ao carregar usuários:", error);
-        tbody.innerHTML = `<tr><td colspan="6" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
     }
 }
 
@@ -1037,7 +1037,7 @@ async function loadGerenciarUsuarios() {
  */
 function renderUsuariosTable(tbody, usuarios) {
     if (!usuarios || usuarios.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500">Nenhum usuário encontrado.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">Nenhum usuário encontrado.</td></tr>`;
         return;
     }
 
@@ -1051,7 +1051,7 @@ function renderUsuariosTable(tbody, usuarios) {
                 <td>${u.id}</td>
                 <td>${u.nome}</td>
                 <td>${u.username}</td>
-                <td>${roleLabel}</td>
+                <td>${u.email || '-'}</td> <td>${roleLabel}</td>
                 <td><span class="font-semibold ${statusClass}">${statusText}</span></td>
                 <td>
                     <button class="btn btn-primary btn-small" onclick="abrirUsuarioModal(${u.id})">Editar</button>
@@ -1106,6 +1106,7 @@ async function abrirUsuarioModal(id = null) {
 
         try {
             // Buscar dados atuais do usuário E suas filiais associadas
+            // ATUALIZADO: Buscar e-mail também
             const userResponse = await supabaseRequest(`usuarios?id=eq.${id}&select=*,usuario_filiais(filial_id)`);
             if (!userResponse || userResponse.length === 0) throw new Error('Usuário não encontrado.');
             
@@ -1115,6 +1116,7 @@ async function abrirUsuarioModal(id = null) {
             // Preencher o formulário
             document.getElementById('usuarioNome').value = user.nome;
             document.getElementById('usuarioUsername').value = user.username;
+            document.getElementById('usuarioEmail').value = user.email || ''; // CAMPO DE E-MAIL
             document.getElementById('usuarioRole').value = user.role;
             document.getElementById('usuarioAtivo').checked = user.ativo;
             
@@ -1158,6 +1160,7 @@ async function handleUsuarioFormSubmit(event) {
     const id = document.getElementById('usuarioId').value;
     const nome = document.getElementById('usuarioNome').value;
     const username = document.getElementById('usuarioUsername').value;
+    const email = document.getElementById('usuarioEmail').value; // CAMPO DE E-MAIL
     const senha = document.getElementById('usuarioSenha').value;
     const role = document.getElementById('usuarioRole').value;
     const ativo = document.getElementById('usuarioAtivo').checked;
@@ -1168,8 +1171,8 @@ async function handleUsuarioFormSubmit(event) {
     const isEdit = !!id;
 
     // 2. Validação
-    if (!nome || !username || !role) {
-         alertContainer.innerHTML = '<div class="alert alert-error">Nome, Usuário e Grupo são obrigatórios.</div>';
+    if (!nome || !username || !role || !email) { // E-mail agora é obrigatório
+         alertContainer.innerHTML = '<div class="alert alert-error">Nome, Usuário, E-mail e Grupo são obrigatórios.</div>';
          return;
     }
     if (!isEdit && !senha) {
@@ -1185,6 +1188,7 @@ async function handleUsuarioFormSubmit(event) {
     const userData = {
         nome,
         username,
+        email, // CAMPO DE E-MAIL
         role,
         ativo
     };
