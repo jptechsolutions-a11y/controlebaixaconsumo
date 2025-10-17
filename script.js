@@ -56,7 +56,7 @@ async function handleLogin(event) {
 
         const user = userResponse[0];
 
-        // --- INÍCIO DA ALTERAÇÃO ---
+        // --- INÍCIO DA ALTERAÇÃO (Comparação de Senha) ---
         // Compara a senha digitada com o valor na coluna senha_hash do banco
         // ATENÇÃO: ISSO SÓ FUNCIONA COM SENHAS EM TEXTO PLANO NO BANCO (NÃO SEGURO!)
         if (password !== user.senha_hash) {
@@ -113,6 +113,7 @@ async function handleLogin(event) {
 
     } catch (error) {
         console.error("Erro no login:", error);
+        // AJUSTE: Mostrar error.message em vez do objeto error inteiro
         alertContainer.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
         document.getElementById('filialSelectGroup').style.display = 'none'; // Esconde filial em caso de erro
     }
@@ -141,7 +142,8 @@ function filterSidebarNav() {
 
     navItems.forEach(item => {
         const roles = item.dataset.role ? item.dataset.role.split(',') : [];
-        if (roles.length === 0 || roles.includes(currentUser.role) || roles.includes('admin')) { // Admin vê tudo
+        // CORREÇÃO: Garante que admin veja tudo corretamente
+        if (roles.length === 0 || roles.includes(currentUser.role) || currentUser.role === 'admin') {
             item.style.display = 'flex';
             if (!firstVisibleLink) {
                 firstVisibleLink = item; // Guarda o primeiro link visível
@@ -159,6 +161,7 @@ function filterSidebarNav() {
         showView('homeView'); // Fallback para home se nenhum link for permitido
     }
 }
+
 
 function showView(viewId, element = null) {
     // Esconde todas as views
@@ -459,16 +462,38 @@ function renderSolicitacoesTable(tbody, solicitacoes, context) {
     }).join('');
 }
 
+// AJUSTE APLICADO AQUI
 function getStatusLabel(status) {
     const labels = {
         'aguardando_aprovacao': 'Aguard. Aprovação',
         'aprovada': 'Aprovada',
         'negada': 'Negada',
-        'executando': 'Em Execução',
+        'executando': 'Em Execução', // Embora não deva aparecer aqui, mantemos por segurança
         'aguardando_retirada': 'Aguard. Retirada',
         'finalizada': 'Finalizada'
     };
-    return labels[status] || status.replace('_', ' ').toUpperCase();
+
+    // --- INÍCIO DA CORREÇÃO ---
+    // Verifica se status é uma string válida antes de tentar usar métodos de string
+    if (typeof status === 'string' && status) {
+        // Se o status existe no nosso mapa 'labels', retorna o label correspondente
+        if (labels[status]) {
+            return labels[status];
+        }
+        // Se não existe no mapa, tenta formatar (ex: 'meu_status_novo' -> 'MEU STATUS NOVO')
+        try {
+            return status.replace('_', ' ').toUpperCase();
+        } catch (e) {
+            // Em caso raro de erro na formatação, retorna o status original ou 'Desconhecido'
+             console.warn("Erro ao formatar status inesperado:", status, e);
+             return status || 'Desconhecido';
+        }
+    } else {
+        // Se status não for uma string válida (undefined, null, etc.), retorna 'Desconhecido'
+        console.warn("Status inválido recebido:", status); // Log para ajudar a identificar dados ruins
+        return 'Desconhecido';
+    }
+    // --- FIM DA CORREÇÃO ---
 }
 
 
@@ -811,6 +836,10 @@ async function supabaseRequest(endpoint, method = 'GET', data = null) {
     const [endpointBase, queryParams] = endpoint.split('?', 2);
 
     // Constrói a URL para o proxy, passando o endpoint Supabase como parâmetro 'endpoint'
+    // Garantir que a constante SUPABASE_PROXY_URL esteja definida (geralmente no HTML ou no topo do JS)
+    if (typeof SUPABASE_PROXY_URL === 'undefined') {
+        throw new Error("SUPABASE_PROXY_URL não está definida.");
+    }
     let proxyUrl = `${SUPABASE_PROXY_URL}?endpoint=${endpointBase}`;
 
     // Adiciona os outros parâmetros de query (select, order, filtros eq, etc.)
@@ -884,7 +913,13 @@ async function supabaseRequest(endpoint, method = 'GET', data = null) {
         // ou erros de rede do próprio fetch.
         console.error(`Falha na requisição via Proxy [${method} ${endpoint}]:`, error);
         // Exibe o erro na interface do usuário através da notificação
-        showNotification(`Erro de comunicação: ${error.message}`, 'error');
+        // Verifica se a função showNotification existe antes de chamá-la
+        if (typeof showNotification === 'function') {
+            showNotification(`Erro de comunicação: ${error.message}`, 'error');
+        } else {
+            // Fallback caso showNotification não esteja definida ainda
+            alert(`Erro de comunicação: ${error.message}`);
+        }
         throw error; // Re-lança o erro para interromper a execução se necessário (e capturado por handleLogin)
     }
 }
