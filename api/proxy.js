@@ -1,8 +1,8 @@
-// /api/proxy.js  (Coloque este arquivo dentro de uma pasta 'api' no seu projeto Vercel)
+// /api/proxy.js
 
-// Substitua os placeholders abaixo pelas suas credenciais reais
-const SUPABASE_URL = "https://xegbsqcaikionewbdnst.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhlZ2JzcWNhaWtpb25ld2JkbnN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg4OTc5ODEsImV4cCI6MjA3NDQ3Mzk4MX0.infICWCbhpqCugTqz8UxS19N4Hc2CuDJl3YO6skrDE0";
+// As credenciais são lidas das Variáveis de Ambiente do Vercel
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 export default async (req, res) => {
     // Extrai o 'endpoint' e 'upsert' dos query parameters da URL da requisição Vercel
@@ -13,8 +13,8 @@ export default async (req, res) => {
     }
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-        // Esta verificação é mais útil se você estivesse usando variáveis de ambiente
-        return res.status(500).json({ error: 'Configuração do Supabase ausente.' });
+        // Esta verificação agora checa se as variáveis de ambiente foram configuradas
+        return res.status(500).json({ error: 'Configuração do Supabase ausente nas variáveis de ambiente.' });
     }
 
     // Monta a URL base do Supabase
