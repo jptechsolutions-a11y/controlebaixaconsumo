@@ -4,13 +4,23 @@ import { createClient } from '@supabase/supabase-js';
 // Pega as credenciais das Variáveis de Ambiente
 const supabaseUrl = process.env.SUPABASE_URL;
 // IMPORTANTE: Usar a Service Role Key aqui para ter permissão de upload no backend
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY; // <<<==== PONTO CRÍTICO
+
+// ===========================================
+// ADICIONAR LOG DE VERIFICAÇÃO AQUI
+console.log('[Upload API] Verificando Variáveis de Ambiente:');
+console.log('[Upload API] SUPABASE_URL:', supabaseUrl ? '*** Carregada ***' : '!!! NÃO CARREGADA !!!');
+console.log('[Upload API] SUPABASE_SERVICE_KEY:', supabaseServiceKey ? '*** Carregada ***' : '!!! NÃO CARREGADA !!!');
+// ===========================================
+
+// Esta linha só será executada se as variáveis acima forem lidas corretamente
+const supabase = createClient(supabaseUrl, supabaseServiceKey); // <<<==== O ERRO ACONTECE AQUI
 
 // Nome do seu bucket no Supabase Storage
 const BUCKET_NAME = 'arquivos-baixas'; // <-- VERIFIQUE SE ESTE É O NOME CORRETO DO SEU BUCKET
 
 export default async (req, res) => {
+    // ... (restante do código da função continua igual) ...
     // 1. Segurança: Apenas aceita requisições POST
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Método não permitido.' });
