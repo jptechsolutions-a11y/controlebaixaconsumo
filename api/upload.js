@@ -3,85 +3,83 @@ import { createClient } from '@supabase/supabase-js';
 
 // Pega as credenciais das Variáveis de Ambiente
 const supabaseUrl = process.env.SUPABASE_URL;
-// IMPORTANTE: Usar a Service Role Key aqui para ter permissão de upload no backend
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY; // <<<==== PONTO CRÍTICO
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// ===========================================
-// ADICIONAR LOG DE VERIFICAÇÃO AQUI
-console.log('[Upload API] Verificando Variáveis de Ambiente:');
-console.log('[Upload API] SUPABASE_URL:', supabaseUrl ? '*** Carregada ***' : '!!! NÃO CARREGADA !!!');
-console.log('[Upload API] SUPABASE_SERVICE_KEY:', supabaseServiceKey ? '*** Carregada ***' : '!!! NÃO CARREGADA !!!');
-// ===========================================
+const BUCKET_NAME = 'arquivos-baixas';
 
-// Esta linha só será executada se as variáveis acima forem lidas corretamente
-const supabase = createClient(supabaseUrl, supabaseServiceKey); // <<<==== O ERRO ACONTECE AQUI
-
-// Nome do seu bucket no Supabase Storage
-const BUCKET_NAME = 'arquivos-baixas'; // <-- VERIFIQUE SE ESTE É O NOME CORRETO DO SEU BUCKET
+// Função para ler o stream da requisição em um buffer
+async function streamToBuffer(readableStream) {
+    const chunks = [];
+    for await (const chunk of readableStream) {
+        chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+}
 
 export default async (req, res) => {
-    // ... (restante do código da função continua igual) ...
-    // 1. Segurança: Apenas aceita requisições POST
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Método não permitido.' });
     }
 
-    // 2. Extrai dados da query string (nome do arquivo e tipo de conteúdo)
-    // O frontend enviará o arquivo no corpo como raw binary/octet-stream
     const fileName = req.query.fileName || `arquivo_${Date.now()}`;
     const contentType = req.headers['content-type'] || 'application/octet-stream';
-    const solicitacaoId = req.query.solicitacaoId; // ID da solicitação para organizar
-    const fileType = req.query.fileType || 'anexo'; // 'anexo' ou 'foto_retirada'
+    const solicitacaoId = req.query.solicitacaoId;
+    const fileType = req.query.fileType || 'anexo';
 
     if (!solicitacaoId) {
          return res.status(400).json({ error: 'ID da solicitação não especificado.' });
     }
 
-    // Define o caminho no Storage (Ex: anexos_baixa/123/timestamp_nomearquivo.pdf)
     const folder = fileType === 'foto_retirada' ? 'fotos_retirada' : 'anexos_baixa';
     const filePath = `${folder}/${solicitacaoId}/${Date.now()}_${fileName}`;
 
     try {
-         console.log(`[Upload API] Recebendo arquivo: ${filePath}, Tipo: ${contentType}`);
+         console.log(`[Upload API v2] Recebendo arquivo: ${filePath}, Tipo: ${contentType}`);
 
-        // 3. Faz o upload para o Supabase Storage
-        // O corpo da requisição (req) é o stream do arquivo
+        // --- MUDANÇA PRINCIPAL: Ler stream para buffer ---
+        console.log('[Upload API v2] Lendo stream para buffer...');
+        const fileBuffer = await streamToBuffer(req);
+        console.log(`[Upload API v2] Buffer criado com tamanho: ${fileBuffer.length} bytes`);
+        // --- FIM DA MUDANÇA ---
+
+        // Faz o upload usando o buffer em vez do stream 'req'
         const { data, error: uploadError } = await supabase.storage
             .from(BUCKET_NAME)
-            .upload(filePath, req, {
+            .upload(filePath, fileBuffer, { // <<<=== ENVIA O BUFFER
                 contentType: contentType,
-                upsert: false // Não sobrescrever se já existir (improvável com timestamp)
+                upsert: false
             });
 
         if (uploadError) {
-            console.error('[Upload API] Erro no Supabase Storage Upload:', uploadError);
-            throw new Error(`Falha no upload para o Supabase: ${uploadError.message}`);
+            console.error('[Upload API v2] Erro no Supabase Storage Upload:', uploadError);
+            // Tenta fornecer mais detalhes do erro original, se disponível
+            const details = uploadError.originalError?.message || uploadError.message;
+            throw new Error(`Falha no upload para o Supabase: ${details}`);
         }
 
-        // 4. Obtém a URL pública do arquivo recém-criado
         const { data: urlData } = supabase.storage
             .from(BUCKET_NAME)
             .getPublicUrl(filePath);
 
         if (!urlData || !urlData.publicUrl) {
-             console.error('[Upload API] Erro ao obter URL pública para:', filePath);
+             console.error('[Upload API v2] Erro ao obter URL pública para:', filePath);
              throw new Error('Falha ao obter a URL pública do arquivo após upload.');
         }
 
-        console.log(`[Upload API] Upload concluído! URL: ${urlData.publicUrl}`);
+        console.log(`[Upload API v2] Upload concluído! URL: ${urlData.publicUrl}`);
 
-        // 5. Retorna a URL pública para o frontend
         return res.status(200).json({ publicUrl: urlData.publicUrl });
 
     } catch (error) {
-        console.error('[Upload API] Erro geral:', error);
+        console.error('[Upload API v2] Erro geral:', error);
         return res.status(500).json({ error: 'Falha interna no upload', details: error.message });
     }
 };
 
-// Configuração para Vercel entender que o corpo é raw/stream
+// Configuração para Vercel *NÃO* fazer parse do corpo (continua necessária)
 export const config = {
     api: {
-        bodyParser: false, // Desabilita o parse automático do corpo pela Vercel
+        bodyParser: false,
     },
 };
