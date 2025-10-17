@@ -96,11 +96,16 @@
                  <a href="#historicoBaixas" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('historicoBaixasView', this)" data-role="gestor,prevencao,admin"> <i data-feather="archive" class="h-5 w-5 mr-3"></i>
                     <span>Histórico Geral</span>
                 </a>
+                
                 <a href="#gerenciarUsuarios" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarUsuariosView', this)" data-role="admin">
                     <i data-feather="users" class="h-5 w-5 mr-3"></i>
                     <span>Gerenciar Usuários</span>
                 </a>
-                 <div id="logoutLink" class="p-3 rounded-lg mt-auto flex items-center text-red-400 cursor-pointer hover:bg-gray-700" onclick="logout()">
+                <a href="#gerenciarFiliais" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarFiliaisView', this)" data-role="admin">
+                    <i data-feather="briefcase" class="h-5 w-5 mr-3"></i>
+                    <span>Gerenciar Filiais</span>
+                </a>
+                <div id="logoutLink" class="p-3 rounded-lg mt-auto flex items-center text-red-400 cursor-pointer hover:bg-gray-700" onclick="logout()">
                     <i data-feather="log-out" class="h-5 w-5 mr-3"></i>
                     <span>Sair</span>
                 </div>
@@ -262,6 +267,30 @@
                     </div>
                 </div>
 
+                <div id="gerenciarFiliaisView" class="view-content">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Gerenciar Filiais</h1>
+                        <button class="btn btn-success" onclick="abrirFilialModal(null)">
+                            <i data-feather="plus" class="h-4 w-4 inline-block -mt-1 mr-1"></i>
+                            Nova Filial
+                        </button>
+                    </div>
+                    <div class="table-container bg-white rounded-lg shadow-md">
+                        <table class="w-full">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nome (Ex: 464)</th>
+                                    <th>Descrição (Ex: MT - Cuiabá)</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="filiaisTableBody">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+
 
             </div>
         </main>
@@ -400,13 +429,36 @@
         </div>
     </div>
 
+    <div id="filialModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3 class="text-xl font-semibold mb-4" id="filialModalTitle">Nova Filial</h3>
+            <form id="filialForm">
+                <input type="hidden" id="filialId">
+                <div class="form-group mb-4">
+                    <label for="filialNome">Nome (Ex: 464):</label>
+                    <input type="text" id="filialNome" required class="w-full">
+                </div>
+                <div class="form-group mb-4">
+                    <label for="filialDescricao">Descrição (Ex: MT - Cuiabá):</label>
+                    <input type="text" id="filialDescricao" required class="w-full">
+                </div>
+                
+                <div id="filialAlert" class="mt-4"></div>
+                <div class="flex gap-4 mt-6">
+                    <button type="submit" class="btn btn-success flex-1">Salvar Filial</button>
+                    <button type="button" class="btn btn-danger flex-1" onclick="closeModal('filialModal')">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 
     <div id="notificationContainer"></div>
 
     <script>
         // Configuração Inicial - Use o Proxy
         const SUPABASE_PROXY_URL = '/api/proxy'; // Aponta para a sua serverless function
-        // Não precisa mais das constantes SUPABASE_URL e SUPABASE_ANON_KEY aqui no frontend
+        // Credenciais removidas daqui e movidas para o Vercel
     </script>
     <script src="script.js"></script>
     <script>
