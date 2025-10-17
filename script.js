@@ -58,14 +58,12 @@ async function handleLogin(event) {
 
         const user = userResponse[0];
 
-        // *** SIMULAÇÃO DE VERIFICAÇÃO DE SENHA (INSEGURA) ***
-        // Em um app real, envie username/password para um endpoint de login no backend
-        // que compare o hash da senha enviada com o hash armazenado (user.senha_hash).
-        // Aqui, vamos apenas comparar a senha digitada com um valor fictício (NÃO FAÇA ISSO EM PRODUÇÃO!)
-        if (password !== "senha_ficticia_substituir") { // << SUBSTITUA PELA LÓGICA REAL NO BACKEND
+     // --- INÍCIO DA ALTERAÇÃO ---
+        // Compara a senha digitada com o valor na coluna senha_hash do banco
+        if (password !== user.senha_hash) {
              throw new Error('Senha incorreta.');
         }
-        // *** FIM DA SIMULAÇÃO INSEGURA ***
+        // --- FIM DA ALTERAÇÃO ---
 
 
         // 2. Buscar filiais associadas ao usuário
