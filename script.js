@@ -802,22 +802,33 @@ async function handleRetiradaSubmit(event) {
 // --- Funções Utilitárias ---
 
 /**
- * Função genérica para fazer requisições à API Supabase (ou ao seu proxy).
- * @param {string} endpoint Ex: 'produtos?codigo=eq.MP001&select=id,descricao'
+ * Função genérica para fazer requisições através do proxy Vercel para o Supabase.
+ * @param {string} endpoint Com parâmetros de query. Ex: 'produtos?codigo=eq.MP001&select=id,descricao'
  * @param {string} method 'GET', 'POST', 'PATCH', 'DELETE'
  * @param {object|null} data Corpo da requisição para POST/PATCH
  * @returns {Promise<any>} Dados da resposta ou null
  * @throws {Error} Em caso de falha na requisição
  */
 async function supabaseRequest(endpoint, method = 'GET', data = null) {
-    const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+    // Separa o nome da tabela dos parâmetros de query existentes
+    const [endpointBase, queryParams] = endpoint.split('?', 2);
+
+    // Constrói a URL para o proxy, passando o endpoint Supabase como parâmetro 'endpoint'
+    let proxyUrl = `${SUPABASE_PROXY_URL}?endpoint=${endpointBase}`;
+
+    // Adiciona os outros parâmetros de query (select, order, filtros eq, etc.)
+    if (queryParams) {
+        proxyUrl += `&${queryParams}`;
+    }
+
+    // Configurações da requisição para o NOSSO PROXY
     const options = {
         method,
         headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
             'Content-Type': 'application/json',
-            'Prefer': 'return=representation' // Pede para retornar os dados após POST/PATCH
+            'Accept': 'application/json',
+            // O header 'Prefer' será adicionado no proxy se necessário (como no upsert)
+            // Não precisa mais de apikey/Authorization aqui, pois o proxy cuidará disso
         }
     };
 
@@ -826,22 +837,48 @@ async function supabaseRequest(endpoint, method = 'GET', data = null) {
     }
 
     try {
-        const response = await fetch(url, options);
+        // Log para debug (opcional)
+        console.log(`[Frontend] Requesting via Proxy: ${method} ${proxyUrl}`);
+        if(options.body) console.log(`[Frontend] Body: ${options.body.substring(0,100)}...`);
+
+        const response = await fetch(proxyUrl, options);
+
         if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Supabase Error:', errorData);
-            throw new Error(errorData.message || `Erro ${response.status}`);
+            let errorData;
+            try {
+                // Tenta ler o erro como JSON (o proxy deve retornar JSON em caso de erro Supabase)
+                errorData = await response.json();
+                console.error('Proxy/Supabase Error (JSON):', errorData);
+                // Usa a mensagem de erro específica do Supabase se disponível
+                throw new Error(errorData.message || errorData.error || `Erro ${response.status}`);
+            } catch (e) {
+                // Se não for JSON, lê como texto
+                const errorText = await response.text();
+                console.error('Proxy/Supabase Error (Text):', response.status, errorText);
+                throw new Error(errorText || `Erro ${response.status} na comunicação com o servidor.`);
+            }
         }
-        if (response.status === 204 || method === 'DELETE') { // No Content ou DELETE bem-sucedido
-             return null;
+
+        // Processa a resposta bem-sucedida
+        if (response.status === 204 || method === 'DELETE') {
+             return null; // No Content ou DELETE
         }
-        return await response.json();
+
+        // Tenta retornar como JSON
+        try {
+            return await response.json();
+        } catch (e) {
+             console.warn("Resposta não era JSON válido, retornando null.");
+             return null; // Retorna null se a resposta não for JSON (raro para GET/POST/PATCH bem-sucedidos)
+        }
+
     } catch (error) {
-        console.error(`Falha na requisição Supabase [${method} ${endpoint}]:`, error);
-        throw error; // Re-lança o erro para ser tratado por quem chamou
+        console.error(`Falha na requisição via Proxy [${method} ${endpoint}]:`, error);
+        // Exibe o erro na interface do usuário através da notificação
+        showNotification(`Erro de comunicação: ${error.message}`, 'error');
+        throw error; // Re-lança o erro para interromper a execução se necessário
     }
 }
-
 
 // Função de Notificação (reutilizada do sistema anterior)
 function showNotification(message, type = 'info', timeout = 4000) {
