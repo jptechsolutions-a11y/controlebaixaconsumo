@@ -48,8 +48,6 @@ async function handleLogin(event) {
 
     try {
         // 1. Buscar usuário pelo username
-        // IMPORTANTE: A verificação de senha DEVE ocorrer no backend com hash seguro!
-        // Esta é uma SIMULAÇÃO insegura apenas para fins de demonstração do fluxo.
         const userResponse = await supabaseRequest(`usuarios?username=eq.${username}&select=id,nome,senha_hash,role,ativo`);
 
         if (!userResponse || userResponse.length === 0 || !userResponse[0].ativo) {
@@ -58,8 +56,9 @@ async function handleLogin(event) {
 
         const user = userResponse[0];
 
-     // --- INÍCIO DA ALTERAÇÃO ---
+        // --- INÍCIO DA ALTERAÇÃO ---
         // Compara a senha digitada com o valor na coluna senha_hash do banco
+        // ATENÇÃO: ISSO SÓ FUNCIONA COM SENHAS EM TEXTO PLANO NO BANCO (NÃO SEGURO!)
         if (password !== user.senha_hash) {
              throw new Error('Senha incorreta.');
         }
