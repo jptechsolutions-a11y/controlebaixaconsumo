@@ -2,6 +2,7 @@
 let currentUser = null; // { id, nome, username, role, filiais: [{id, nome}] }
 let selectedFilial = null; // { id, nome, descricao }
 let produtosCache = []; // Cache simples de produtos para lookup
+let todasFiliaisCache = []; // Cache de todas as filiais para admin
 
 // --- Inicialização ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -32,6 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('novaSolicitacaoForm')?.addEventListener('submit', handleNovaSolicitacaoSubmit);
     document.getElementById('executarForm')?.addEventListener('submit', handleExecucaoSubmit);
     document.getElementById('retiradaForm')?.addEventListener('submit', handleRetiradaSubmit);
+    // NOVO LISTENER
+    document.getElementById('usuarioForm')?.addEventListener('submit', handleUsuarioFormSubmit);
 
 });
 
@@ -145,7 +148,7 @@ function filterSidebarNav() {
         // CORREÇÃO: Garante que admin veja tudo corretamente
         if (roles.length === 0 || roles.includes(currentUser.role) || currentUser.role === 'admin') {
             item.style.display = 'flex';
-            if (!firstVisibleLink) {
+            if (!firstVisibleLink && item.getAttribute('href') !== '#gerenciarUsuarios') { // Não define admin como padrão
                 firstVisibleLink = item; // Guarda o primeiro link visível
             }
         } else {
@@ -154,11 +157,14 @@ function filterSidebarNav() {
     });
 
     // Opcional: Ativar o primeiro link visível como default
-    if (firstVisibleLink) {
+    // Prioriza 'home' se o usuário for 'admin', senão usa o primeiro link
+    if (currentUser.role === 'admin') {
+        showView('homeView', document.querySelector('a[href="#homeView"]'));
+    } else if (firstVisibleLink) {
         const viewId = firstVisibleLink.getAttribute('href').substring(1) + 'View';
         showView(viewId, firstVisibleLink);
     } else {
-        showView('homeView'); // Fallback para home se nenhum link for permitido
+        showView('homeView'); // Fallback para home
     }
 }
 
@@ -178,9 +184,11 @@ function showView(viewId, element = null) {
         element.classList.add('active');
     } else {
         // Se nenhum elemento foi passado, tenta encontrar pelo href
-        const link = document.querySelector(`.sidebar nav a[href="#${viewId.replace('View', '')}"]`);
+        const linkSelector = viewId === 'homeView' ? '.sidebar nav a[href="#homeView"]' : `.sidebar nav a[href="#${viewId.replace('View', '')}"]`;
+        const link = document.querySelector(linkSelector);
         if (link) link.classList.add('active');
     }
+
 
     // Carrega dados específicos da view
     switch (viewId) {
@@ -200,6 +208,10 @@ function showView(viewId, element = null) {
         case 'historicoBaixasView':
             loadHistoricoGeral();
             break;
+        // NOVO CASE
+        case 'gerenciarUsuariosView':
+            loadGerenciarUsuarios();
+            break;
         // Adicione mais casos conforme necessário
     }
 
@@ -216,6 +228,7 @@ function showView(viewId, element = null) {
 function logout() {
     currentUser = null;
     selectedFilial = null;
+    todasFiliaisCache = []; // Limpa o cache de admin
     document.getElementById('mainSystem').style.display = 'none';
     document.getElementById('loginContainer').style.display = 'flex';
     document.getElementById('loginForm').reset();
@@ -545,6 +558,12 @@ function closeModal(modalId) {
         // Limpar alerts dentro do modal ao fechar
         const alertDiv = modal.querySelector('[id$="Alert"]');
         if (alertDiv) alertDiv.innerHTML = '';
+        
+        // Limpar form específico do modal de usuário
+        if (modalId === 'usuarioModal') {
+            document.getElementById('usuarioForm').reset();
+            document.getElementById('usuarioId').value = '';
+        }
     }
 }
 
@@ -557,6 +576,7 @@ async function abrirDetalhesModal(id) {
 
     
     try {
+        // AJUSTE APLICADO PELA SUGESTÃO ANTERIOR (com aliases)
         const s = await supabaseRequest(
             `solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),produtos(codigo,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),usuarios_aprovador:usuarios!solicitacoes_baixa_aprovador_id_fkey(nome),usuarios_executor:usuarios!solicitacoes_baixa_executor_id_fkey(nome),usuarios_retirada:usuarios!solicitacoes_baixa_retirada_por_id_fkey(nome),anexos_baixa(url_arquivo,nome_arquivo)`, 'GET'
         );
@@ -967,4 +987,232 @@ function showNotification(message, type = 'info', timeout = 4000) {
         // Espera a animação terminar antes de remover
         notification.addEventListener('animationend', () => notification.remove());
     }, timeout);
+}
+
+
+// =======================================================
+// === NOVAS FUNÇÕES - GERENCIAMENTO DE USUÁRIOS (ADMIN) ===
+// =======================================================
+
+/**
+ * Carrega a lista de usuários e filiais para a view de admin.
+ */
+async function loadGerenciarUsuarios() {
+    const tbody = document.getElementById('usuariosTableBody');
+    tbody.innerHTML = `<tr><td colspan="6" class="loading"><div class="spinner"></div>Carregando usuários...</td></tr>`;
+
+    try {
+        // 1. Buscar todos os usuários
+        const usuarios = await supabaseRequest('usuarios?select=id,nome,username,role,ativo&order=nome.asc');
+        renderUsuariosTable(tbody, usuarios || []);
+
+        // 2. Preencher o cache de filiais (se vazio)
+        if (todasFiliaisCache.length === 0) {
+            todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc');
+        }
+    } catch (error) {
+        console.error("Erro ao carregar usuários:", error);
+        tbody.innerHTML = `<tr><td colspan="6" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
+    }
+}
+
+/**
+ * Renderiza a tabela de usuários na view de admin.
+ */
+function renderUsuariosTable(tbody, usuarios) {
+    if (!usuarios || usuarios.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500">Nenhum usuário encontrado.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = usuarios.map(u => {
+        const statusClass = u.ativo ? 'text-green-600' : 'text-red-600';
+        const statusText = u.ativo ? 'Ativo' : 'Inativo';
+        const roleLabel = u.role.charAt(0).toUpperCase() + u.role.slice(1); // Ex: "Admin"
+
+        return `
+            <tr class="text-sm">
+                <td>${u.id}</td>
+                <td>${u.nome}</td>
+                <td>${u.username}</td>
+                <td>${roleLabel}</td>
+                <td><span class="font-semibold ${statusClass}">${statusText}</span></td>
+                <td>
+                    <button class="btn btn-primary btn-small" onclick="abrirUsuarioModal(${u.id})">Editar</button>
+                    </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Abre o modal para criar (id=null) ou editar (id=valor) um usuário.
+ */
+async function abrirUsuarioModal(id = null) {
+    const modal = document.getElementById('usuarioModal');
+    const form = document.getElementById('usuarioForm');
+    const alertContainer = document.getElementById('usuarioAlert');
+    const title = document.getElementById('usuarioModalTitle');
+    const senhaHelp = document.getElementById('usuarioSenhaHelp');
+    const filiaisContainer = document.getElementById('usuarioFiliaisCheckboxes');
+    alertContainer.innerHTML = '';
+    form.reset();
+    document.getElementById('usuarioId').value = id || '';
+
+    // 1. Garantir que o cache de filiais está preenchido
+    filiaisContainer.innerHTML = '<div class="loading text-sm">Carregando filiais...</div>';
+    try {
+        if (todasFiliaisCache.length === 0) {
+            todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc');
+        }
+    } catch (e) {
+        alertContainer.innerHTML = `<div class="alert alert-error">Falha fatal ao carregar filiais: ${e.message}</div>`;
+        return;
+    }
+    
+    // 2. Popular checkboxes de filiais
+    if (todasFiliaisCache.length > 0) {
+         filiaisContainer.innerHTML = todasFiliaisCache.map(f => `
+            <label class="flex items-center space-x-2 text-sm">
+                <input type="checkbox" value="${f.id}" name="filiais">
+                <span>${f.nome} (${f.descricao})</span>
+            </label>
+         `).join('');
+    } else {
+        filiaisContainer.innerHTML = '<div class="text-sm text-red-600">Nenhuma filial cadastrada.</div>';
+    }
+
+
+    if (id) {
+        // --- MODO EDIÇÃO ---
+        title.textContent = `Editar Usuário #${id}`;
+        senhaHelp.style.display = 'block'; // Mostra ajuda da senha
+        document.getElementById('usuarioSenha').required = false;
+
+        try {
+            // Buscar dados atuais do usuário E suas filiais associadas
+            const userResponse = await supabaseRequest(`usuarios?id=eq.${id}&select=*,usuario_filiais(filial_id)`);
+            if (!userResponse || userResponse.length === 0) throw new Error('Usuário não encontrado.');
+            
+            const user = userResponse[0];
+            const filiaisAtuais = user.usuario_filiais.map(uf => uf.filial_id);
+
+            // Preencher o formulário
+            document.getElementById('usuarioNome').value = user.nome;
+            document.getElementById('usuarioUsername').value = user.username;
+            document.getElementById('usuarioRole').value = user.role;
+            document.getElementById('usuarioAtivo').checked = user.ativo;
+            
+            // Marcar as checkboxes das filiais atuais
+            filiaisContainer.querySelectorAll('input[name="filiais"]').forEach(checkbox => {
+                if (filiaisAtuais.includes(parseInt(checkbox.value))) {
+                    checkbox.checked = true;
+                }
+            });
+
+        } catch (error) {
+            console.error("Erro ao carregar dados do usuário:", error);
+            alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
+            return; // Não abre o modal se falhar
+        }
+
+    } else {
+        // --- MODO CRIAÇÃO ---
+        title.textContent = 'Novo Usuário';
+        senhaHelp.style.display = 'none'; // Esconde ajuda da senha
+        document.getElementById('usuarioSenha').required = true;
+        document.getElementById('usuarioAtivo').checked = true; // Default
+    }
+
+    modal.style.display = 'flex';
+    // Re-renderizar ícones (caso tenha algum no modal)
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
+}
+
+/**
+ * Trata a submissão do formulário de criação/edição de usuário.
+ */
+async function handleUsuarioFormSubmit(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('usuarioAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
+
+    // 1. Obter dados do formulário
+    const id = document.getElementById('usuarioId').value;
+    const nome = document.getElementById('usuarioNome').value;
+    const username = document.getElementById('usuarioUsername').value;
+    const senha = document.getElementById('usuarioSenha').value;
+    const role = document.getElementById('usuarioRole').value;
+    const ativo = document.getElementById('usuarioAtivo').checked;
+    
+    const selectedFiliaisCheckboxes = document.querySelectorAll('#usuarioFiliaisCheckboxes input[name="filiais"]:checked');
+    const selectedFilialIds = Array.from(selectedFiliaisCheckboxes).map(cb => parseInt(cb.value));
+
+    const isEdit = !!id;
+
+    // 2. Validação
+    if (!nome || !username || !role) {
+         alertContainer.innerHTML = '<div class="alert alert-error">Nome, Usuário e Grupo são obrigatórios.</div>';
+         return;
+    }
+    if (!isEdit && !senha) {
+        alertContainer.innerHTML = '<div class="alert alert-error">A Senha é obrigatória para novos usuários.</div>';
+        return;
+    }
+     if (selectedFilialIds.length === 0) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Selecione ao menos uma filial.</div>';
+        return;
+    }
+
+    // 3. Preparar dados do usuário
+    const userData = {
+        nome,
+        username,
+        role,
+        ativo
+    };
+    // Adiciona senha_hash APENAS se uma nova senha foi digitada
+    if (senha) {
+        userData.senha_hash = senha; // (Ainda em plaintext, conforme seu setup)
+    }
+
+    try {
+        let userId = id;
+
+        // 4. Salvar Usuário (INSERT ou PATCH)
+        if (isEdit) {
+            await supabaseRequest(`usuarios?id=eq.${id}`, 'PATCH', userData);
+        } else {
+            const response = await supabaseRequest('usuarios', 'POST', userData);
+            if (!response || response.length === 0) throw new Error("Falha ao criar o usuário, não obteve resposta.");
+            userId = response[0].id; // Pega o ID do novo usuário
+        }
+
+        if (!userId) throw new Error("ID do usuário não definido.");
+
+        // 5. Salvar Associações de Filiais (DELETE all, then POST new)
+        
+        // 5a. Deletar associações antigas
+        await supabaseRequest(`usuario_filiais?usuario_id=eq.${userId}`, 'DELETE');
+
+        // 5b. Preparar novas associações
+        const filiaisToInsert = selectedFilialIds.map(filialId => ({
+            usuario_id: userId,
+            filial_id: filialId
+        }));
+
+        // 5c. Inserir novas associações
+        await supabaseRequest('usuario_filiais', 'POST', filiaisToInsert);
+
+        // 6. Sucesso
+        showNotification(`Usuário ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
+        closeModal('usuarioModal');
+        loadGerenciarUsuarios(); // Recarrega a tabela
+
+    } catch (error) {
+        console.error("Erro ao salvar usuário:", error);
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
+    }
 }
