@@ -86,6 +86,10 @@
                     <i data-feather="list" class="h-5 w-5 mr-3"></i>
                     <span>Minhas Solicitações</span>
                 </a>
+                <a href="#consultaCgo" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('consultaCgoView', this)" data-role="operacao,gestor,prevencao,admin">
+                    <i data-feather="book-open" class="h-5 w-5 mr-3"></i>
+                    <span>Consultar CGOs</span>
+                </a>
                  <a href="#aprovarSolicitacoes" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('aprovarSolicitacoesView', this)" data-role="gestor">
                     <i data-feather="check-square" class="h-5 w-5 mr-3"></i>
                     <span>Aprovar Baixas</span>
@@ -105,6 +109,10 @@
                 <a href="#gerenciarFiliais" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarFiliaisView', this)" data-role="admin">
                     <i data-feather="briefcase" class="h-5 w-5 mr-3"></i>
                     <span>Gerenciar Filiais</span>
+                </a>
+                <a href="#gerenciarCgo" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarCgoView', this)" data-role="admin">
+                    <i data-feather="settings" class="h-5 w-5 mr-3"></i>
+                    <span>Gerenciar CGOs</span>
                 </a>
                 <div id="logoutLink" class="p-3 rounded-lg mt-auto flex items-center text-red-400 cursor-pointer hover:bg-gray-700" onclick="logout()">
                     <i data-feather="log-out" class="h-5 w-5 mr-3"></i>
@@ -292,6 +300,49 @@
                     </div>
                 </div>
 
+                <div id="gerenciarCgoView" class="view-content">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Gerenciar CGOs</h1>
+                        <button class="btn btn-success" onclick="abrirCgoModal(null)">
+                            <i data-feather="plus" class="h-4 w-4 inline-block -mt-1 mr-1"></i>
+                            Novo CGO
+                        </button>
+                    </div>
+                    <div class="table-container bg-white rounded-lg shadow-md">
+                        <table class="w-full">
+                            <thead>
+                                <tr>
+                                    <th>Cód. CGO</th>
+                                    <th>Descrição</th>
+                                    <th>Observação</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cgoTableBody">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="consultaCgoView" class="view-content">
+                    <h1 class="text-3xl font-bold text-gray-800 mb-6">Consulta de CGOs (Códigos de Movimentação)</h1>
+                    <p class="text-gray-600 mb-6">Utilize esta tela para consultar os códigos corretos antes de executar uma baixa.</p>
+                    <div class="table-container bg-white rounded-lg shadow-md">
+                        <table class="w-full">
+                            <thead>
+                                <tr>
+                                    <th>Cód. CGO</th>
+                                    <th>Descrição</th>
+                                    <th>Observação (Quando usar)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="consultaCgoTableBody">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+
 
             </div>
         </main>
@@ -337,8 +388,10 @@
                      <textarea id="justificativaExecucao" rows="3" required class="w-full"></textarea>
                  </div>
                  <div class="form-group mb-4">
-                     <label for="codigoMovimentacao">Código Movimentação:</label>
-                     <input type="text" id="codigoMovimentacao" required class="w-full">
+                     <label for="codigoMovimentacao">CGO (Cód. Movimentação):</label>
+                     <select id="codigoMovimentacao" required class="w-full">
+                         <option value="">Carregando CGOs...</option>
+                     </select>
                  </div>
                  <div class="form-group mb-4">
                      <label for="anexosExecucao">Anexos (Opcional):</label>
@@ -452,6 +505,37 @@
                 <div class="flex gap-4 mt-6">
                     <button type="submit" class="btn btn-success flex-1">Salvar Filial</button>
                     <button type="button" class="btn btn-danger flex-1" onclick="closeModal('filialModal')">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="cgoModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3 class="text-xl font-semibold mb-4" id="cgoModalTitle">Novo CGO</h3>
+            <form id="cgoForm">
+                <input type="hidden" id="cgoId">
+                <div class="form-group mb-4">
+                    <label for="cgoCodigo">Código CGO (Ex: 475):</label>
+                    <input type="text" id="cgoCodigo" required class="w-full">
+                </div>
+                <div class="form-group mb-4">
+                    <label for="cgoDescricao">Descrição (Ex: BAIXA QUEBRA DE ESTOQUE):</label>
+                    <input type="text" id="cgoDescricao" required class="w-full">
+                </div>
+                <div class="form-group mb-4">
+                    <label for="cgoObs">Observação (Quando usar):</label>
+                    <textarea id="cgoObs" rows="3" class="w-full"></textarea>
+                </div>
+                <div class="form-group flex items-center pt-2">
+                    <input type="checkbox" id="cgoAtivo" class="h-5 w-5" checked>
+                    <label for="cgoAtivo" class="ml-2 font-normal">CGO Ativo</label>
+                </div>
+                
+                <div id="cgoAlert" class="mt-4"></div>
+                <div class="flex gap-4 mt-6">
+                    <button type="submit" class="btn btn-success flex-1">Salvar CGO</button>
+                    <button type="button" class="btn btn-danger flex-1" onclick="closeModal('cgoModal')">Cancelar</button>
                 </div>
             </form>
         </div>
