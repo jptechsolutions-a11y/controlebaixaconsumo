@@ -3,6 +3,8 @@ let currentUser = null; // { id, nome, username, role, filiais: [{id, nome}] }
 let selectedFilial = null; // { id, nome, descricao }
 let produtosCache = []; // Cache simples de produtos para lookup
 let todasFiliaisCache = []; // Cache de todas as filiais para admin
+let cgoCache = []; // NOVO: Cache de CGOs ativos
+let todosCgoCache = []; // NOVO: Cache de TODOS os CGOs (para admin)
 
 // --- Inicialização ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -35,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('retiradaForm')?.addEventListener('submit', handleRetiradaSubmit);
     document.getElementById('usuarioForm')?.addEventListener('submit', handleUsuarioFormSubmit);
     document.getElementById('filialForm')?.addEventListener('submit', handleFilialFormSubmit);
+    document.getElementById('cgoForm')?.addEventListener('submit', handleCgoFormSubmit); // NOVO
 
 });
 
@@ -215,6 +218,12 @@ function showView(viewId, element = null) {
         case 'gerenciarFiliaisView':
             loadGerenciarFiliais();
             break;
+        case 'gerenciarCgoView': // NOVO
+            loadGerenciarCgo();
+            break;
+        case 'consultaCgoView': // NOVO
+            loadConsultaCgo();
+            break;
         // Adicione mais casos conforme necessário
     }
 
@@ -232,6 +241,8 @@ function logout() {
     currentUser = null;
     selectedFilial = null;
     todasFiliaisCache = []; // Limpa o cache de admin
+    cgoCache = []; // NOVO
+    todosCgoCache = []; // NOVO
     document.getElementById('mainSystem').style.display = 'none';
     document.getElementById('loginContainer').style.display = 'flex';
     document.getElementById('loginForm').reset();
@@ -572,6 +583,11 @@ function closeModal(modalId) {
             document.getElementById('filialForm').reset();
             document.getElementById('filialId').value = '';
         }
+        // NOVO: Limpar form específico do modal de CGO
+        if (modalId === 'cgoModal') {
+            document.getElementById('cgoForm').reset();
+            document.getElementById('cgoId').value = '';
+        }
     }
 }
 
@@ -633,7 +649,7 @@ async function abrirDetalhesModal(id) {
             <p><strong>Valor Unit. Executado:</strong> R$ ${sol.valor_unitario_executado?.toFixed(2) ?? 'N/A'}</p>
             <p><strong>Valor Total Executado:</strong> R$ ${sol.valor_total_executado?.toFixed(2) ?? 'N/A'}</p>
             <p><strong>Justificativa:</strong> ${sol.justificativa_execucao || 'N/A'}</p>
-            <p><strong>Cód. Movimentação:</strong> ${sol.codigo_movimentacao || 'N/A'}</p>
+            <p><strong>Cód. Movimentação (CGO):</strong> ${sol.codigo_movimentacao || 'N/A'}</p>
             <p><strong>Anexos:</strong></p>
             <div>${anexosHtml}</div>
             <hr class="my-2">
@@ -656,6 +672,11 @@ async function abrirExecutarModal(id) {
     document.getElementById('executarSolicitacaoId').value = id;
     document.getElementById('executarForm').reset(); // Limpa o form
 
+    // NOVO: Limpar e carregar CGOs
+    const cgoSelect = document.getElementById('codigoMovimentacao');
+    cgoSelect.innerHTML = '<option value="">Carregando CGOs...</option>';
+    cgoSelect.disabled = true;
+
     try {
          const s = await supabaseRequest(`solicitacoes_baixa?id=eq.${id}&select=quantidade_solicitada,valor_total_solicitado,produtos(codigo,descricao)`);
          if (!s || s.length === 0) throw new Error('Solicitação não encontrada.');
@@ -672,6 +693,24 @@ async function abrirExecutarModal(id) {
          calcularValorTotalExecutado();
 
          modal.style.display = 'flex';
+
+         // NOVO: Carregar CGOs em paralelo
+         try {
+            const cgos = await getCgoCache(); // Busca CGOs ativos
+            if (cgos.length > 0) {
+                cgoSelect.innerHTML = '<option value="">-- Selecione um CGO --</option>';
+                cgos.forEach(cgo => {
+                    // Salva o CÓDIGO (ex: "475") no value
+                    cgoSelect.innerHTML += `<option value="${cgo.codigo_cgo}">${cgo.codigo_cgo} - ${cgo.descricao_cgo}</option>`;
+                });
+            } else {
+                cgoSelect.innerHTML = '<option value="">Nenhum CGO ativo encontrado</option>';
+            }
+            cgoSelect.disabled = false;
+         } catch (cgoError) {
+            console.error("Erro ao carregar CGOs:", cgoError);
+            cgoSelect.innerHTML = '<option value="">Erro ao carregar CGOs</option>';
+         }
 
     } catch (error) {
         console.error("Erro ao abrir modal de execução:", error);
@@ -697,11 +736,12 @@ async function handleExecucaoSubmit(event) {
     const valorUnitario = parseFloat(document.getElementById('valorUnitarioExecutado').value);
     const valorTotal = parseFloat(document.getElementById('valorTotalExecutado').value);
     const justificativa = document.getElementById('justificativaExecucao').value.trim();
-    const codigoMov = document.getElementById('codigoMovimentacao').value.trim();
+    const codigoMov = document.getElementById('codigoMovimentacao').value; // MUDANÇA: .trim() removido
     const anexoFiles = document.getElementById('anexosExecucao').files;
 
+     // MUDANÇA: !codigoMov (check de string vazia)
      if (isNaN(quantidade) || quantidade < 0 || isNaN(valorUnitario) || valorUnitario < 0 || !justificativa || !codigoMov) {
-        alertContainer.innerHTML = '<div class="alert alert-error">Preencha Quantidade, Valor Unitário, Justificativa e Cód. Movimentação.</div>';
+        alertContainer.innerHTML = '<div class="alert alert-error">Preencha Quantidade, Valor Unitário, Justificativa e selecione um CGO.</div>';
         return;
     }
 
@@ -713,7 +753,7 @@ async function handleExecucaoSubmit(event) {
         valor_unitario_executado: valorUnitario,
         valor_total_executado: valorTotal,
         justificativa_execucao: justificativa,
-        codigo_movimentacao: codigoMov
+        codigo_movimentacao: codigoMov // Salva o código do CGO (ex: "475")
     };
 
     try {
@@ -1025,6 +1065,28 @@ async function getFiliaisCache() {
         todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc');
     }
     return todasFiliaisCache;
+}
+
+/**
+ * NOVO: Helper para buscar e cachear CGOs ATIVOS (para dropdowns e consulta).
+ */
+async function getCgoCache(forceRefresh = false) {
+    if (cgoCache.length === 0 || forceRefresh) {
+        // Busca apenas CGOs ativos e ordena pelo código
+        cgoCache = await supabaseRequest('cgo?ativo=eq.true&select=codigo_cgo,descricao_cgo,obs&order=codigo_cgo.asc');
+    }
+    return cgoCache;
+}
+
+/**
+ * NOVO: Helper para buscar e cachear TODOS os CGOs (para admin).
+ */
+async function getAllCgoCache(forceRefresh = false) {
+    if (todosCgoCache.length === 0 || forceRefresh) {
+        // Busca todos, incluindo inativos, e ordena pelo código
+        todosCgoCache = await supabaseRequest('cgo?select=id,codigo_cgo,descricao_cgo,obs,ativo&order=codigo_cgo.asc');
+    }
+    return todosCgoCache;
 }
 
 // --- Gerenciamento de Usuários ---
@@ -1391,5 +1453,213 @@ async function removerFilial(id) {
          } else {
              showNotification(`Erro ao remover filial: ${error.message}`, 'error');
          }
+    }
+}
+
+
+// =======================================================
+// === FUNÇÕES DE CONSULTA (TODOS) ===
+// =======================================================
+
+/**
+ * NOVO: Carrega a lista de CGOs ativos para consulta pública.
+ */
+async function loadConsultaCgo() {
+    const tbody = document.getElementById('consultaCgoTableBody');
+    tbody.innerHTML = `<tr><td colspan="3" class="loading"><div class="spinner"></div>Carregando CGOs...</td></tr>`;
+    try {
+        // Usar o cache de CGOs *ativos*
+        const cgos = await getCgoCache(true); // Força refresh para garantir dados novos
+        renderConsultaCgoTable(tbody, cgos || []);
+    } catch (error) {
+        console.error("Erro ao carregar CGOs para consulta:", error);
+        tbody.innerHTML = `<tr><td colspan="3" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
+    }
+}
+
+/**
+ * NOVO: Renderiza a tabela de consulta de CGOs.
+ */
+function renderConsultaCgoTable(tbody, cgos) {
+    if (!cgos || cgos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-gray-500">Nenhum CGO ativo encontrado.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = cgos.map(c => `
+        <tr class="text-sm">
+            <td><strong>${c.codigo_cgo}</strong></td>
+            <td>${c.descricao_cgo}</td>
+            <td>${c.obs || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+
+// =======================================================
+// === FUNÇÕES DE GERENCIAMENTO CGO (ADMIN) ===
+// =======================================================
+
+/**
+ * NOVO: Carrega a lista de CGOs para a view de admin.
+ */
+async function loadGerenciarCgo() {
+    const tbody = document.getElementById('cgoTableBody');
+    tbody.innerHTML = `<tr><td colspan="5" class="loading"><div class="spinner"></div>Carregando CGOs...</td></tr>`;
+    try {
+        const cgos = await getAllCgoCache(true); // Força refresh (busca todos)
+        renderCgoTable(tbody, cgos || []);
+    } catch (error) {
+        console.error("Erro ao carregar CGOs:", error);
+        tbody.innerHTML = `<tr><td colspan="5" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
+    }
+}
+
+/**
+ * NOVO: Renderiza a tabela de CGOs na view de admin.
+ */
+function renderCgoTable(tbody, cgos) {
+    if (!cgos || cgos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">Nenhum CGO encontrado.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = cgos.map(c => {
+        const statusClass = c.ativo ? 'text-green-600' : 'text-red-600';
+        const statusText = c.ativo ? 'Ativo' : 'Inativo';
+        const toggleButton = c.ativo
+            ? `<button class="btn btn-warning btn-small ml-1" onclick="toggleCgoStatus(${c.id}, false)">Desativar</button>`
+            : `<button class="btn btn-success btn-small ml-1" onclick="toggleCgoStatus(${c.id}, true)">Ativar</button>`;
+
+        return `
+            <tr class="text-sm">
+                <td><strong>${c.codigo_cgo}</strong></td>
+                <td>${c.descricao_cgo}</td>
+                <td>${c.obs || '-'}</td>
+                <td><span class="font-semibold ${statusClass}">${statusText}</span></td>
+                <td>
+                    <button class="btn btn-primary btn-small" onclick="abrirCgoModal(${c.id})">Editar</button>
+                    ${toggleButton}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * NOVO: Abre o modal para criar (id=null) ou editar (id=valor) um CGO.
+ */
+async function abrirCgoModal(id = null) {
+    const modal = document.getElementById('cgoModal');
+    const form = document.getElementById('cgoForm');
+    const alertContainer = document.getElementById('cgoAlert');
+    const title = document.getElementById('cgoModalTitle');
+    alertContainer.innerHTML = '';
+    form.reset();
+    document.getElementById('cgoId').value = id || '';
+
+    if (id) {
+        // --- MODO EDIÇÃO ---
+        title.textContent = `Editar CGO #${id}`;
+        document.getElementById('cgoCodigo').disabled = true; // Não permite editar o código
+        try {
+            // Busca o CGO específico no cache de admin
+            const cgos = await getAllCgoCache();
+            const cgo = cgos.find(c => c.id === id);
+            if (!cgo) throw new Error("CGO não encontrado no cache.");
+
+            document.getElementById('cgoCodigo').value = cgo.codigo_cgo;
+            document.getElementById('cgoDescricao').value = cgo.descricao_cgo;
+            document.getElementById('cgoObs').value = cgo.obs || '';
+            document.getElementById('cgoAtivo').checked = cgo.ativo;
+
+        } catch(error) {
+             alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
+             return;
+        }
+    } else {
+        // --- MODO CRIAÇÃO ---
+        title.textContent = 'Novo CGO';
+        document.getElementById('cgoCodigo').disabled = false;
+        document.getElementById('cgoAtivo').checked = true; // Default
+    }
+
+    modal.style.display = 'flex';
+}
+
+/**
+ * NOVO: Trata a submissão do formulário de criação/edição de CGO.
+ */
+async function handleCgoFormSubmit(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('cgoAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
+
+    const id = document.getElementById('cgoId').value;
+    const codigo_cgo = document.getElementById('cgoCodigo').value.trim();
+    const descricao_cgo = document.getElementById('cgoDescricao').value.trim();
+    const obs = document.getElementById('cgoObs').value.trim();
+    const ativo = document.getElementById('cgoAtivo').checked;
+    const isEdit = !!id;
+
+    if (!codigo_cgo || !descricao_cgo) {
+         alertContainer.innerHTML = '<div class="alert alert-error">Código CGO e Descrição são obrigatórios.</div>';
+         return;
+    }
+
+    const cgoData = {
+        codigo_cgo,
+        descricao_cgo,
+        obs: obs || null, // Salva null se vazio
+        ativo
+    };
+
+    try {
+        if (isEdit) {
+            // Não atualiza o codigo_cgo na edição
+            delete cgoData.codigo_cgo;
+            await supabaseRequest(`cgo?id=eq.${id}`, 'PATCH', cgoData);
+        } else {
+            await supabaseRequest('cgo', 'POST', cgoData);
+        }
+        
+        // Limpar ambos os caches para forçar a atualização
+        cgoCache = []; 
+        todosCgoCache = [];
+        
+        showNotification(`CGO ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
+        closeModal('cgoModal');
+        loadGerenciarCgo(); // Recarrega a tabela de admin
+
+    } catch (error) {
+         console.error("Erro ao salvar CGO:", error);
+         let errorMsg = error.message;
+         if (errorMsg.includes('duplicate key value violates unique constraint "cgo_codigo_cgo_key"')) {
+             errorMsg = "Já existe um CGO com este código.";
+         }
+         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${errorMsg}</div>`;
+    }
+}
+
+/**
+ * NOVO: Ativa ou desativa um CGO.
+ */
+async function toggleCgoStatus(id, newStatus) {
+    const action = newStatus ? 'ativar' : 'desativar';
+    if (!confirm(`Tem certeza que deseja ${action} o CGO #${id}?`)) {
+        return;
+    }
+
+    try {
+        await supabaseRequest(`cgo?id=eq.${id}`, 'PATCH', { ativo: newStatus });
+        
+        // Limpar ambos os caches
+        cgoCache = []; 
+        todosCgoCache = [];
+        
+        showNotification(`CGO #${id} ${action.replace('a', 'a')}do com sucesso!`, 'success');
+        loadGerenciarCgo(); // Recarrega a tabela
+
+    } catch (error) {
+         console.error(`Erro ao ${action} CGO:`, error);
+         showNotification(`Erro ao ${action} CGO: ${error.message}`, 'error');
     }
 }
