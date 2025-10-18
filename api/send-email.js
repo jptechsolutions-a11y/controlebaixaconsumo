@@ -7,6 +7,10 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev'; // E-mail de envio
 
+// --- NOVO: URL do seu sistema (Defina em Vercel) ---
+const APP_URL = process.env.APP_URL || 'https://seu-app.vercel.app'; // Fallback
+const APP_LINK_HTML = `<p>Acesse o sistema clicando aqui: <a href="${APP_URL}">Acessar Controle de Baixas</a></p>`;
+
 /**
  * Função helper para buscar dados do Supabase usando o proxy interno.
  * Isso é necessário para que a API de e-mail possa buscar os detalhes da solicitação.
@@ -56,7 +60,6 @@ export default async (req, res) => {
         let toEmails = []; // Lista de e-mails para quem enviar
 
         // 3. Define qual tipo de e-mail disparar
-        // (Estamos interessados em INSERT e UPDATE)
         
         if (payload.type === 'INSERT' && payload.table === 'solicitacoes_baixa') {
             // --- NOVA SOLICITAÇÃO ---
@@ -82,16 +85,16 @@ export default async (req, res) => {
                         <li><strong>Solicitação ID:</strong> ${id}</li>
                         <li><strong>Produto:</strong> ${produto.codigo} - ${produto.descricao}</li>
                     </ul>
-                    <p>Por favor, acesse o sistema para aprovar ou negar.</p>
+                    ${APP_LINK_HTML}
                 `;
                 // Adiciona o solicitante em cópia (opcional)
-                // if (solicitante.email) {
-                //    toEmails.push(solicitante.email);
-                // }
+                if (solicitante.email) {
+                   toEmails.push(solicitante.email);
+                }
             }
 
         } else if (payload.type === 'UPDATE' && payload.table === 'solicitacoes_baixa') {
-            // --- ATUALIZAÇÃO DE STATUS (Aprovada, Negada, Finalizada) ---
+            // --- ATUALIZAÇÃO DE STATUS (Aprovada, Negada, Executada, Finalizada) ---
             const { id, status } = payload.record;
             const old_status = payload.old_record.status;
 
@@ -100,26 +103,65 @@ export default async (req, res) => {
                 return res.status(200).json({ message: 'Nenhuma mudança de status, e-mail não enviado.' });
             }
 
-            // Buscar dados completos
-            const sol = await fetchSupabaseData(`solicitacoes_baixa?id=eq.${id}&select=*,produtos(codigo,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome,email),usuarios_aprovador:usuarios!solicitacoes_baixa_aprovador_id_fkey(nome,email),usuarios_executor:usuarios!solicitacoes_baixa_executor_id_fkey(nome,email),usuarios_retirada:usuarios!solicitacoes_baixa_retirada_por_id_fkey(nome,email)`);
+            // --- ATUALIZADO: Query agora busca 'foto_retirada_url' e 'anexos_baixa' ---
+            const sol = await fetchSupabaseData(
+                `solicitacoes_baixa?id=eq.${id}&select=*,foto_retirada_url,produtos(codigo,descricao),anexos_baixa(url_arquivo,nome_arquivo),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome,email),usuarios_aprovador:usuarios!solicitacoes_baixa_aprovador_id_fkey(nome,email),usuarios_executor:usuarios!solicitacoes_baixa_executor_id_fkey(nome,email),usuarios_retirada:usuarios!solicitacoes_baixa_retirada_por_id_fkey(nome,email)`
+            );
+
 
             if (!sol) throw new Error('Solicitação não encontrada para envio de e-mail.');
 
             const solicitanteEmail = sol.usuarios?.email;
+            if (solicitanteEmail) toEmails.push(solicitanteEmail); // Adiciona o solicitante como padrão
 
             if (status === 'aprovada') {
                 subject = `Solicitação Aprovada (#${id})`;
-                htmlBody = `<p>Olá ${sol.usuarios.nome},</p><p>Sua solicitação #${id} (${sol.produtos.codigo}) foi <strong>APROVADA</strong> por ${sol.usuarios_aprovador.nome}.</p>`;
-                if (solicitanteEmail) toEmails.push(solicitanteEmail);
+                htmlBody = `<p>Olá ${sol.usuarios.nome},</p><p>Sua solicitação #${id} (${sol.produtos.codigo}) foi <strong>APROVADA</strong> por ${sol.usuarios_aprovador.nome}.</p><p>A equipe de Prevenção já foi notificada para executar a baixa.</p>${APP_LINK_HTML}`;
             
             } else if (status === 'negada') {
                 subject = `Solicitação Negada (#${id})`;
-                htmlBody = `<p>Olá ${sol.usuarios.nome},</p><p>Sua solicitação #${id} (${sol.produtos.codigo}) foi <strong>NEGADA</strong> por ${sol.usuarios_aprovador.nome}.</p><p>Motivo: ${sol.motivo_negacao || 'N/A'}</p>`;
-                if (solicitanteEmail) toEmails.push(solicitanteEmail);
+                htmlBody = `<p>Olá ${sol.usuarios.nome},</p><p>Sua solicitação #${id} (${sol.produtos.codigo}) foi <strong>NEGADA</strong> por ${sol.usuarios_aprovador.nome}.</p><p>Motivo: ${sol.motivo_negacao || 'N/A'}</p>${APP_LINK_HTML}`;
             
+            } else if (status === 'aguardando_retirada') {
+                // --- NOVO E-MAIL: Notifica a Operação que a baixa foi executada ---
+                subject = `Baixa Pronta para Retirada (#${id})`;
+                htmlBody = `
+                    <p>Olá ${sol.usuarios.nome},</p>
+                    <p>A baixa da sua solicitação #${id} (${sol.produtos.codigo}) foi <strong>EXECUTADA</strong> por ${sol.usuarios_executor.nome} e está pronta para retirada.</p>
+                    <ul>
+                        <li><strong>Qtd. Executada:</strong> ${sol.quantidade_executada}</li>
+                        <li><strong>Valor Total Executado:</strong> R$ ${sol.valor_total_executado.toFixed(2)}</li>
+                        <li><strong>Justificativa:</strong> ${sol.justificativa_execucao}</li>
+                    </ul>
+                    <p>Por favor, acesse o sistema para confirmar a retirada e anexar a foto.</p>
+                    ${APP_LINK_HTML}
+                `;
+                // Pode adicionar o gestor em cópia se desejar
+                if (sol.usuarios_aprovador?.email) toEmails.push(sol.usuarios_aprovador.email);
+
             } else if (status === 'finalizada') {
-                // --- E-MAIL DE LAUDO COMPLETO ---
-                subject = `Baixa Finalizada (#${id}) - Laudo`;
+                // --- E-MAIL DE LAUDO COMPLETO (AGORA COM IMAGENS E ANEXOS) ---
+                subject = `Baixa Finalizada (#${id}) - Laudo Completo`;
+                
+                // Formata os anexos
+                let anexosHtml = 'Nenhum anexo.';
+                if (sol.anexos_baixa && sol.anexos_baixa.length > 0) {
+                    anexosHtml = '<ul>' + sol.anexos_baixa.map(anexo =>
+                        `<li><a href="${anexo.url_arquivo}">${anexo.nome_arquivo || 'Ver Anexo'}</a></li>`
+                    ).join('') + '</ul>';
+                }
+                
+                // Formata a foto de retirada (se existir)
+                let fotoHtml = '<p>Não foi anexada foto da retirada.</p>';
+                if (sol.foto_retirada_url) {
+                    fotoHtml = `
+                        <p><strong>Foto da Retirada:</strong></p>
+                        <a href="${sol.foto_retirada_url}">
+                            <img src="${sol.foto_retirada_url}" alt="Foto da Retirada" style="max-width: 400px; height: auto; border: 1px solid #ccc; border-radius: 8px;" />
+                        </a>
+                    `;
+                }
+
                 htmlBody = `
                     <h1>Laudo de Baixa Finalizada - #${id}</h1>
                     <p>A solicitação de baixa para o produto <strong>${sol.produtos.codigo} - ${sol.produtos.descricao}</strong> foi concluída.</p>
@@ -138,36 +180,42 @@ export default async (req, res) => {
                         <li><strong>Qtd. Executada:</strong> ${sol.quantidade_executada}</li>
                         <li><strong>Valor Total Executado:</strong> R$ ${sol.valor_total_executado.toFixed(2)}</li>
                         <li><strong>Justificativa:</strong> ${sol.justificativa_execucao}</li>
+                        <li><strong>Anexos da Execução:</strong> ${anexosHtml}</li>
                     </ul>
                      <h3>Detalhes da Retirada (Operação)</h3>
                     <ul>
                         <li><strong>Retirado por:</strong> ${sol.usuarios_retirada.nome}</li>
                         <li><strong>Data:</strong> ${new Date(sol.data_retirada).toLocaleString('pt-BR')}</li>
                     </ul>
+                    ${fotoHtml}
+                    <hr>
+                    ${APP_LINK_HTML}
                 `;
                 
                 // Envia o laudo para todos os envolvidos
                 if (sol.usuarios.email) toEmails.push(sol.usuarios.email);
-                if (sol.usuarios_aprovador.email) toEmails.push(sol.usuarios_aprovador.email);
-                if (sol.usuarios_executor.email) toEmails.push(sol.usuarios_executor.email);
-                if (sol.usuarios_retirada.email) toEmails.push(sol.usuarios_retirada.email);
+                if (sol.usuarios_aprovador?.email) toEmails.push(sol.usuarios_aprovador.email);
+                if (sol.usuarios_executor?.email) toEmails.push(sol.usuarios_executor.email);
+                if (sol.usuarios_retirada?.email) toEmails.push(sol.usuarios_retirada.email);
             }
         }
 
         // 4. Enviar o e-mail (se houver destinatários)
         if (toEmails.length > 0) {
             // Remove duplicados
-            const uniqueEmails = [...new Set(toEmails)]; 
+            const uniqueEmails = [...new Set(toEmails.filter(Boolean))]; // Garante que não há nulos/undefined
             
-            console.log(`Enviando e-mail [${subject}] para:`, uniqueEmails);
+            if (uniqueEmails.length > 0) {
+                console.log(`Enviando e-mail [${subject}] para:`, uniqueEmails);
 
-            await resend.emails.send({
-                from: EMAIL_FROM,
-                to: uniqueEmails,
-                subject: subject,
-                html: htmlBody,
-            });
-            return res.status(200).json({ message: 'E-mail enviado com sucesso.' });
+                await resend.emails.send({
+                    from: EMAIL_FROM,
+                    to: uniqueEmails,
+                    subject: subject,
+                    html: `<div style="font-family: Arial, sans-serif; line-height: 1.6;">${htmlBody}</div>`,
+                });
+                return res.status(200).json({ message: 'E-mail enviado com sucesso.' });
+            }
         }
 
         return res.status(200).json({ message: 'Nenhuma ação de e-mail acionada.' });
