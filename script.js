@@ -37,8 +37,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('retiradaForm')?.addEventListener('submit', handleRetiradaSubmit);
     document.getElementById('usuarioForm')?.addEventListener('submit', handleUsuarioFormSubmit);
     document.getElementById('filialForm')?.addEventListener('submit', handleFilialFormSubmit);
-    document.getElementById('cgoForm')?.addEventListener('submit', handleCgoFormSubmit); // NOVO
+    document.getElementById('cgoForm')?.addEventListener('submit', handleCgoFormSubmit);
 
+    // NOVO: Listeners para o painel de consulta CGO
+    document.getElementById('helpCgoButton')?.addEventListener('click', abrirConsultaCgoModal);
+    document.getElementById('cgoSearchInput')?.addEventListener('input', filtrarCgoConsulta);
 });
 
 // --- Funções de Autenticação e Navegação ---
@@ -128,6 +131,7 @@ async function handleLogin(event) {
 function showMainSystem() {
     document.getElementById('loginContainer').style.display = 'none';
     document.getElementById('mainSystem').style.display = 'flex';
+    document.getElementById('helpCgoButton').style.display = 'flex'; // NOVO: Mostra o botão flutuante
 
     // Preenche informações no Sidebar
     document.getElementById('sidebarUser').textContent = currentUser.nome;
@@ -221,9 +225,7 @@ function showView(viewId, element = null) {
         case 'gerenciarCgoView': // NOVO
             loadGerenciarCgo();
             break;
-        case 'consultaCgoView': // NOVO
-            loadConsultaCgo();
-            break;
+        // REMOVIDO: case 'consultaCgoView'
         // Adicione mais casos conforme necessário
     }
 
@@ -241,10 +243,11 @@ function logout() {
     currentUser = null;
     selectedFilial = null;
     todasFiliaisCache = []; // Limpa o cache de admin
-    cgoCache = []; // NOVO
-    todosCgoCache = []; // NOVO
+    cgoCache = []; 
+    todosCgoCache = []; 
     document.getElementById('mainSystem').style.display = 'none';
     document.getElementById('loginContainer').style.display = 'flex';
+    document.getElementById('helpCgoButton').style.display = 'none'; // NOVO: Esconde o botão flutuante
     document.getElementById('loginForm').reset();
     document.getElementById('loginAlert').innerHTML = '';
     document.getElementById('filialSelectGroup').style.display = 'none';
@@ -583,10 +586,15 @@ function closeModal(modalId) {
             document.getElementById('filialForm').reset();
             document.getElementById('filialId').value = '';
         }
-        // NOVO: Limpar form específico do modal de CGO
+        // Limpar form específico do modal de CGO
         if (modalId === 'cgoModal') {
             document.getElementById('cgoForm').reset();
             document.getElementById('cgoId').value = '';
+        }
+        // NOVO: Limpar filtro do modal de consulta CGO
+        if (modalId === 'consultaCgoModal') {
+            document.getElementById('cgoSearchInput').value = '';
+            filtrarCgoConsulta(); // Reseta o filtro para mostrar tudo
         }
     }
 }
@@ -1458,40 +1466,86 @@ async function removerFilial(id) {
 
 
 // =======================================================
-// === FUNÇÕES DE CONSULTA (TODOS) ===
+// === FUNÇÕES DE CONSULTA CGO (PAINEL FLUTUANTE) ===
 // =======================================================
 
 /**
- * NOVO: Carrega a lista de CGOs ativos para consulta pública.
+ * NOVO: Abre o painel (modal) de consulta de CGOs.
  */
-async function loadConsultaCgo() {
-    const tbody = document.getElementById('consultaCgoTableBody');
-    tbody.innerHTML = `<tr><td colspan="3" class="loading"><div class="spinner"></div>Carregando CGOs...</td></tr>`;
+async function abrirConsultaCgoModal() {
+    const modal = document.getElementById('consultaCgoModal');
+    const listContainer = document.getElementById('consultaCgoList');
+    listContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando CGOs...</div>';
+    modal.style.display = 'flex';
+    
+    // Renderiza os ícones do modal (X de fechar, etc)
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
+    
     try {
-        // Usar o cache de CGOs *ativos*
-        const cgos = await getCgoCache(true); // Força refresh para garantir dados novos
-        renderConsultaCgoTable(tbody, cgos || []);
+        // Usar o cache de CGOs *ativos*. 
+        // O 'false' significa que ele só busca na API se o cache estiver vazio.
+        const cgos = await getCgoCache(false); 
+        renderConsultaCgoList(cgos || []);
     } catch (error) {
         console.error("Erro ao carregar CGOs para consulta:", error);
-        tbody.innerHTML = `<tr><td colspan="3" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
+        listContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar: ${error.message}</div>`;
     }
 }
 
 /**
- * NOVO: Renderiza a tabela de consulta de CGOs.
+ * NOVO: Renderiza a lista de CGOs no painel de consulta.
  */
-function renderConsultaCgoTable(tbody, cgos) {
+function renderConsultaCgoList(cgos) {
+    const listContainer = document.getElementById('consultaCgoList');
     if (!cgos || cgos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-gray-500">Nenhum CGO ativo encontrado.</td></tr>`;
+        listContainer.innerHTML = `<div id="cgoConsultaEmptyState">Nenhum CGO ativo encontrado.</div>`;
         return;
     }
-    tbody.innerHTML = cgos.map(c => `
-        <tr class="text-sm">
-            <td><strong>${c.codigo_cgo}</strong></td>
-            <td>${c.descricao_cgo}</td>
-            <td>${c.obs || '-'}</td>
-        </tr>
+    
+    listContainer.innerHTML = cgos.map(c => `
+        <div class="cgo-item-card" data-filter-text="${(c.codigo_cgo + ' ' + c.descricao_cgo + ' ' + (c.obs || '')).toLowerCase()}">
+            <div class="cgo-item-header">
+                <span class="cgo-item-codigo">${c.codigo_cgo}</span>
+                <span class="cgo-item-descricao">${c.descricao_cgo}</span>
+            </div>
+            <p class="cgo-item-obs">${c.obs || 'Sem observações.'}</p>
+        </div>
     `).join('');
+}
+
+/**
+ * NOVO: Filtra a lista de CGOs no painel de consulta.
+ */
+function filtrarCgoConsulta() {
+    const searchTerm = document.getElementById('cgoSearchInput').value.toLowerCase();
+    const items = document.querySelectorAll('#consultaCgoList .cgo-item-card');
+    let itemsFound = 0;
+
+    items.forEach(item => {
+        const filterText = item.dataset.filterText;
+        if (filterText.includes(searchTerm)) {
+            item.style.display = 'block';
+            itemsFound++;
+        } else {
+            item.style.display = 'none';
+        }
+    });
+
+    // Mostra ou esconde a mensagem de "nenhum resultado"
+    let emptyState = document.getElementById('cgoConsultaEmptyState');
+    if (itemsFound === 0 && items.length > 0) {
+        if (!emptyState) {
+            emptyState = document.createElement('div');
+            emptyState.id = 'cgoConsultaEmptyState';
+            document.getElementById('consultaCgoList').appendChild(emptyState);
+        }
+        emptyState.textContent = 'Nenhum CGO encontrado para "' + searchTerm + '"';
+        emptyState.style.display = 'block';
+    } else if (emptyState) {
+        emptyState.style.display = 'none';
+    }
 }
 
 
