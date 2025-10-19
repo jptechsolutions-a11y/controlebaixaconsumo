@@ -570,11 +570,7 @@ async function loadHistoricoGeral() {
 }
 
 
-// --- Funções de Renderização (REESCRITA) ---
-
-/**
- * REESCRITO: Renderiza a tabela de PEDIDOS (solicitacoes_baixa)
- */
+// SUBSTITUA esta função no script.js
 function renderSolicitacoesTable(tbody, solicitacoes, context) {
     if (!solicitacoes || solicitacoes.length === 0) {
         const colspan = context === 'historico' ? 9 : 7;
@@ -588,7 +584,7 @@ function renderSolicitacoesTable(tbody, solicitacoes, context) {
         const solicitanteNome = s.usuarios ? s.usuarios.nome : 'Desconhecido';
         const filialNome = s.filiais ? s.filiais.nome : selectedFilial.nome; // Para histórico
 
-        // --- Nova Lógica de Resumo de Itens ---
+        // --- Lógica de Resumo de Itens (sem alteração) ---
         let produtoDesc = 'Nenhum item';
         let qtdTotalSol = 0;
         let valorTotalSol = 0;
@@ -615,8 +611,14 @@ function renderSolicitacoesTable(tbody, solicitacoes, context) {
 
         let actions = '';
         if (context === 'operacao') {
-            // Botão "Retirar" foi removido da lista principal. Ação é feita no modal de detalhes.
-            actions += `<button class="btn btn-primary btn-small" onclick="abrirDetalhesModal('${s.id}')">Ver Detalhes</button>`;
+            actions = `<button class="btn btn-primary btn-small" onclick="abrirDetalhesModal('${s.id}')">Ver Detalhes</button>`;
+            
+            // **** MUDANÇA AQUI ****
+            // Se o pedido está aguardando retirada (ou seja, tem itens prontos), mostra o botão de Retirada em Lote
+            if (s.status === 'aguardando_retirada') {
+                 actions += `<button class="btn btn-success btn-small ml-1" onclick="abrirRetiradaLoteModal('${s.id}')">Confirmar Retirada</Sbutton>`;
+            }
+
         } else if (context === 'gestor') {
             actions = `
                 <button class="btn btn-success btn-small" onclick="aprovarSolicitacao('${s.id}')">Aprovar</button>
@@ -661,7 +663,6 @@ function renderSolicitacoesTable(tbody, solicitacoes, context) {
         }
     }).join('');
 }
-
 
 function getStatusLabel(status) {
     const labels = {
@@ -1965,5 +1966,148 @@ async function toggleCgoStatus(id, newStatus) {
     } catch (error) {
          console.error(`Erro ao ${action} CGO:`, error);
          showNotification(`Erro ao ${action} CGO: ${error.message}`, 'error');
+    }
+}
+
+// SUBSTITUA a função 'abrirRetiradaModal' antiga por esta:
+/**
+ * NOVO: Abre modal de Retirada para um PEDIDO (em lote)
+ */
+async function abrirRetiradaLoteModal(solicitacaoId) { 
+    const modal = document.getElementById('retiradaModal');
+    document.getElementById('retiradaPedidoIdDisplay').textContent = solicitacaoId;
+    document.getElementById('retiradaSolicitacaoId').value = solicitacaoId; // Salva o ID do PEDIDO
+    document.getElementById('retiradaForm').reset();
+    document.getElementById('retiradaAlert').innerHTML = '';
+    
+    const listContainer = document.getElementById('retiradaItensList');
+    listContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando itens...</div>';
+
+    modal.style.display = 'flex';
+
+    try {
+        // Busca todos os itens AGUARDANDO RETIRADA desta solicitação
+        const response = await supabaseRequest(
+            `solicitacao_itens?solicitacao_id=eq.${solicitacaoId}&status=eq.aguardando_retirada&select=*,produtos(codigo,descricao)&order=id.asc`
+        );
+
+        if (!response || response.length === 0) {
+            listContainer.innerHTML = '<div class="text-center py-4 text-gray-500">Nenhum item aguardando retirada para este pedido.</div>';
+            return;
+        }
+
+        // Renderiza a lista de itens com checkboxes
+        listContainer.innerHTML = response.map(item => {
+            const produto = item.produtos;
+            return `
+                <div class="bg-gray-50 p-4 rounded border flex items-start">
+                    <input type="checkbox" value="${item.id}" name="retirar_item_ids" 
+                           class="h-5 w-5 mt-1 mr-3" checked> <div class="flex-1">
+                        <p class="font-semibold">${produto.codigo} - ${produto.descricao}</p>
+                        <p class="text-sm text-gray-700">
+                            Qtd. Executada: ${item.quantidade_executada} | 
+                            Valor Total: R$ ${item.valor_total_executado.toFixed(2)}
+                        </p>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (error) {
+        console.error("Erro ao carregar itens para retirada:", error);
+        listContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar itens: ${error.message}</div>`;
+    }
+}
+
+
+// SUBSTITUA a função 'handleRetiradaSubmit' antiga por esta:
+/**
+ * NOVO: Submissão do formulário de Retirada (em lote e com múltiplos anexos)
+ */
+async function handleRetiradaSubmit(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('retiradaAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Processando retirada...</div>';
+
+    const solicitacaoId = document.getElementById('retiradaSolicitacaoId').value; // ID do PEDIDO
+    const fotoFiles = document.getElementById('fotosRetirada').files; // Múltiplos arquivos
+    const checkedItems = document.querySelectorAll('input[name="retirar_item_ids"]:checked');
+
+    if (checkedItems.length === 0) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Selecione pelo menos um item para confirmar a retirada.</div>';
+        return;
+    }
+    if (!fotoFiles || fotoFiles.length === 0) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Por favor, anexe pelo menos uma foto ou anexo.</div>';
+        return;
+    }
+
+    try {
+        // 1. Fazer Upload de TODAS as fotos/anexos
+        alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Enviando anexos...</div>';
+        let fotosUrls = []; // Array que vai guardar as URLs
+        
+        for (const file of fotoFiles) {
+            try {
+                // Usamos o ID do PEDIDO para a pasta
+                const apiUrl = `/api/upload?fileName=${encodeURIComponent(file.name)}&solicitacaoId=${solicitacaoId}&fileType=foto_retirada`; 
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+                    body: file,
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Erro ${response.status} ao enviar ${file.name}: ${errorData.details || errorData.error}`);
+                }
+                const result = await response.json();
+                if (result.publicUrl) {
+                    fotosUrls.push(result.publicUrl); // Adiciona a URL ao nosso array
+                }
+            } catch (uploadError) {
+                 console.error(`Falha no upload do anexo ${file.name}:`, uploadError);
+                 throw new Error(`Falha no upload do anexo ${file.name}`);
+            }
+        }
+        
+        if (fotosUrls.length === 0) {
+             throw new Error('Nenhum anexo foi enviado com sucesso.');
+        }
+
+        // 2. Atualizar todos os ITENS selecionados
+        alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Atualizando itens...</div>';
+        
+        const dataRetirada = new Date().toISOString();
+        
+        for (const item of checkedItems) {
+            const itemId = item.value;
+            
+            const updateData = {
+                status: 'finalizada', // Status final do ITEM
+                retirada_por_id: currentUser.id,
+                data_retirada: dataRetirada,
+                fotos_retirada_urls: fotosUrls // Salva o ARRAY de URLs
+            };
+            await supabaseRequest(`solicitacao_itens?id=eq.${itemId}`, 'PATCH', updateData);
+        }
+
+        // 3. (Opcional) Verificar se o PEDIDO (cabeçalho) está 100% finalizado
+        // Busca itens que AINDA NÃO estejam finalizados ou negados
+        const itensPendentes = await supabaseRequest(
+            `solicitacao_itens?solicitacao_id=eq.${solicitacaoId}&status=not.in.(finalizada,negada)&select=id&limit=1`
+        );
+        
+        // Se não há mais itens pendentes, fecha o pedido
+        if (itensPendentes.length === 0) {
+            await supabaseRequest(`solicitacoes_baixa?id=eq.${solicitacaoId}`, 'PATCH', { status: 'finalizada' });
+        }
+        
+        showNotification(`Retirada de ${checkedItems.length} item(ns) confirmada!`, 'success');
+        closeModal('retiradaModal');
+        loadMinhasSolicitacoes(); // Recarrega a lista principal
+
+    } catch (error) {
+        console.error("Erro ao confirmar retirada:", error);
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao confirmar: ${error.message}</div>`;
     }
 }
