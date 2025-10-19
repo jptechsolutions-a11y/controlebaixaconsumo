@@ -106,6 +106,10 @@
                     <i data-feather="briefcase" class="h-5 w-5 mr-3"></i>
                     <span>Gerenciar Filiais</span>
                 </a>
+                <a href="#gerenciarProdutos" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarProdutosView', this)" data-role="admin">
+                    <i data-feather="package" class="h-5 w-5 mr-3"></i>
+                    <span>Gerenciar Produtos</span>
+                </a>
                 <a href="#gerenciarCgo" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarCgoView', this)" data-role="admin">
                     <i data-feather="settings" class="h-5 w-5 mr-3"></i>
                     <span>Gerenciar CGOs</span>
@@ -123,43 +127,75 @@
                 <div id="homeView" class="view-content active">
                     <h1 class="text-3xl font-bold text-gray-800 mb-6">Bem-vindo(a)!</h1>
                     <p class="text-gray-600">Selecione uma opção no menu lateral para começar.</p>
-                    </div>
+                </div>
 
                 <div id="novaSolicitacaoView" class="view-content">
                     <h1 class="text-3xl font-bold text-gray-800 mb-6">Nova Solicitação de Baixa</h1>
-                    <div class="bg-white p-6 rounded-lg shadow-md max-w-2xl mx-auto">
-                        <form id="novaSolicitacaoForm">
-                            <div class="form-group mb-4">
+                    
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <h3 class="text-xl font-semibold mb-4">Adicionar Item</h3>
+                        <form id="addItemForm" class="form-grid" style="grid-template-columns: 1fr 1fr; align-items: flex-end;">
+                            <div class="form-group" style="grid-column: 1 / 2;">
                                 <label for="produtoCodigo">Código do Produto:</label>
                                 <input type="text" id="produtoCodigo" required class="w-full">
                             </div>
-                            <div class="form-group mb-4">
+                            <div class="form-group" style="grid-column: 2 / 3;">
                                 <label>Descrição:</label>
                                 <input type="text" id="produtoDescricao" readonly disabled class="w-full bg-gray-200">
                                 <input type="hidden" id="produtoId">
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                <div class="form-group">
-                                    <label for="quantidadeSolicitada">Quantidade:</label>
-                                    <input type="number" id="quantidadeSolicitada" min="1" required class="w-full">
-                                </div>
-                                <div class="form-group">
-                                    <label for="valorUnitarioSolicitado">Valor Unitário (R$):</label>
-                                    <input type="number" id="valorUnitarioSolicitado" step="0.01" min="0" required class="w-full">
-                                </div>
-                                <div class="form-group">
-                                    <label>Valor Total (R$):</label>
-                                    <input type="text" id="valorTotalSolicitado" readonly disabled class="w-full bg-gray-200">
-                                </div>
+                            <div class="form-group" style="grid-column: 1 / 2;">
+                                <label for="quantidadeSolicitada">Quantidade:</label>
+                                <input type="number" id="quantidadeSolicitada" min="1" required class="w-full">
                             </div>
-                            <div class="mt-6 text-center">
-                                <button type="submit" class="btn btn-success w-full md:w-auto">Enviar Solicitação</button>
+                            <div class="form-group" style="grid-column: 2 / 3;">
+                                <label for="valorUnitarioSolicitado">Valor Unitário (R$):</label>
+                                <input type="number" id="valorUnitarioSolicitado" step="0.01" min="0" required class="w-full">
+                            </div>
+                             <div class="form-group" style="grid-column: 1 / 2;">
+                                <label>Valor Total do Item (R$):</label>
+                                <input type="text" id="valorTotalSolicitado" readonly disabled class="w-full bg-gray-200">
+                            </div>
+                            <div class="form-group" style="grid-column: 2 / 3; text-align: left;">
+                                <button type="submit" class="btn btn-primary w-full">
+                                    <i data-feather="plus" class="h-4 w-4 inline-block -mt-1"></i> 
+                                    Adicionar Item ao Pedido
+                                </button>
                             </div>
                         </form>
+                        <div id="addItemAlert" class="mt-4"></div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-4">Itens do Pedido</h3>
+                        <div class="table-container">
+                            <table class="w-full">
+                                <thead>
+                                    <tr>
+                                        <th>Produto</th>
+                                        <th>Qtd.</th>
+                                        <th>Valor Unit.</th>
+                                        <th>Valor Total</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="carrinhoItensBody">
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4 text-gray-500">Nenhum item adicionado.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-6 text-right">
+                            <h3 class="text-2xl font-bold">Valor Total do Pedido: R$ <span id="carrinhoValorTotal">0.00</span></h3>
+                            <button id="submitPedidoButton" class="btn btn-success w-full md:w-auto mt-4" disabled>
+                                <i data-feather="send" class="h-4 w-4 inline-block -mt-1"></i>
+                                Enviar Solicitação
+                            </button>
+                        </div>
                         <div id="novaSolicitacaoAlert" class="mt-4"></div>
                     </div>
                 </div>
-
                 <div id="minhasSolicitacoesView" class="view-content">
                     <h1 class="text-3xl font-bold text-gray-800 mb-6">Minhas Solicitações</h1>
                     <div class="table-container bg-white rounded-lg shadow-md">
@@ -296,6 +332,29 @@
                     </div>
                 </div>
 
+                <div id="gerenciarProdutosView" class="view-content">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Gerenciar Produtos</h1>
+                        <button class="btn btn-success" onclick="abrirProdutoModal(null)">
+                            <i data-feather="plus" class="h-4 w-4 inline-block -mt-1 mr-1"></i>
+                            Novo Produto
+                        </button>
+                    </div>
+                    <div class="table-container bg-white rounded-lg shadow-md">
+                        <table class="w-full">
+                            <thead>
+                                <tr>
+                                    <th>Cód.</th>
+                                    <th>Descrição</th>
+                                    <th>CGOs Permitidos</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="produtosTableBody">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
                 <div id="gerenciarCgoView" class="view-content">
                     <div class="flex justify-between items-center mb-6">
                         <h1 class="text-3xl font-bold text-gray-800">Gerenciar CGOs</h1>
@@ -337,54 +396,50 @@
     </div>
 
     <div id="executarModal" class="modal-overlay">
-        <div class="modal-content">
-             <h3 class="text-xl font-semibold mb-4">Executar Baixa - Solicitação #<span id="executarId"></span></h3>
-             <form id="executarForm">
-                 <input type="hidden" id="executarSolicitacaoId">
-                 <div class="mb-4 p-3 bg-gray-100 rounded border border-gray-200">
-                     <p><strong>Produto:</strong> <span id="executarProduto"></span></p>
-                     <p><strong>Qtd. Solicitada:</strong> <span id="executarQtdSolicitada"></span></p>
-                     <p><strong>Valor Solicitado:</strong> R$ <span id="executarValorSolicitado"></span></p>
-                 </div>
-                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                     <div class="form-group">
-                         <label for="quantidadeExecutada">Qtd. Real Baixada:</label>
-                         <input type="number" id="quantidadeExecutada" min="0" required class="w-full">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh; display: flex; flex-direction: column;">
+            <h3 class="text-xl font-semibold mb-4">Executar Baixa - Solicitação #<span id="executarId"></span></h3>
+            
+            <form id="executarForm" class="flex-1 flex flex-col min-h-0">
+                <input type="hidden" id="executarSolicitacaoId">
+                
+                <div class="form-group mb-4 flex-1 overflow-y-auto">
+                    <label class="block mb-2 font-semibold">Itens Aprovados para Execução:</label>
+                    <div id="executarItensList" class="space-y-3 pr-2">
+                        <div class="loading"><div class="spinner"></div>Carregando itens...</div>
+                        </div>
+                </div>
+
+                <div class="border-t pt-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div class="form-group">
+                             <label for="codigoMovimentacao">CGO (Cód. Movimentação):</label>
+                             <select id="codigoMovimentacao" required class="w-full" disabled>
+                                 <option value="">Selecione os itens primeiro...</option>
+                             </select>
+                             <small id="cgoHelp" class="text-gray-500">A lista mostra CGOs comuns a *todos* os itens selecionados.</small>
+                        </div>
+                         <div class="form-group">
+                            <label for="justificativaExecucao">Justificativa (para todos itens selecionados):</label>
+                            <input type="text" id="justificativaExecucao" required class="w-full">
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-4">
+                         <label for="anexosExecucao">Anexos (Opcional):</label>
+                         <input type="file" id="anexosExecucao" multiple class="w-full text-sm">
+                         <small class="text-gray-500">Anexos para *esta* execução (serão ligados aos itens selecionados).</small>
                      </div>
-                     <div class="form-group">
-                         <label for="valorUnitarioExecutado">Valor Unit. Real (R$):</label>
-                         <input type="number" id="valorUnitarioExecutado" step="0.01" min="0" required class="w-full">
-                     </div>
-                     <div class="form-group">
-                         <label>Valor Total Real (R$):</label>
-                         <input type="text" id="valorTotalExecutado" readonly disabled class="w-full bg-gray-200">
-                     </div>
-                 </div>
-                 <div class="form-group mb-4">
-                     <label for="justificativaExecucao">Justificativa:</label>
-                     <textarea id="justificativaExecucao" rows="3" required class="w-full"></textarea>
-                 </div>
-                 <div class="form-group mb-4">
-                     <label for="codigoMovimentacao">CGO (Cód. Movimentação):</label>
-                     <select id="codigoMovimentacao" required class="w-full">
-                         <option value="">Carregando CGOs...</option>
-                     </select>
-                 </div>
-                 <div class="form-group mb-4">
-                     <label for="anexosExecucao">Anexos (Opcional):</label>
-                     <input type="file" id="anexosExecucao" multiple class="w-full text-sm">
-                     <small class="text-gray-500">Selecione um ou mais arquivos (PDF, Imagem).</small>
-                 </div>
-                 <div id="executarAlert" class="mt-4"></div>
-                 <div class="flex gap-4 mt-6">
-                     <button type="submit" class="btn btn-success flex-1">Confirmar Execução</button>
-                     <button type="button" class="btn btn-danger flex-1" onclick="closeModal('executarModal')">Cancelar</button>
-                 </div>
-             </form>
+                </div>
+                
+                <div id="executarAlert" class="mt-4"></div>
+                <div class="flex gap-4 mt-6">
+                    <button type="submit" class="btn btn-success flex-1">Confirmar Execução dos Itens Selecionados</button>
+                    <button type="button" class="btn btn-danger flex-1" onclick="closeModal('executarModal')">Cancelar</button>
+                </div>
+            </form>
         </div>
     </div>
-
-     <div id="retiradaModal" class="modal-overlay">
+    <div id="retiradaModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 500px;">
              <h3 class="text-xl font-semibold mb-4">Confirmar Retirada - Solicitação #<span id="retiradaId"></span></h3>
              <form id="retiradaForm">
@@ -518,6 +573,35 @@
         </div>
     </div>
 
+    <div id="produtoModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3 class="text-xl font-semibold mb-4" id="produtoModalTitle">Novo Produto</h3>
+            <form id="produtoForm">
+                <input type="hidden" id="produtoIdAdmin">
+                <div class="form-group mb-4">
+                    <label for="produtoCodigoAdmin">Código do Produto:</label>
+                    <input type="text" id="produtoCodigoAdmin" required class="w-full">
+                </div>
+                <div class="form-group mb-4">
+                    <label for="produtoDescricaoAdmin">Descrição:</label>
+                    <input type="text" id="produtoDescricaoAdmin" required class="w-full">
+                </div>
+                
+                <div class="form-group mb-4">
+                    <label class="block mb-1">CGOs Permitidos:</label>
+                    <div id="produtoCgosCheckboxes" class="max-h-40 overflow-y-auto bg-gray-50 p-3 border rounded-md grid grid-cols-2 gap-2">
+                        <div class="loading text-sm">Carregando CGOs...</div>
+                    </div>
+                </div>
+
+                <div id="produtoAlert" class="mt-4"></div>
+                <div class="flex gap-4 mt-6">
+                    <button type="submit" class="btn btn-success flex-1">Salvar Produto</button>
+                    <button type="button" class="btn btn-danger flex-1" onclick="closeModal('produtoModal')">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <div id="consultaCgoModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 700px; max-height: 80vh; display: flex; flex-direction: column;">
             <div class="flex justify-between items-center mb-4">
