@@ -5,12 +5,13 @@ let produtosCache = []; // Cache simples de produtos para lookup
 let todasFiliaisCache = []; // Cache de todas as filiais para admin
 let cgoCache = []; // NOVO: Cache de CGOs ativos
 let todosCgoCache = []; // NOVO: Cache de TODOS os CGOs (para admin)
+let carrinhoItens = []; // NOVO: Array para o "carrinho" da nova solicitação
 
 // --- Inicialização ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
 
-    // Listeners para cálculo automático e busca de produto
+    // Listeners para cálculo automático e busca de produto (Formulário de ADICIONAR ITEM)
     const qtdInput = document.getElementById('quantidadeSolicitada');
     const valorInput = document.getElementById('valorUnitarioSolicitado');
     const codigoInput = document.getElementById('produtoCodigo');
@@ -23,21 +24,17 @@ document.addEventListener('DOMContentLoaded', () => {
         codigoInput.addEventListener('blur', buscarProdutoPorCodigo); // Ao sair do campo
     }
 
-    // Listeners para modal de execução
-    const qtdExecInput = document.getElementById('quantidadeExecutada');
-    const valorExecInput = document.getElementById('valorUnitarioExecutado');
-    if (qtdExecInput && valorExecInput) {
-        qtdExecInput.addEventListener('input', calcularValorTotalExecutado);
-        valorExecInput.addEventListener('input', calcularValorTotalExecutado);
-    }
+    // Listeners para modal de execução (REMOVIDO, agora é dinâmico)
 
-    // Bind forms (novos)
-    document.getElementById('novaSolicitacaoForm')?.addEventListener('submit', handleNovaSolicitacaoSubmit);
+    // Bind forms (novos e antigos)
+    document.getElementById('addItemForm')?.addEventListener('submit', handleAddItem); // NOVO
+    document.getElementById('submitPedidoButton')?.addEventListener('click', handleNovaSolicitacaoSubmit); // NOVO
     document.getElementById('executarForm')?.addEventListener('submit', handleExecucaoSubmit);
     document.getElementById('retiradaForm')?.addEventListener('submit', handleRetiradaSubmit);
     document.getElementById('usuarioForm')?.addEventListener('submit', handleUsuarioFormSubmit);
     document.getElementById('filialForm')?.addEventListener('submit', handleFilialFormSubmit);
     document.getElementById('cgoForm')?.addEventListener('submit', handleCgoFormSubmit);
+    document.getElementById('produtoForm')?.addEventListener('submit', handleProdutoFormSubmit); // NOVO
 
     // NOVO: Listeners para o painel de consulta CGO
     document.getElementById('helpCgoButton')?.addEventListener('click', abrirConsultaCgoModal);
@@ -200,8 +197,7 @@ function showView(viewId, element = null) {
     // Carrega dados específicos da view
     switch (viewId) {
         case 'novaSolicitacaoView':
-            // Limpar formulário? Carregar algum dado inicial?
-            document.getElementById('novaSolicitacaoForm')?.reset();
+            limparCarrinho(); // NOVO: Limpa o carrinho ao entrar na view
             break;
         case 'minhasSolicitacoesView':
             loadMinhasSolicitacoes();
@@ -222,11 +218,12 @@ function showView(viewId, element = null) {
         case 'gerenciarFiliaisView':
             loadGerenciarFiliais();
             break;
+        case 'gerenciarProdutosView': // NOVO
+            loadGerenciarProdutos();
+            break;
         case 'gerenciarCgoView': // NOVO
             loadGerenciarCgo();
             break;
-        // REMOVIDO: case 'consultaCgoView'
-        // Adicione mais casos conforme necessário
     }
 
     // Re-renderizar ícones Feather (importante após mudar views)
@@ -245,6 +242,7 @@ function logout() {
     todasFiliaisCache = []; // Limpa o cache de admin
     cgoCache = []; 
     todosCgoCache = []; 
+    carrinhoItens = []; // NOVO: Limpa o carrinho
     document.getElementById('mainSystem').style.display = 'none';
     document.getElementById('loginContainer').style.display = 'flex';
     document.getElementById('helpCgoButton').style.display = 'none'; // NOVO: Esconde o botão flutuante
@@ -254,8 +252,128 @@ function logout() {
     showNotification('Você foi desconectado.', 'info');
 }
 
-// --- Funções de Lógica de Negócio (Solicitações) ---
+// --- Funções de Lógica de Negócio (Solicitações - NOVO "CARRINHO") ---
 
+/**
+ * NOVO: Limpa o carrinho e reseta os formulários da view 'novaSolicitacaoView'
+ */
+function limparCarrinho() {
+    carrinhoItens = [];
+    document.getElementById('addItemForm')?.reset();
+    document.getElementById('addItemAlert').innerHTML = '';
+    document.getElementById('novaSolicitacaoAlert').innerHTML = '';
+    renderCarrinho();
+}
+
+/**
+ * NOVO: Adiciona um item ao array 'carrinhoItens'
+ */
+function handleAddItem(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('addItemAlert');
+    alertContainer.innerHTML = '';
+
+    // Pegar dados do formulário
+    const produtoId = document.getElementById('produtoId').value;
+    const produtoCodigo = document.getElementById('produtoCodigo').value;
+    const produtoDescricao = document.getElementById('produtoDescricao').value;
+    const quantidade = parseInt(document.getElementById('quantidadeSolicitada').value);
+    const valorUnitario = parseFloat(document.getElementById('valorUnitarioSolicitado').value);
+    const valorTotal = parseFloat(document.getElementById('valorTotalSolicitado').value);
+
+    // Validação
+    if (!produtoId || produtoDescricao === 'Produto não encontrado') {
+        alertContainer.innerHTML = '<div class="alert alert-error">Produto inválido. Busque um código válido.</div>';
+        return;
+    }
+    if (isNaN(quantidade) || quantidade <= 0) {
+         alertContainer.innerHTML = '<div class="alert alert-error">Quantidade deve ser maior que zero.</div>';
+        return;
+    }
+     if (isNaN(valorUnitario) || valorUnitario < 0) {
+         alertContainer.innerHTML = '<div class="alert alert-error">Valor unitário inválido.</div>';
+        return;
+    }
+    // Verifica se o item já está no carrinho
+    if (carrinhoItens.find(item => item.produto_id === produtoId)) {
+         alertContainer.innerHTML = '<div class="alert alert-error">Este produto já foi adicionado. Remova-o para alterar.</div>';
+        return;
+    }
+
+    // Adiciona ao array do carrinho
+    carrinhoItens.push({
+        produto_id: produtoId,
+        produto_desc: `${produtoCodigo} - ${produtoDescricao}`,
+        quantidade_solicitada: quantidade,
+        valor_unitario_solicitado: valorUnitario,
+        valor_total_solicitado: valorTotal
+    });
+
+    // Renderiza o carrinho
+    renderCarrinho();
+    
+    // Limpa o formulário de adicionar
+    document.getElementById('addItemForm').reset();
+    document.getElementById('produtoId').value = '';
+    document.getElementById('produtoDescricao').value = '';
+    document.getElementById('valorTotalSolicitado').value = '';
+    document.getElementById('produtoCodigo').focus();
+    showNotification('Item adicionado ao pedido!', 'success', 2000);
+}
+
+/**
+ * NOVO: Renderiza a tabela do carrinho com base no array 'carrinhoItens'
+ */
+function renderCarrinho() {
+    const tbody = document.getElementById('carrinhoItensBody');
+    const totalSpan = document.getElementById('carrinhoValorTotal');
+    const submitButton = document.getElementById('submitPedidoButton');
+
+    if (carrinhoItens.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">Nenhum item adicionado.</td></tr>`;
+        totalSpan.textContent = '0.00';
+        submitButton.disabled = true;
+        return;
+    }
+
+    let valorTotalPedido = 0;
+    tbody.innerHTML = carrinhoItens.map((item, index) => {
+        valorTotalPedido += item.valor_total_solicitado;
+        return `
+            <tr class="text-sm">
+                <td>${item.produto_desc}</td>
+                <td class="text-center">${item.quantidade_solicitada}</td>
+                <td class="text-right">R$ ${item.valor_unitario_solicitado.toFixed(2)}</td>
+                <td class="text-right">R$ ${item.valor_total_solicitado.toFixed(2)}</td>
+                <td class="text-center">
+                    <button class="btn btn-danger btn-small" onclick="removerItemDoCarrinho(${index})">
+                        <i data-feather="trash-2" class="h-4 w-4"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    totalSpan.textContent = valorTotalPedido.toFixed(2);
+    submitButton.disabled = false;
+    if (typeof feather !== 'undefined') {
+        feather.replace(); // Renderiza os ícones de lixeira
+    }
+}
+
+/**
+ * NOVO: Remove um item do array 'carrinhoItens'
+ */
+function removerItemDoCarrinho(index) {
+    carrinhoItens.splice(index, 1); // Remove o item do array pelo índice
+    renderCarrinho();
+    showNotification('Item removido.', 'info', 2000);
+}
+
+
+/**
+ * REESCRITO: Busca o produto (sem alteração de lógica)
+ */
 async function buscarProdutoPorCodigo() {
     const codigo = document.getElementById('produtoCodigo').value.trim();
     const descricaoInput = document.getElementById('produtoDescricao');
@@ -276,7 +394,8 @@ async function buscarProdutoPorCodigo() {
 
         if (!produto) {
             // Se não está no cache, busca no banco
-            const response = await supabaseRequest(`produtos?codigo=eq.${codigo}&select=id,descricao`); // Remover valor_unitario_padrao
+            // IMPORTANTE: Agora também buscamos 'cgos_permitidos'
+            const response = await supabaseRequest(`produtos?codigo=eq.${codigo}&select=id,descricao,cgos_permitidos`);
             if (response && response.length > 0) {
                 produto = response[0];
                 produtosCache.push(produto); // Adiciona ao cache
@@ -306,7 +425,9 @@ async function buscarProdutoPorCodigo() {
     }
 }
 
-
+/**
+ * REESCRITO: Calcula o total (sem alteração de lógica)
+ */
 function calcularValorTotalSolicitado() {
     const qtd = parseFloat(document.getElementById('quantidadeSolicitada').value) || 0;
     const valorUnit = parseFloat(document.getElementById('valorUnitarioSolicitado').value) || 0;
@@ -314,53 +435,73 @@ function calcularValorTotalSolicitado() {
     document.getElementById('valorTotalSolicitado').value = total.toFixed(2);
 }
 
+/**
+ * REESCRITO: Envia o "carrinho" (pedido e itens)
+ */
 async function handleNovaSolicitacaoSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('novaSolicitacaoAlert');
-    alertContainer.innerHTML = '';
-
-    const produtoId = document.getElementById('produtoId').value;
-    const quantidade = parseInt(document.getElementById('quantidadeSolicitada').value);
-    const valorUnitario = parseFloat(document.getElementById('valorUnitarioSolicitado').value);
-    const valorTotal = parseFloat(document.getElementById('valorTotalSolicitado').value);
-
-    if (!produtoId || isNaN(quantidade) || quantidade <= 0 || isNaN(valorUnitario) || valorUnitario < 0) {
-        alertContainer.innerHTML = '<div class="alert alert-error">Verifique os dados do produto, quantidade e valor.</div>';
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Enviando solicitação...</div>';
+    
+    if (carrinhoItens.length === 0) {
+         alertContainer.innerHTML = '<div class="alert alert-error">Adicione pelo menos um item ao pedido.</div>';
         return;
     }
 
-    const solicitacaoData = {
-        filial_id: selectedFilial.id,
-        produto_id: produtoId,
-        solicitante_id: currentUser.id,
-        quantidade_solicitada: quantidade,
-        valor_unitario_solicitado: valorUnitario,
-        valor_total_solicitado: valorTotal,
-        status: 'aguardando_aprovacao'
-    };
-
     try {
-        await supabaseRequest('solicitacoes_baixa', 'POST', solicitacaoData);
+        // 1. Criar o "cabeçalho" da solicitação
+        const solicitacaoHeader = {
+            filial_id: selectedFilial.id,
+            solicitante_id: currentUser.id,
+            status: 'aguardando_aprovacao' // Status geral do pedido
+        };
+        
+        // Usamos 'Prefer: return=representation' para pegar o ID de volta
+        const response = await supabaseRequest('solicitacoes_baixa', 'POST', solicitacaoHeader);
+        
+        if (!response || response.length === 0 || !response[0].id) {
+            throw new Error('Falha ao criar o cabeçalho da solicitação.');
+        }
+
+        const novaSolicitacaoId = response[0].id;
+        
+        // 2. Preparar os itens
+        const itensParaInserir = carrinhoItens.map(item => ({
+            solicitacao_id: novaSolicitacaoId,
+            produto_id: item.produto_id,
+            quantidade_solicitada: item.quantidade_solicitada,
+            valor_unitario_solicitado: item.valor_unitario_solicitado,
+            valor_total_solicitado: item.valor_total_solicitado,
+            status: 'aguardando_aprovacao' // Status de cada item
+        }));
+
+        // 3. Inserir todos os itens
+        await supabaseRequest('solicitacao_itens', 'POST', itensParaInserir);
+
+        // 4. Sucesso
         showNotification('Solicitação de baixa enviada com sucesso!', 'success');
-        document.getElementById('novaSolicitacaoForm').reset();
-        // Opcional: Redirecionar para "Minhas Solicitações"
+        limparCarrinho();
         showView('minhasSolicitacoesView', document.querySelector('a[href="#minhasSolicitacoes"]'));
 
     } catch (error) {
         console.error("Erro ao enviar solicitação:", error);
         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao enviar: ${error.message}</div>`;
+        // TODO: Adicionar lógica para deletar o "cabeçalho" caso a inserção dos itens falhe (rollback manual)
     }
 }
 
-// --- Funções de Carregamento de Dados das Views ---
+// --- Funções de Carregamento de Dados das Views (REESCRITAS) ---
 
+/**
+ * REESCRITO: Carrega os PEDIDOS do usuário
+ */
 async function loadMinhasSolicitacoes() {
     const tbody = document.getElementById('minhasSolicitacoesBody');
     tbody.innerHTML = `<tr><td colspan="7" class="loading"><div class="spinner"></div>Carregando...</td></tr>`;
 
     try {
         const response = await supabaseRequest(
-            `solicitacoes_baixa?solicitante_id=eq.${currentUser.id}&filial_id=eq.${selectedFilial.id}&select=id,data_solicitacao,status,quantidade_solicitada,valor_total_solicitado,produtos(codigo,descricao)&order=data_solicitacao.desc`
+            `solicitacoes_baixa?solicitante_id=eq.${currentUser.id}&filial_id=eq.${selectedFilial.id}&select=id,data_solicitacao,status,solicitacao_itens(quantidade_solicitada,valor_total_solicitado,status,produtos(codigo,descricao))&order=data_solicitacao.desc`
         );
         renderSolicitacoesTable(tbody, response || [], 'operacao');
     } catch (error) {
@@ -369,15 +510,17 @@ async function loadMinhasSolicitacoes() {
     }
 }
 
+/**
+ * REESCRITO: Carrega PEDIDOS pendentes de aprovação
+ */
 async function loadAprovacoesPendentes() {
     const tbody = document.getElementById('aprovarSolicitacoesBody');
     tbody.innerHTML = `<tr><td colspan="7" class="loading"><div class="spinner"></div>Carregando...</td></tr>`;
 
     try {
-        // Gestor vê todas da(s) sua(s) filial(is)
         const filialIds = currentUser.filiais.map(f => f.id);
         const response = await supabaseRequest(
-            `solicitacoes_baixa?status=eq.aguardando_aprovacao&filial_id=in.(${filialIds.join(',')})&select=id,data_solicitacao,quantidade_solicitada,valor_total_solicitado,produtos(codigo,descricao),usuarios!solicitacoes_baixa_solicitante_id_fkey(nome)&order=data_solicitacao.asc`
+            `solicitacoes_baixa?status=eq.aguardando_aprovacao&filial_id=in.(${filialIds.join(',')})&select=id,data_solicitacao,status,usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),solicitacao_itens(quantidade_solicitada,valor_total_solicitado,status,produtos(codigo,descricao))&order=data_solicitacao.asc`
         );
         renderSolicitacoesTable(tbody, response || [], 'gestor');
     } catch (error) {
@@ -386,15 +529,19 @@ async function loadAprovacoesPendentes() {
     }
 }
 
+/**
+ * REESCRITO: Carrega PEDIDOS pendentes de execução
+ */
 async function loadExecucoesPendentes() {
     const tbody = document.getElementById('executarSolicitacoesBody');
     tbody.innerHTML = `<tr><td colspan="7" class="loading"><div class="spinner"></div>Carregando...</td></tr>`;
 
     try {
-        // Prevenção vê todas aprovadas da(s) sua(s) filial(is)
+        // Gestor/Prevenção vê todas aprovadas da(s) sua(s) filial(is)
          const filialIds = currentUser.filiais.map(f => f.id);
+         // Busca pedidos 'aprovados' OU 'aguardando_retirada' (parcialmente executados)
         const response = await supabaseRequest(
-            `solicitacoes_baixa?status=eq.aprovada&filial_id=in.(${filialIds.join(',')})&select=id,data_solicitacao,quantidade_solicitada,valor_total_solicitado,produtos(codigo,descricao),usuarios!solicitacoes_baixa_solicitante_id_fkey(nome)&order=data_solicitacao.asc`
+            `solicitacoes_baixa?status=in.(aprovada,aguardando_retirada)&filial_id=in.(${filialIds.join(',')})&select=id,data_solicitacao,status,usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),solicitacao_itens(quantidade_solicitada,valor_total_solicitado,status,produtos(codigo,descricao))&order=data_solicitacao.asc`
         );
         renderSolicitacoesTable(tbody, response || [], 'prevencao');
     } catch (error) {
@@ -403,15 +550,17 @@ async function loadExecucoesPendentes() {
     }
 }
 
+/**
+ * REESCRITO: Carrega HISTÓRICO de pedidos
+ */
 async function loadHistoricoGeral() {
     const tbody = document.getElementById('historicoBaixasBody');
     tbody.innerHTML = `<tr><td colspan="9" class="loading"><div class="spinner"></div>Carregando histórico...</td></tr>`;
 
      try {
-        // Gestor/Admin vê histórico de suas filiais
         const filialIds = currentUser.filiais.map(f => f.id);
         const response = await supabaseRequest(
-            `solicitacoes_baixa?filial_id=in.(${filialIds.join(',')})&select=id,data_solicitacao,status,quantidade_executada,valor_total_executado,filiais(nome),produtos(codigo,descricao),usuarios!solicitacoes_baixa_solicitante_id_fkey(nome)&order=data_solicitacao.desc&limit=100` // Limite para performance
+            `solicitacoes_baixa?filial_id=in.(${filialIds.join(',')})&select=id,data_solicitacao,status,filiais(nome),usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),solicitacao_itens(quantidade_executada,valor_total_executado,status,produtos(codigo,descricao))&order=data_solicitacao.desc&limit=100`
         );
         renderSolicitacoesTable(tbody, response || [], 'historico');
     } catch (error) {
@@ -421,8 +570,11 @@ async function loadHistoricoGeral() {
 }
 
 
-// --- Funções de Renderização ---
+// --- Funções de Renderização (REESCRITA) ---
 
+/**
+ * REESCRITO: Renderiza a tabela de PEDIDOS (solicitacoes_baixa)
+ */
 function renderSolicitacoesTable(tbody, solicitacoes, context) {
     if (!solicitacoes || solicitacoes.length === 0) {
         const colspan = context === 'historico' ? 9 : 7;
@@ -431,20 +583,40 @@ function renderSolicitacoesTable(tbody, solicitacoes, context) {
     }
 
     tbody.innerHTML = solicitacoes.map(s => {
-        const produtoDesc = s.produtos ? `${s.produtos.codigo} - ${s.produtos.descricao}` : 'Produto não encontrado';
-        const solicitanteNome = s.usuarios ? s.usuarios.nome : 'Desconhecido';
+        const itens = s.solicitacao_itens || [];
         const dataSol = new Date(s.data_solicitacao).toLocaleDateString('pt-BR');
-        const valorSol = (s.valor_total_solicitado || 0).toFixed(2);
-        const valorExec = (s.valor_total_executado || 0).toFixed(2);
-        const qtdExec = s.quantidade_executada ?? '-';
+        const solicitanteNome = s.usuarios ? s.usuarios.nome : 'Desconhecido';
         const filialNome = s.filiais ? s.filiais.nome : selectedFilial.nome; // Para histórico
+
+        // --- Nova Lógica de Resumo de Itens ---
+        let produtoDesc = 'Nenhum item';
+        let qtdTotalSol = 0;
+        let valorTotalSol = 0;
+        let qtdTotalExec = 0;
+        let valorTotalExec = 0;
+
+        if (itens.length === 1) {
+            const item = itens[0];
+            produtoDesc = item.produtos ? `${item.produtos.codigo} - ${item.produtos.descricao}` : 'Produto inválido';
+            qtdTotalSol = item.quantidade_solicitada;
+            valorTotalSol = item.valor_total_solicitado;
+            qtdTotalExec = item.quantidade_executada ?? 0;
+            valorTotalExec = item.valor_total_executado ?? 0;
+        } else if (itens.length > 1) {
+            produtoDesc = `Múltiplos Itens (${itens.length})`;
+            itens.forEach(item => {
+                qtdTotalSol += item.quantidade_solicitada;
+                valorTotalSol += item.valor_total_solicitado;
+                qtdTotalExec += item.quantidade_executada ?? 0;
+                valorTotalExec += item.valor_total_executado ?? 0;
+            });
+        }
+        // --- Fim da Lógica de Resumo ---
 
         let actions = '';
         if (context === 'operacao') {
-            actions += `<button class="btn btn-primary btn-small" onclick="abrirDetalhesModal('${s.id}')">Ver</button>`;
-            if (s.status === 'aguardando_retirada') {
-                 actions += `<button class="btn btn-success btn-small ml-1" onclick="abrirRetiradaModal('${s.id}')">Retirar</button>`;
-            }
+            // Botão "Retirar" foi removido da lista principal. Ação é feita no modal de detalhes.
+            actions += `<button class="btn btn-primary btn-small" onclick="abrirDetalhesModal('${s.id}')">Ver Detalhes</button>`;
         } else if (context === 'gestor') {
             actions = `
                 <button class="btn btn-success btn-small" onclick="aprovarSolicitacao('${s.id}')">Aprovar</button>
@@ -467,8 +639,8 @@ function renderSolicitacoesTable(tbody, solicitacoes, context) {
                     <td>${filialNome}</td>
                     <td>${solicitanteNome}</td>
                     <td>${produtoDesc}</td>
-                    <td class="text-center">${qtdExec}</td>
-                    <td class="text-right">${valorExec}</td>
+                    <td class="text-center">${qtdTotalExec}</td>
+                    <td class="text-right">${valorTotalExec.toFixed(2)}</td>
                     <td><span class="status-badge status-${s.status}">${getStatusLabel(s.status)}</span></td>
                     <td>${actions}</td>
                 </tr>
@@ -480,74 +652,78 @@ function renderSolicitacoesTable(tbody, solicitacoes, context) {
                     <td>${dataSol}</td>
                     ${context !== 'operacao' ? `<td>${solicitanteNome}</td>` : ''}
                     <td>${produtoDesc}</td>
-                    <td class="text-center">${s.quantidade_solicitada}</td>
-                    <td class="text-right">${valorSol}</td>
+                    <td class="text-center">${qtdTotalSol}</td>
+                    <td class="text-right">${valorTotalSol.toFixed(2)}</td>
                     <td><span class="status-badge status-${s.status}">${getStatusLabel(s.status)}</span></td>
                     <td>${actions}</td>
                 </tr>
             `;
         }
-
-
     }).join('');
 }
 
-// AJUSTE APLICADO AQUI
+
 function getStatusLabel(status) {
     const labels = {
         'aguardando_aprovacao': 'Aguard. Aprovação',
         'aprovada': 'Aprovada',
         'negada': 'Negada',
-        'executando': 'Em Execução', // Embora não deva aparecer aqui, mantemos por segurança
-        'aguardando_retirada': 'Aguard. Retirada',
-        'finalizada': 'Finalizada'
+        'executando': 'Em Execução', // Status de item
+        'aguardando_retirada': 'Aguard. Retirada', // Pode ser do pedido (parcial) ou item
+        'finalizada': 'Finalizada',
+        'parcialmente_executado': 'Parcial. Executado' // NOVO status de pedido
     };
-
-    // --- INÍCIO DA CORREÇÃO ---
-    // Verifica se status é uma string válida antes de tentar usar métodos de string
     if (typeof status === 'string' && status) {
-        // Se o status existe no nosso mapa 'labels', retorna o label correspondente
         if (labels[status]) {
             return labels[status];
         }
-        // Se não existe no mapa, tenta formatar (ex: 'meu_status_novo' -> 'MEU STATUS NOVO')
         try {
             return status.replace('_', ' ').toUpperCase();
         } catch (e) {
-            // Em caso raro de erro na formatação, retorna o status original ou 'Desconhecido'
              console.warn("Erro ao formatar status inesperado:", status, e);
              return status || 'Desconhecido';
         }
     } else {
-        // Se status não for uma string válida (undefined, null, etc.), retorna 'Desconhecido'
-        console.warn("Status inválido recebido:", status); // Log para ajudar a identificar dados ruins
+        console.warn("Status inválido recebido:", status);
         return 'Desconhecido';
     }
-    // --- FIM DA CORREÇÃO ---
 }
 
 
-// --- Funções de Ações (Aprovar, Negar, Executar, Retirar) ---
+// --- Funções de Ações (REESCRITAS) ---
 
-async function aprovarSolicitacao(id) {
+/**
+ * REESCRITO: Aprova TODOS os itens de um pedido
+ */
+async function aprovarSolicitacao(id) { // id é solicitacao_id
+    if (!confirm(`Tem certeza que deseja APROVAR todos os itens do pedido #${id}?`)) return;
+    
     try {
         const updateData = {
             status: 'aprovada',
             aprovador_id: currentUser.id,
             data_aprovacao_negacao: new Date().toISOString()
         };
-        await supabaseRequest(`solicitacoes_baixa?id=eq.${id}`, 'PATCH', updateData);
-        showNotification(`Solicitação #${id} aprovada!`, 'success');
-        loadAprovacoesPendentes(); // Recarrega a lista de aprovações
+        
+        // 1. Atualiza todos os ITENS
+        await supabaseRequest(`solicitacao_itens?solicitacao_id=eq.${id}&status=eq.aguardando_aprovacao`, 'PATCH', updateData);
+        
+        // 2. Atualiza o PEDIDO (cabeçalho)
+        await supabaseRequest(`solicitacoes_baixa?id=eq.${id}`, 'PATCH', { status: 'aprovada' });
+
+        showNotification(`Pedido #${id} aprovado!`, 'success');
+        loadAprovacoesPendentes();
     } catch (error) {
         console.error("Erro ao aprovar:", error);
         showNotification(`Erro ao aprovar #${id}: ${error.message}`, 'error');
     }
 }
 
-async function negarSolicitacao(id) {
-    // Adicionar um prompt para o motivo (opcional, mas recomendado)
-    const motivo = prompt(`Digite o motivo para negar a solicitação #${id}:`);
+/**
+ * REESCRITO: Nega TODOS os itens de um pedido
+ */
+async function negarSolicitacao(id) { // id é solicitacao_id
+    const motivo = prompt(`Digite o motivo para NEGAR todos os itens do pedido #${id}:`);
     if (motivo === null) return; // Cancelado pelo usuário
 
     try {
@@ -557,115 +733,154 @@ async function negarSolicitacao(id) {
             data_aprovacao_negacao: new Date().toISOString(),
             motivo_negacao: motivo || 'Motivo não informado.'
         };
-        await supabaseRequest(`solicitacoes_baixa?id=eq.${id}`, 'PATCH', updateData);
-        showNotification(`Solicitação #${id} negada.`, 'info');
-        loadAprovacoesPendentes(); // Recarrega a lista
+
+        // 1. Atualiza todos os ITENS
+        await supabaseRequest(`solicitacao_itens?solicitacao_id=eq.${id}&status=eq.aguardando_aprovacao`, 'PATCH', updateData);
+        
+        // 2. Atualiza o PEDIDO (cabeçalho)
+        await supabaseRequest(`solicitacoes_baixa?id=eq.${id}`, 'PATCH', { status: 'negada' });
+
+        showNotification(`Pedido #${id} negado.`, 'info');
+        loadAprovacoesPendentes();
     } catch (error) {
         console.error("Erro ao negar:", error);
         showNotification(`Erro ao negar #${id}: ${error.message}`, 'error');
     }
 }
 
-// --- Funções dos Modais ---
+// --- Funções dos Modais (REESCRITAS) ---
 
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.style.display = 'none';
-        // Limpar alerts dentro do modal ao fechar
         const alertDiv = modal.querySelector('[id$="Alert"]');
         if (alertDiv) alertDiv.innerHTML = '';
         
-        // Limpar form específico do modal de usuário
         if (modalId === 'usuarioModal') {
             document.getElementById('usuarioForm').reset();
             document.getElementById('usuarioId').value = '';
         }
-         // Limpar form específico do modal de filial
         if (modalId === 'filialModal') {
             document.getElementById('filialForm').reset();
             document.getElementById('filialId').value = '';
         }
-        // Limpar form específico do modal de CGO
         if (modalId === 'cgoModal') {
             document.getElementById('cgoForm').reset();
             document.getElementById('cgoId').value = '';
         }
-        // NOVO: Limpar filtro do modal de consulta CGO
+        if (modalId === 'produtoModal') { // NOVO
+            document.getElementById('produtoForm').reset();
+            document.getElementById('produtoIdAdmin').value = '';
+        }
         if (modalId === 'consultaCgoModal') {
             document.getElementById('cgoSearchInput').value = '';
-            filtrarCgoConsulta(); // Reseta o filtro para mostrar tudo
+            filtrarCgoConsulta();
         }
     }
 }
 
-async function abrirDetalhesModal(id) {
+/**
+ * REESCRITO: Abre detalhes do PEDIDO e lista seus ITENS
+ */
+async function abrirDetalhesModal(id) { // id é solicitacao_id
     const modal = document.getElementById('detalhesModal');
     const content = document.getElementById('detalhesContent');
     document.getElementById('detalhesId').textContent = id;
     content.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
     modal.style.display = 'flex';
 
-    
     try {
-        // AJUSTE APLICADO PELA SUGESTÃO ANTERIOR (com aliases)
+        // 1. Busca o Pedido (cabeçalho)
         const s = await supabaseRequest(
-            `solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),produtos(codigo,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),usuarios_aprovador:usuarios!solicitacoes_baixa_aprovador_id_fkey(nome),usuarios_executor:usuarios!solicitacoes_baixa_executor_id_fkey(nome),usuarios_retirada:usuarios!solicitacoes_baixa_retirada_por_id_fkey(nome),anexos_baixa(url_arquivo,nome_arquivo)`, 'GET'
+            `solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome)`
         );
-
-
         if (!s || s.length === 0) throw new Error('Solicitação não encontrada.');
         const sol = s[0];
 
-        // Formatando datas
+        // 2. Busca os Itens
+        const itens = await supabaseRequest(
+            `solicitacao_itens?solicitacao_id=eq.${id}&select=*,produtos(codigo,descricao),usuarios_aprovador:usuarios!solicitacao_itens_aprovador_id_fkey(nome),usuarios_executor:usuarios!solicitacao_itens_executor_id_fkey(nome),usuarios_retirada:usuarios!solicitacao_itens_retirada_por_id_fkey(nome)&order=id.asc`
+        );
+        
+        // 3. Busca Anexos do Pedido
+        const anexos = await supabaseRequest(`anexos_baixa?solicitacao_id=eq.${id}`);
+
+
         const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleString('pt-BR') : 'N/A';
 
-        // Links de Anexos
+        // Links de Anexos (Nível Pedido)
         let anexosHtml = 'Nenhum anexo.';
-        if (sol.anexos_baixa && sol.anexos_baixa.length > 0) {
-            anexosHtml = sol.anexos_baixa.map(anexo =>
+        if (anexos && anexos.length > 0) {
+            anexosHtml = anexos.map(anexo =>
                 `<a href="${anexo.url_arquivo}" target="_blank" class="text-blue-600 hover:underline block">${anexo.nome_arquivo || 'Ver Anexo'}</a>`
             ).join('');
         }
 
-        // Foto de Retirada
-        const fotoRetiradaHtml = sol.foto_retirada_url
-            ? `<a href="${sol.foto_retirada_url}" target="_blank" class="text-blue-600 hover:underline">Ver Foto</a>`
-            : 'Não anexada';
-
-        content.innerHTML = `
-            <p><strong>Status:</strong> <span class="status-badge status-${sol.status}">${getStatusLabel(sol.status)}</span></p>
+        // Renderiza o Cabeçalho
+        let headerHtml = `
+            <p><strong>Status do Pedido:</strong> <span class="status-badge status-${sol.status}">${getStatusLabel(sol.status)}</span></p>
             <p><strong>Filial:</strong> ${sol.filiais.nome} - ${sol.filiais.descricao}</p>
-            <hr class="my-2">
-            <h4 class="font-semibold mb-1">Solicitação</h4>
-            <p><strong>Produto:</strong> ${sol.produtos.codigo} - ${sol.produtos.descricao}</p>
             <p><strong>Solicitante:</strong> ${sol.usuarios.nome}</p>
             <p><strong>Data:</strong> ${formatDate(sol.data_solicitacao)}</p>
-            <p><strong>Qtd. Solicitada:</strong> ${sol.quantidade_solicitada}</p>
-            <p><strong>Valor Unit. Solicitado:</strong> R$ ${sol.valor_unitario_solicitado.toFixed(2)}</p>
-            <p><strong>Valor Total Solicitado:</strong> R$ ${sol.valor_total_solicitado.toFixed(2)}</p>
-            <hr class="my-2">
-            <h4 class="font-semibold mb-1">Aprovação / Negação</h4>
-            <p><strong>Aprovador/Negador:</strong> ${sol.usuarios_aprovador?.nome || 'Pendente'}</p>
-            <p><strong>Data:</strong> ${formatDate(sol.data_aprovacao_negacao)}</p>
-            ${sol.status === 'negada' ? `<p><strong>Motivo Negação:</strong> ${sol.motivo_negacao || 'N/A'}</p>` : ''}
-            <hr class="my-2">
-            <h4 class="font-semibold mb-1">Execução (Prevenção)</h4>
-            <p><strong>Executor:</strong> ${sol.usuarios_executor?.nome || 'Pendente'}</p>
-            <p><strong>Data:</strong> ${formatDate(sol.data_execucao)}</p>
-            <p><strong>Qtd. Executada:</strong> ${sol.quantidade_executada ?? 'N/A'}</p>
-            <p><strong>Valor Unit. Executado:</strong> R$ ${sol.valor_unitario_executado?.toFixed(2) ?? 'N/A'}</p>
-            <p><strong>Valor Total Executado:</strong> R$ ${sol.valor_total_executado?.toFixed(2) ?? 'N/A'}</p>
-            <p><strong>Justificativa:</strong> ${sol.justificativa_execucao || 'N/A'}</p>
-            <p><strong>Cód. Movimentação (CGO):</strong> ${sol.codigo_movimentacao || 'N/A'}</p>
-            <p><strong>Anexos:</strong></p>
+            <p><strong>Anexos do Pedido:</strong></p>
             <div>${anexosHtml}</div>
-            <hr class="my-2">
-             <h4 class="font-semibold mb-1">Retirada (Operação)</h4>
-            <p><strong>Retirado por:</strong> ${sol.usuarios_retirada?.nome || 'Pendente'}</p>
-            <p><strong>Data:</strong> ${formatDate(sol.data_retirada)}</p>
-            <p><strong>Foto:</strong> ${fotoRetiradaHtml}</p>
+            <hr class="my-4">
+            <h4 class="text-lg font-semibold mb-2">Itens do Pedido</h4>
         `;
+
+        // Renderiza cada Item
+        let itensHtml = (itens || []).map(item => {
+            const fotoRetiradaHtml = item.foto_retirada_url
+                ? `<a href="${item.foto_retirada_url}" target="_blank" class="text-blue-600 hover:underline">Ver Foto</a>`
+                : 'Não anexada';
+
+            // NOVO: Botão de Retirada por item
+            let retiradaBtn = '';
+            if (item.status === 'aguardando_retirada' && (currentUser.role === 'operacao' || currentUser.role === 'admin')) {
+                retiradaBtn = `<button class="btn btn-success btn-small mt-2" onclick="abrirRetiradaModal(${item.id}, ${sol.id})">Confirmar Retirada</button>`;
+            }
+
+            return `
+                <div class="bg-gray-50 p-4 rounded border border-gray-200 mb-3">
+                    <p class="font-bold text-base">${item.produtos.codigo} - ${item.produtos.descricao}</p>
+                    <p><strong>Status do Item:</strong> <span class="status-badge status-${item.status}">${getStatusLabel(item.status)}</span></p>
+                    <hr class="my-2">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                        <div>
+                            <h5 class="font-semibold mb-1">Solicitação</h5>
+                            <p><strong>Qtd.:</strong> ${item.quantidade_solicitada}</p>
+                            <p><strong>Valor Total:</strong> R$ ${item.valor_total_solicitado.toFixed(2)}</p>
+                        </div>
+                        <div>
+                            <h5 class="font-semibold mb-1">Aprovação</h5>
+                            <p><strong>Por:</strong> ${item.usuarios_aprovador?.nome || 'Pendente'}</p>
+                            ${item.status === 'negada' ? `<p><strong>Motivo:</strong> ${item.motivo_negacao || 'N/A'}</p>` : ''}
+                        </div>
+                        <div>
+                            <h5 class="font-semibold mb-1 mt-2">Execução (Prevenção)</h5>
+                            <p><strong>Por:</strong> ${item.usuarios_executor?.nome || 'Pendente'}</p>
+                            <p><strong>Qtd.:</strong> ${item.quantidade_executada ?? 'N/A'}</p>
+                            <p><strong>Valor Total:</strong> R$ ${item.valor_total_executado?.toFixed(2) ?? 'N/A'}</p>
+                            <p><strong>CGO:</strong> ${item.codigo_movimentacao || 'N/A'}</p>
+                            <p><strong>Justificativa:</strong> ${item.justificativa_execucao || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <h5 class="font-semibold mb-1 mt-2">Retirada (Operação)</h5>
+                            <p><strong>Por:</strong> ${item.usuarios_retirada?.nome || 'Pendente'}</p>
+                            <p><strong>Foto:</strong> ${fotoRetiradaHtml}</p>
+                            ${retiradaBtn}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        content.innerHTML = headerHtml + (itensHtml || '<p>Nenhum item encontrado.</p>');
+        if (typeof feather !== 'undefined') {
+            feather.replace();
+        }
 
     } catch (error) {
         console.error("Erro ao carregar detalhes:", error);
@@ -673,249 +888,358 @@ async function abrirDetalhesModal(id) {
     }
 }
 
-// Abre modal de Execução (Prevenção)
-async function abrirExecutarModal(id) {
+/**
+ * REESCRITO: Abre modal de Execução para um PEDIDO
+ */
+async function abrirExecutarModal(id) { // id é solicitacao_id
     const modal = document.getElementById('executarModal');
     document.getElementById('executarId').textContent = id;
     document.getElementById('executarSolicitacaoId').value = id;
-    document.getElementById('executarForm').reset(); // Limpa o form
-
-    // NOVO: Limpar e carregar CGOs
+    document.getElementById('executarForm').reset();
+    document.getElementById('executarAlert').innerHTML = '';
+    
+    const listContainer = document.getElementById('executarItensList');
+    listContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando itens...</div>';
+    
     const cgoSelect = document.getElementById('codigoMovimentacao');
-    cgoSelect.innerHTML = '<option value="">Carregando CGOs...</option>';
+    cgoSelect.innerHTML = '<option value="">Selecione os itens primeiro...</option>';
     cgoSelect.disabled = true;
 
+    modal.style.display = 'flex';
+
     try {
-         const s = await supabaseRequest(`solicitacoes_baixa?id=eq.${id}&select=quantidade_solicitada,valor_total_solicitado,produtos(codigo,descricao)`);
-         if (!s || s.length === 0) throw new Error('Solicitação não encontrada.');
-         const sol = s[0];
+        // Busca todos os itens APROVADOS desta solicitação
+        // E já traz os dados do produto, incluindo a nova coluna 'cgos_permitidos'
+        const response = await supabaseRequest(
+            `solicitacao_itens?solicitacao_id=eq.${id}&status=eq.aprovada&select=*,produtos(codigo,descricao,cgos_permitidos)&order=id.asc`
+        );
 
-         document.getElementById('executarProduto').textContent = `${sol.produtos.codigo} - ${sol.produtos.descricao}`;
-         document.getElementById('executarQtdSolicitada').textContent = sol.quantidade_solicitada;
-         document.getElementById('executarValorSolicitado').textContent = sol.valor_total_solicitado.toFixed(2);
+        if (!response || response.length === 0) {
+            listContainer.innerHTML = '<div class="text-center py-4 text-gray-500">Nenhum item aprovado aguardando execução para este pedido.</div>';
+            return;
+        }
 
-         // Preencher campos com valores solicitados como padrão inicial
-         document.getElementById('quantidadeExecutada').value = sol.quantidade_solicitada;
-         // Buscar valor unitário original para preencher? Ou deixar em branco? Decidi deixar em branco.
-         // document.getElementById('valorUnitarioExecutado').value = (sol.valor_total_solicitado / sol.quantidade_solicitada).toFixed(2);
-         calcularValorTotalExecutado();
+        // Renderiza a lista de itens com checkboxes
+        listContainer.innerHTML = response.map(item => {
+            const produto = item.produtos;
+            // Armazena os CGOs permitidos num data attribute
+            // JSON.stringify é uma forma fácil de guardar o array como string
+            const cgosPermitidos = JSON.stringify(produto.cgos_permitidos || []);
 
-         modal.style.display = 'flex';
-
-         // NOVO: Carregar CGOs em paralelo
-         try {
-            const cgos = await getCgoCache(); // Busca CGOs ativos
-            if (cgos.length > 0) {
-                cgoSelect.innerHTML = '<option value="">-- Selecione um CGO --</option>';
-                cgos.forEach(cgo => {
-                    // Salva o CÓDIGO (ex: "475") no value
-                    cgoSelect.innerHTML += `<option value="${cgo.codigo_cgo}">${cgo.codigo_cgo} - ${cgo.descricao_cgo}</option>`;
-                });
-            } else {
-                cgoSelect.innerHTML = '<option value="">Nenhum CGO ativo encontrado</option>';
-            }
-            cgoSelect.disabled = false;
-         } catch (cgoError) {
-            console.error("Erro ao carregar CGOs:", cgoError);
-            cgoSelect.innerHTML = '<option value="">Erro ao carregar CGOs</option>';
-         }
+            return `
+                <div class="bg-gray-50 p-4 rounded border flex items-start">
+                    <input type="checkbox" value="${item.id}" name="executar_item_ids" 
+                           class="h-5 w-5 mt-1 mr-3" 
+                           onchange="atualizarCgosPermitidos()"
+                           data-cgos='${cgosPermitidos}'>
+                    
+                    <div class="flex-1">
+                        <p class="font-semibold">${produto.codigo} - ${produto.descricao}</p>
+                        <p class="text-sm text-gray-700">
+                            Qtd. Aprovada: ${item.quantidade_solicitada} | 
+                            Valor Total: R$ ${item.valor_total_solicitado.toFixed(2)}
+                        </p>
+                        
+                        <div class="form-grid mt-2" style="grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <div class="form-group">
+                                <label for="qtd_exec_${item.id}" class="text-xs font-semibold">Qtd. Real:</label>
+                                <input type="number" id="qtd_exec_${item.id}" value="${item.quantidade_solicitada}" class="w-full" style="padding: 8px;">
+                            </div>
+                            <div class="form-group">
+                                <label for="val_unit_${item.id}" class="text-xs font-semibold">Valor Unit. Real:</label>
+                                <input type="number" step="0.01" id="val_unit_${item.id}" value="${item.valor_unitario_solicitado.toFixed(2)}" class="w-full" style="padding: 8px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
 
     } catch (error) {
-        console.error("Erro ao abrir modal de execução:", error);
-        showNotification(`Erro ao carregar dados da solicitação #${id}: ${error.message}`, 'error');
+        console.error("Erro ao carregar itens para execução:", error);
+        listContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar itens: ${error.message}</div>`;
     }
 }
 
-function calcularValorTotalExecutado() {
-    const qtd = parseFloat(document.getElementById('quantidadeExecutada').value) || 0;
-    const valorUnit = parseFloat(document.getElementById('valorUnitarioExecutado').value) || 0;
-    const total = qtd * valorUnit;
-    document.getElementById('valorTotalExecutado').value = total.toFixed(2);
-}
 
-// Submissão do formulário de Execução
-async function handleExecucaoSubmit(event) {
-    event.preventDefault();
-    const alertContainer = document.getElementById('executarAlert');
-    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Processando...</div>';
+/**
+ * NOVO: Filtra o dropdown de CGOs com base nos itens selecionados
+ */
+async function atualizarCgosPermitidos() {
+    const cgoSelect = document.getElementById('codigoMovimentacao');
+    const checkedItems = document.querySelectorAll('input[name="executar_item_ids"]:checked');
 
-    const solicitacaoId = document.getElementById('executarSolicitacaoId').value;
-    const quantidade = parseInt(document.getElementById('quantidadeExecutada').value);
-    const valorUnitario = parseFloat(document.getElementById('valorUnitarioExecutado').value);
-    const valorTotal = parseFloat(document.getElementById('valorTotalExecutado').value);
-    const justificativa = document.getElementById('justificativaExecucao').value.trim();
-    const codigoMov = document.getElementById('codigoMovimentacao').value; // MUDANÇA: .trim() removido
-    const anexoFiles = document.getElementById('anexosExecucao').files;
-
-     // MUDANÇA: !codigoMov (check de string vazia)
-     if (isNaN(quantidade) || quantidade < 0 || isNaN(valorUnitario) || valorUnitario < 0 || !justificativa || !codigoMov) {
-        alertContainer.innerHTML = '<div class="alert alert-error">Preencha Quantidade, Valor Unitário, Justificativa e selecione um CGO.</div>';
+    if (checkedItems.length === 0) {
+        cgoSelect.innerHTML = '<option value="">Selecione os itens primeiro...</option>';
+        cgoSelect.disabled = true;
         return;
     }
 
-     const updateData = {
-        status: 'aguardando_retirada', // Próximo status
-        executor_id: currentUser.id,
-        data_execucao: new Date().toISOString(),
-        quantidade_executada: quantidade,
-        valor_unitario_executado: valorUnitario,
-        valor_total_executado: valorTotal,
-        justificativa_execucao: justificativa,
-        codigo_movimentacao: codigoMov // Salva o código do CGO (ex: "475")
-    };
+    let cgosPermitidosComuns = null;
 
+    // Itera por todos os itens checados
+    for (const item of checkedItems) {
+        // Lê o array de CGOs do data-attribute
+        const cgosDoItem = JSON.parse(item.dataset.cgos); // ex: ["475", "480"]
+
+        if (cgosPermitidosComuns === null) {
+            // No primeiro item, o conjunto comum é o conjunto dele
+            cgosPermitidosComuns = new Set(cgosDoItem);
+        } else {
+            // Nos itens seguintes, faz a INTERSEÇÃO
+            cgosPermitidosComuns = new Set(
+                [...cgosPermitidosComuns].filter(cgo => cgosDoItem.includes(cgo))
+            );
+        }
+    }
+
+    // Agora cgosPermitidosComuns (um Set) contém apenas CGOs presentes em TODOS os itens selecionados
+    
+    // Busca os detalhes desses CGOs no cache
+    const cgosDoCache = await getCgoCache(); // Pega CGOs ativos
+    
+    const cgosFiltrados = cgosDoCache.filter(cgo => cgosPermitidosComuns.has(cgo.codigo_cgo));
+
+    if (cgosFiltrados.length === 0) {
+        cgoSelect.innerHTML = '<option value="">Nenhum CGO em comum para os itens selecionados.</option>';
+        cgoSelect.disabled = true;
+    } else {
+        cgoSelect.innerHTML = '<option value="">-- Selecione um CGO --</option>';
+        cgosFiltrados.forEach(cgo => {
+            cgoSelect.innerHTML += `<option value="${cgo.codigo_cgo}">${cgo.codigo_cgo} - ${cgo.descricao_cgo}</option>`;
+        });
+        cgoSelect.disabled = false;
+    }
+}
+
+
+/**
+ * REESCRITO: Submissão do formulário de Execução
+ */
+async function handleExecucaoSubmit(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('executarAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Processando execução...</div>';
+
+    const solicitacaoId = document.getElementById('executarSolicitacaoId').value;
+    const checkedItems = document.querySelectorAll('input[name="executar_item_ids"]:checked');
+    const justificativa = document.getElementById('justificativaExecucao').value.trim();
+    const codigoMov = document.getElementById('codigoMovimentacao').value;
+    const anexoFiles = document.getElementById('anexosExecucao').files;
+
+    // Validação
+    if (checkedItems.length === 0) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Selecione pelo menos um item para executar.</div>';
+        return;
+    }
+    if (!codigoMov) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Selecione um CGO válido (comum a todos os itens).</div>';
+        return;
+    }
+    if (!justificativa) {
+        alertContainer.innerHTML = '<div class="alert alert-error">A justificativa é obrigatória.</div>';
+        return;
+    }
+
+    const dataExecucao = new Date().toISOString();
+    let itensParaAtualizar = [];
+    let itemIdsAtualizados = [];
+
+    // 1. Prepara os dados de atualização para cada item
     try {
-        // 1. Atualizar a solicitação principal (SEM os anexos ainda)
-        await supabaseRequest(`solicitacoes_baixa?id=eq.${solicitacaoId}`, 'PATCH', updateData);
-        showNotification('Dados da execução salvos. Iniciando upload de anexos...', 'info');
+        for (const item of checkedItems) {
+            const itemId = item.value;
+            itemIdsAtualizados.push(itemId);
+            const qtd = parseInt(document.getElementById(`qtd_exec_${itemId}`).value);
+            const valUnit = parseFloat(document.getElementById(`val_unit_${itemId}`).value);
+            
+            if (isNaN(qtd) || qtd < 0 || isNaN(valUnit) || valUnit < 0) {
+                throw new Error(`Valores inválidos para o item ID ${itemId}.`);
+            }
+            
+            itensParaAtualizar.push({
+                id: itemId, // ID do item
+                data: {
+                    status: 'aguardando_retirada', // Próximo status
+                    executor_id: currentUser.id,
+                    data_execucao: dataExecucao,
+                    quantidade_executada: qtd,
+                    valor_unitario_executado: valUnit,
+                    valor_total_executado: qtd * valUnit,
+                    justificativa_execucao: justificativa,
+                    codigo_movimentacao: codigoMov
+                }
+            });
+        }
+    } catch (error) {
+         alertContainer.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+         return;
+    }
 
-        // --- INÍCIO DA NOVA LÓGICA DE UPLOAD ---
-        // 2. Lidar com Upload de Anexos via API Vercel (se houver)
+    // 2. Enviar atualizações
+    try {
+        // A forma mais fácil é um loop de PATCH
+        for (const item of itensParaAtualizar) {
+             await supabaseRequest(`solicitacao_itens?id=eq.${item.id}`, 'PATCH', item.data);
+        }
+        
+        // 3. Atualizar o status do PEDIDO (cabeçalho)
+        // Verificamos se *todos* os itens do pedido foram movidos.
+        // Vamos apenas setar para 'aguardando_retirada' que sinaliza 'parcial' ou 'total'
+        await supabaseRequest(`solicitacoes_baixa?id=eq.${solicitacaoId}`, 'PATCH', { status: 'aguardando_retirada' });
+        
+        // 4. Lidar com Anexos (Lógica original mantida, anexa ao PEDIDO)
         let anexoUrls = [];
         if (anexoFiles.length > 0) {
             alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Enviando anexos...</div>';
             for (const file of anexoFiles) {
                 try {
-                    // Monta a URL da API com query params
                     const apiUrl = `/api/upload?fileName=${encodeURIComponent(file.name)}&solicitacaoId=${solicitacaoId}&fileType=anexo`;
-
                     const response = await fetch(apiUrl, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': file.type || 'application/octet-stream', // Envia o tipo MIME correto
-                        },
-                        body: file, // Envia o arquivo diretamente no corpo
+                        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+                        body: file,
                     });
-
                     if (!response.ok) {
                         const errorData = await response.json();
                         throw new Error(`Erro ${response.status} ao enviar ${file.name}: ${errorData.details || errorData.error}`);
                     }
-
                     const result = await response.json();
                     if (result.publicUrl) {
                         anexoUrls.push({
-                             solicitacao_id: parseInt(solicitacaoId), // Garante que é número
+                             solicitacao_id: parseInt(solicitacaoId), // Linka ao PEDIDO
                              url_arquivo: result.publicUrl,
                              nome_arquivo: file.name,
                              uploader_id: currentUser.id
                         });
-                        showNotification(`Anexo ${file.name} enviado com sucesso!`, 'success', 2000);
                     }
                 } catch (uploadError) {
                     console.error(`Falha no upload do anexo ${file.name}:`, uploadError);
                     showNotification(`Falha no upload do anexo ${file.name}: ${uploadError.message}`, 'error');
-                    // Decide se quer parar ou continuar com os outros arquivos
-                    // throw uploadError; // Descomente para parar em caso de erro
                 }
             }
 
-            // 3. Salvar as referências dos anexos no banco de dados (tabela anexos_baixa)
             if (anexoUrls.length > 0) {
                 alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Salvando referências...</div>';
                 await supabaseRequest('anexos_baixa', 'POST', anexoUrls);
                 showNotification('Referências dos anexos salvas.', 'success');
             }
         }
-        // --- FIM DA NOVA LÓGICA DE UPLOAD ---
 
-        showNotification(`Baixa da solicitação #${solicitacaoId} executada com sucesso! Aguardando retirada.`, 'success');
+        showNotification(`Itens executados com sucesso! Aguardando retirada.`, 'success');
         closeModal('executarModal');
-        loadExecucoesPendentes(); // Recarrega a lista de execução
+        loadExecucoesPendentes();
 
     } catch (error) {
         console.error("Erro ao executar baixa:", error);
         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao executar: ${error.message}</div>`;
-        // Opcional: Reverter a atualização da solicitação principal em caso de erro no upload? (Mais complexo)
     }
 }
 
-// Abre modal de Retirada (Operação)
-async function abrirRetiradaModal(id) {
+/**
+ * REESCRITO: Abre modal de Retirada para um ITEM
+ */
+async function abrirRetiradaModal(itemId, solicitacaoId) { // MUDANÇA: Recebe itemId e solicitacaoId
      const modal = document.getElementById('retiradaModal');
-    document.getElementById('retiradaId').textContent = id;
-    document.getElementById('retiradaSolicitacaoId').value = id;
-    document.getElementById('retiradaForm').reset(); // Limpa o form
+    document.getElementById('retiradaId').textContent = itemId;
+    document.getElementById('retiradaSolicitacaoId').value = itemId; // Salva o ID do ITEM
+    document.getElementById('retiradaForm').reset();
+    
+    // NOVO: Adiciona um campo oculto para o ID do Pedido (necessário para o upload)
+    let pedidoIdInput = document.getElementById('retiradaPedidoId');
+    if (!pedidoIdInput) {
+        pedidoIdInput = document.createElement('input');
+        pedidoIdInput.type = 'hidden';
+        pedidoIdInput.id = 'retiradaPedidoId';
+        document.getElementById('retiradaForm').appendChild(pedidoIdInput);
+    }
+    pedidoIdInput.value = solicitacaoId; // Salva o ID do PEDIDO
 
      try {
-         const s = await supabaseRequest(`solicitacoes_baixa?id=eq.${id}&select=quantidade_executada,valor_total_executado,produtos(codigo,descricao)`);
-         if (!s || s.length === 0) throw new Error('Solicitação não encontrada ou não executada.');
-         const sol = s[0];
+         // Busca o ITEM específico
+         const s = await supabaseRequest(`solicitacao_itens?id=eq.${itemId}&select=quantidade_executada,valor_total_executado,produtos(codigo,descricao)`);
+         if (!s || s.length === 0) throw new Error('Item da solicitação não encontrado ou não executado.');
+         const item = s[0];
 
-         document.getElementById('retiradaProduto').textContent = `${sol.produtos.codigo} - ${sol.produtos.descricao}`;
-         document.getElementById('retiradaQtdExecutada').textContent = sol.quantidade_executada ?? 'N/A';
-         document.getElementById('retiradaValorExecutado').textContent = sol.valor_total_executado?.toFixed(2) ?? 'N/A';
+         document.getElementById('retiradaProduto').textContent = `${item.produtos.codigo} - ${item.produtos.descricao}`;
+         document.getElementById('retiradaQtdExecutada').textContent = item.quantidade_executada ?? 'N/A';
+         document.getElementById('retiradaValorExecutado').textContent = item.valor_total_executado?.toFixed(2) ?? 'N/A';
 
          modal.style.display = 'flex';
 
     } catch (error) {
         console.error("Erro ao abrir modal de retirada:", error);
-        showNotification(`Erro ao carregar dados da solicitação #${id}: ${error.message}`, 'error');
+        showNotification(`Erro ao carregar dados do item #${itemId}: ${error.message}`, 'error');
     }
 }
 
-// Submissão do formulário de Retirada
+/**
+ * REESCRITO: Submissão do formulário de Retirada (por ITEM)
+ */
 async function handleRetiradaSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('retiradaAlert');
     alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Processando...</div>';
 
-    const solicitacaoId = document.getElementById('retiradaSolicitacaoId').value;
+    const itemId = document.getElementById('retiradaSolicitacaoId').value; // Este é o ID do ITEM
+    const solicitacaoId = document.getElementById('retiradaPedidoId').value; // Este é o ID do PEDIDO
     const fotoFile = document.getElementById('fotoRetirada').files[0];
 
     if (!fotoFile) {
         alertContainer.innerHTML = '<div class="alert alert-error">Por favor, anexe a foto da retirada.</div>';
         return;
     }
+    if (!solicitacaoId) {
+         alertContainer.innerHTML = '<div class="alert alert-error">Erro: ID do Pedido não encontrado.</div>';
+         return;
+    }
 
     try {
         let fotoUrl = '';
         alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Enviando foto...</div>';
 
-        // --- INÍCIO DA NOVA LÓGICA DE UPLOAD ---
+        // --- LÓGICA DE UPLOAD (Usa o ID do PEDIDO para a pasta) ---
         try {
-            // Monta a URL da API com query params
             const apiUrl = `/api/upload?fileName=${encodeURIComponent(fotoFile.name)}&solicitacaoId=${solicitacaoId}&fileType=foto_retirada`;
-
             const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': fotoFile.type || 'application/octet-stream',
-                },
+                headers: { 'Content-Type': fotoFile.type || 'application/octet-stream' },
                 body: fotoFile,
             });
-
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(`Erro ${response.status} ao enviar foto: ${errorData.details || errorData.error}`);
             }
-
             const result = await response.json();
             if (result.publicUrl) {
                 fotoUrl = result.publicUrl;
-                showNotification('Foto enviada com sucesso!', 'success');
             } else {
                 throw new Error('API de upload não retornou a URL da foto.');
             }
         } catch (uploadError) {
              console.error('Falha no upload da foto:', uploadError);
-             throw uploadError; // Re-lança o erro para ser pego pelo catch principal
+             throw uploadError;
         }
-        // --- FIM DA NOVA LÓGICA DE UPLOAD ---
+        // --- FIM DO UPLOAD ---
 
 
-        // Atualizar a solicitação com a URL da foto e o status final
+        // Atualizar o ITEM com a URL da foto e o status final
         const updateData = {
-            status: 'finalizada', // Status final
+            status: 'finalizada', // Status final do ITEM
             retirada_por_id: currentUser.id,
             data_retirada: new Date().toISOString(),
-            foto_retirada_url: fotoUrl // Salva a URL retornada pela API
+            foto_retirada_url: fotoUrl
         };
-        await supabaseRequest(`solicitacoes_baixa?id=eq.${solicitacaoId}`, 'PATCH', updateData);
+        await supabaseRequest(`solicitacao_itens?id=eq.${itemId}`, 'PATCH', updateData);
+        
+        // TODO: Adicionar lógica para verificar se TODOS os itens do pedido 'solicitacaoId'
+        // estão 'finalizada' ou 'negada', e então atualizar o status do PEDIDO (cabeçalho)
+        // para 'finalizada'. (Opcional, mas bom para limpeza)
 
-        showNotification(`Retirada da solicitação #${solicitacaoId} confirmada! Baixa finalizada.`, 'success');
+        showNotification(`Retirada do item #${itemId} confirmada!`, 'success');
         closeModal('retiradaModal');
-        loadMinhasSolicitacoes(); // Recarrega a lista da operação
+        closeModal('detalhesModal'); // Fecha o modal de detalhes também
+        loadMinhasSolicitacoes(); // Recarrega a lista principal
 
     } catch (error) {
         console.error("Erro ao confirmar retirada:", error);
@@ -924,108 +1248,74 @@ async function handleRetiradaSubmit(event) {
 }
 
 
-
+/**
+ * REESCRITO: supabaseRequest (Mantendo o error handling melhorado)
+ */
 async function supabaseRequest(endpoint, method = 'GET', data = null) {
-    // Separa o nome da tabela dos parâmetros de query existentes
     const [endpointBase, queryParams] = endpoint.split('?', 2);
-
-    // Constrói a URL para o proxy, passando o endpoint Supabase como parâmetro 'endpoint'
-    // Garantir que a constante SUPABASE_PROXY_URL esteja definida (geralmente no HTML ou no topo do JS)
     if (typeof SUPABASE_PROXY_URL === 'undefined') {
         throw new Error("SUPABASE_PROXY_URL não está definida.");
     }
     let proxyUrl = `${SUPABASE_PROXY_URL}?endpoint=${endpointBase}`;
-
-    // Adiciona os outros parâmetros de query (select, order, filtros eq, etc.)
     if (queryParams) {
         proxyUrl += `&${queryParams}`;
     }
 
-    // Configurações da requisição para o NOSSO PROXY
     const options = {
         method,
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-           
         }
     };
-
     if (data && (method === 'POST' || method === 'PATCH')) {
         options.body = JSON.stringify(data);
     }
 
     try {
-        // Log para debug (opcional)
-        console.log(`[Frontend] Requesting via Proxy: ${method} ${proxyUrl}`);
-        if(options.body) console.log(`[Frontend] Body: ${options.body.substring(0,100)}...`);
-
         const response = await fetch(proxyUrl, options);
 
-        // --- START: CORRECTED ERROR HANDLING ---
         if (!response.ok) {
-            // Read the body ONLY ONCE as text
             const errorText = await response.text();
             console.error('[Frontend] Proxy/Supabase Error Response Text:', response.status, errorText);
-
             let errorJson;
-            let errorMessage = errorText || `Erro ${response.status} na comunicação.`; // Default message
-
+            let errorMessage = errorText || `Erro ${response.status} na comunicação.`;
             try {
-                // Try parsing the text as JSON
                 errorJson = JSON.parse(errorText);
-                // Use specific Supabase error message if available
                 errorMessage = errorJson.message || errorJson.error || errorMessage;
             } catch (parseError) {
-                // If parsing fails, use the raw text as the error message
-                console.warn('[Frontend] Could not parse error response as JSON.');
+                // ignore
             }
-            // Throw a new error with the best available message
             throw new Error(errorMessage);
         }
-        // --- END: CORRECTED ERROR HANDLING ---
 
-        // Processa a resposta bem-sucedida (Only if response.ok is true)
         if (response.status === 204 || method === 'DELETE') {
-             return null; // No Content ou DELETE
+             return null;
         }
-
-        // Tenta retornar como JSON
         try {
-            // response.json() reads the body stream
             return await response.json();
         } catch (e) {
              console.warn("Resposta bem-sucedida não era JSON válido, retornando null.");
-             // Ler como texto como fallback se o parse JSON falhar em sucesso (improvável, mas seguro)
-             // Tentar ler de novo causaria 'already read', então retornamos null diretamente.
              return null;
         }
-
     } catch (error) {
-        // Este bloco catch lida com erros lançados acima (como o bloco !response.ok)
-        // ou erros de rede do próprio fetch.
         console.error(`Falha na requisição via Proxy [${method} ${endpoint}]:`, error);
-        // Exibe o erro na interface do usuário através da notificação
-        // Verifica se a função showNotification existe antes de chamá-la
         if (typeof showNotification === 'function') {
             showNotification(`Erro de comunicação: ${error.message}`, 'error');
         } else {
-            // Fallback caso showNotification não esteja definida ainda
             alert(`Erro de comunicação: ${error.message}`);
         }
-        throw error; // Re-lança o erro para interromper a execução se necessário (e capturado por handleLogin)
+        throw error;
     }
 }
 
 
-// Função de Notificação (reutilizada do sistema anterior)
+// Função de Notificação (sem alteração)
 function showNotification(message, type = 'info', timeout = 4000) {
     const container = document.getElementById('notificationContainer');
     if (!container) return;
-
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
-
     let icon = '';
     let title = '';
     if (type === 'success') {
@@ -1038,7 +1328,6 @@ function showNotification(message, type = 'info', timeout = 4000) {
         icon = '<i data-feather="info" class="h-5 w-5 mr-2"></i>';
         title = 'Informação';
     }
-
     notification.innerHTML = `
         <div class="notification-header">
             ${icon}
@@ -1046,16 +1335,12 @@ function showNotification(message, type = 'info', timeout = 4000) {
         </div>
         <div class="notification-body">${message}</div>
     `;
-
     container.appendChild(notification);
     if (typeof feather !== 'undefined') {
-        feather.replace(); // Renderiza o ícone
+        feather.replace();
     }
-
-
     setTimeout(() => {
         notification.classList.add('hide');
-        // Espera a animação terminar antes de remover
         notification.addEventListener('animationend', () => notification.remove());
     }, timeout);
 }
@@ -1065,9 +1350,6 @@ function showNotification(message, type = 'info', timeout = 4000) {
 // === FUNÇÕES DE GERENCIAMENTO (ADMIN) ===
 // =======================================================
 
-/**
- * Helper para buscar e cachear todas as filiais.
- */
 async function getFiliaisCache() {
     if (todasFiliaisCache.length === 0) {
         todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc');
@@ -1075,40 +1357,25 @@ async function getFiliaisCache() {
     return todasFiliaisCache;
 }
 
-/**
- * NOVO: Helper para buscar e cachear CGOs ATIVOS (para dropdowns e consulta).
- */
 async function getCgoCache(forceRefresh = false) {
     if (cgoCache.length === 0 || forceRefresh) {
-        // Busca apenas CGOs ativos e ordena pelo código
         cgoCache = await supabaseRequest('cgo?ativo=eq.true&select=codigo_cgo,descricao_cgo,obs&order=codigo_cgo.asc');
     }
     return cgoCache;
 }
 
-/**
- * NOVO: Helper para buscar e cachear TODOS os CGOs (para admin).
- */
 async function getAllCgoCache(forceRefresh = false) {
     if (todosCgoCache.length === 0 || forceRefresh) {
-        // Busca todos, incluindo inativos, e ordena pelo código
         todosCgoCache = await supabaseRequest('cgo?select=id,codigo_cgo,descricao_cgo,obs,ativo&order=codigo_cgo.asc');
     }
     return todosCgoCache;
 }
 
-// --- Gerenciamento de Usuários ---
-
-/**
- * Carrega a lista de usuários e filiais para a view de admin.
- */
+// --- Gerenciamento de Usuários (sem alteração) ---
 async function loadGerenciarUsuarios() {
     const tbody = document.getElementById('usuariosTableBody');
     tbody.innerHTML = `<tr><td colspan="7" class="loading"><div class="spinner"></div>Carregando usuários...</td></tr>`;
-
     try {
-        // 1. Buscar todos os usuários
-        // ATUALIZADO: Buscar e-mail também
         const usuarios = await supabaseRequest('usuarios?select=id,nome,username,email,role,ativo&order=nome.asc');
         renderUsuariosTable(tbody, usuarios || []);
     } catch (error) {
@@ -1116,21 +1383,15 @@ async function loadGerenciarUsuarios() {
         tbody.innerHTML = `<tr><td colspan="7" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
     }
 }
-
-/**
- * Renderiza a tabela de usuários na view de admin.
- */
 function renderUsuariosTable(tbody, usuarios) {
     if (!usuarios || usuarios.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">Nenhum usuário encontrado.</td></tr>`;
         return;
     }
-
     tbody.innerHTML = usuarios.map(u => {
         const statusClass = u.ativo ? 'text-green-600' : 'text-red-600';
         const statusText = u.ativo ? 'Ativo' : 'Inativo';
-        const roleLabel = u.role.charAt(0).toUpperCase() + u.role.slice(1); // Ex: "Admin"
-
+        const roleLabel = u.role.charAt(0).toUpperCase() + u.role.slice(1);
         return `
             <tr class="text-sm">
                 <td>${u.id}</td>
@@ -1145,10 +1406,6 @@ function renderUsuariosTable(tbody, usuarios) {
         `;
     }).join('');
 }
-
-/**
- * Abre o modal para criar (id=null) ou editar (id=valor) um usuário.
- */
 async function abrirUsuarioModal(id = null) {
     const modal = document.getElementById('usuarioModal');
     const form = document.getElementById('usuarioForm');
@@ -1159,18 +1416,14 @@ async function abrirUsuarioModal(id = null) {
     alertContainer.innerHTML = '';
     form.reset();
     document.getElementById('usuarioId').value = id || '';
-
-    // 1. Garantir que o cache de filiais está preenchido
     filiaisContainer.innerHTML = '<div class="loading text-sm">Carregando filiais...</div>';
     let filiais = [];
     try {
-        filiais = await getFiliaisCache(); // Usa a função helper
+        filiais = await getFiliaisCache();
     } catch (e) {
         alertContainer.innerHTML = `<div class="alert alert-error">Falha fatal ao carregar filiais: ${e.message}</div>`;
         return;
     }
-    
-    // 2. Popular checkboxes de filiais
     if (filiais.length > 0) {
          filiaisContainer.innerHTML = filiais.map(f => `
             <label class="flex items-center space-x-2 text-sm">
@@ -1181,82 +1434,56 @@ async function abrirUsuarioModal(id = null) {
     } else {
         filiaisContainer.innerHTML = '<div class="text-sm text-red-600">Nenhuma filial cadastrada.</div>';
     }
-
-
     if (id) {
-        // --- MODO EDIÇÃO ---
         title.textContent = `Editar Usuário #${id}`;
-        senhaHelp.style.display = 'block'; // Mostra ajuda da senha
+        senhaHelp.style.display = 'block';
         document.getElementById('usuarioSenha').required = false;
-
         try {
-            // Buscar dados atuais do usuário E suas filiais associadas
-            // ATUALIZADO: Buscar e-mail também
             const userResponse = await supabaseRequest(`usuarios?id=eq.${id}&select=*,usuario_filiais(filial_id)`);
             if (!userResponse || userResponse.length === 0) throw new Error('Usuário não encontrado.');
-            
             const user = userResponse[0];
             const filiaisAtuais = user.usuario_filiais.map(uf => uf.filial_id);
-
-            // Preencher o formulário
             document.getElementById('usuarioNome').value = user.nome;
             document.getElementById('usuarioUsername').value = user.username;
-            document.getElementById('usuarioEmail').value = user.email || ''; // CAMPO DE E-MAIL
+            document.getElementById('usuarioEmail').value = user.email || '';
             document.getElementById('usuarioRole').value = user.role;
             document.getElementById('usuarioAtivo').checked = user.ativo;
-            
-            // Marcar as checkboxes das filiais atuais
             filiaisContainer.querySelectorAll('input[name="filiais"]').forEach(checkbox => {
                 if (filiaisAtuais.includes(parseInt(checkbox.value))) {
                     checkbox.checked = true;
                 }
             });
-
         } catch (error) {
             console.error("Erro ao carregar dados do usuário:", error);
             alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
-            return; // Não abre o modal se falhar
+            return;
         }
-
     } else {
-        // --- MODO CRIAÇÃO ---
         title.textContent = 'Novo Usuário';
-        senhaHelp.style.display = 'none'; // Esconde ajuda da senha
+        senhaHelp.style.display = 'none';
         document.getElementById('usuarioSenha').required = true;
-        document.getElementById('usuarioAtivo').checked = true; // Default
+        document.getElementById('usuarioAtivo').checked = true;
     }
-
     modal.style.display = 'flex';
-    // Re-renderizar ícones (caso tenha algum no modal)
     if (typeof feather !== 'undefined') {
         feather.replace();
     }
 }
-
-/**
- * Trata a submissão do formulário de criação/edição de usuário.
- */
 async function handleUsuarioFormSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('usuarioAlert');
     alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
-
-    // 1. Obter dados do formulário
     const id = document.getElementById('usuarioId').value;
     const nome = document.getElementById('usuarioNome').value;
     const username = document.getElementById('usuarioUsername').value;
-    const email = document.getElementById('usuarioEmail').value; // CAMPO DE E-MAIL
+    const email = document.getElementById('usuarioEmail').value;
     const senha = document.getElementById('usuarioSenha').value;
     const role = document.getElementById('usuarioRole').value;
     const ativo = document.getElementById('usuarioAtivo').checked;
-    
     const selectedFiliaisCheckboxes = document.querySelectorAll('#usuarioFiliaisCheckboxes input[name="filiais"]:checked');
     const selectedFilialIds = Array.from(selectedFiliaisCheckboxes).map(cb => parseInt(cb.value));
-
     const isEdit = !!id;
-
-    // 2. Validação
-    if (!nome || !username || !role || !email) { // E-mail agora é obrigatório
+    if (!nome || !username || !role || !email) {
          alertContainer.innerHTML = '<div class="alert alert-error">Nome, Usuário, E-mail e Grupo são obrigatórios.</div>';
          return;
     }
@@ -1268,53 +1495,29 @@ async function handleUsuarioFormSubmit(event) {
         alertContainer.innerHTML = '<div class="alert alert-error">Selecione ao menos uma filial.</div>';
         return;
     }
-
-    // 3. Preparar dados do usuário
-    const userData = {
-        nome,
-        username,
-        email, // CAMPO DE E-MAIL
-        role,
-        ativo
-    };
-    // Adiciona senha_hash APENAS se uma nova senha foi digitada
+    const userData = { nome, username, email, role, ativo };
     if (senha) {
-        userData.senha_hash = senha; // (Ainda em plaintext, conforme seu setup)
+        userData.senha_hash = senha;
     }
-
     try {
         let userId = id;
-
-        // 4. Salvar Usuário (INSERT ou PATCH)
         if (isEdit) {
             await supabaseRequest(`usuarios?id=eq.${id}`, 'PATCH', userData);
         } else {
             const response = await supabaseRequest('usuarios', 'POST', userData);
             if (!response || response.length === 0) throw new Error("Falha ao criar o usuário, não obteve resposta.");
-            userId = response[0].id; // Pega o ID do novo usuário
+            userId = response[0].id;
         }
-
         if (!userId) throw new Error("ID do usuário não definido.");
-
-        // 5. Salvar Associações de Filiais (DELETE all, then POST new)
-        
-        // 5a. Deletar associações antigas
         await supabaseRequest(`usuario_filiais?usuario_id=eq.${userId}`, 'DELETE');
-
-        // 5b. Preparar novas associações
         const filiaisToInsert = selectedFilialIds.map(filialId => ({
             usuario_id: userId,
             filial_id: filialId
         }));
-
-        // 5c. Inserir novas associações
         await supabaseRequest('usuario_filiais', 'POST', filiaisToInsert);
-
-        // 6. Sucesso
         showNotification(`Usuário ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
         closeModal('usuarioModal');
-        loadGerenciarUsuarios(); // Recarrega a tabela
-
+        loadGerenciarUsuarios();
     } catch (error) {
         console.error("Erro ao salvar usuário:", error);
         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
@@ -1322,26 +1525,18 @@ async function handleUsuarioFormSubmit(event) {
 }
 
 
-// --- Gerenciamento de Filiais ---
-
-/**
- * Carrega a lista de filiais para a view de admin.
- */
+// --- Gerenciamento de Filiais (sem alteração) ---
 async function loadGerenciarFiliais() {
     const tbody = document.getElementById('filiaisTableBody');
     tbody.innerHTML = `<tr><td colspan="4" class="loading"><div class="spinner"></div>Carregando filiais...</td></tr>`;
     try {
-        const filiais = await getFiliaisCache(); // Usa a função helper
+        const filiais = await getFiliaisCache();
         renderFiliaisTable(tbody, filiais || []);
     } catch (error) {
         console.error("Erro ao carregar filiais:", error);
         tbody.innerHTML = `<tr><td colspan="4" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
     }
 }
-
-/**
- * Renderiza a tabela de filiais na view de admin.
- */
 function renderFiliaisTable(tbody, filiais) {
     if (!filiais || filiais.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">Nenhuma filial encontrada.</td></tr>`;
@@ -1359,10 +1554,6 @@ function renderFiliaisTable(tbody, filiais) {
         </tr>
     `).join('');
 }
-
-/**
- * Abre o modal para criar (id=null) ou editar (id=valor) uma filial.
- */
 async function abrirFilialModal(id = null) {
     const modal = document.getElementById('filialModal');
     const form = document.getElementById('filialForm');
@@ -1371,91 +1562,62 @@ async function abrirFilialModal(id = null) {
     alertContainer.innerHTML = '';
     form.reset();
     document.getElementById('filialId').value = id || '';
-
     if (id) {
-        // --- MODO EDIÇÃO ---
         title.textContent = `Editar Filial #${id}`;
         try {
-            // Busca a filial específica no cache
             const filiais = await getFiliaisCache();
             const filial = filiais.find(f => f.id === id);
             if (!filial) throw new Error("Filial não encontrada no cache.");
-
             document.getElementById('filialNome').value = filial.nome;
             document.getElementById('filialDescricao').value = filial.descricao;
-
         } catch(error) {
              alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
              return;
         }
     } else {
-        // --- MODO CRIAÇÃO ---
         title.textContent = 'Nova Filial';
     }
-
     modal.style.display = 'flex';
 }
-
-/**
- * Trata a submissão do formulário de criação/edição de filial.
- */
 async function handleFilialFormSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('filialAlert');
     alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
-
     const id = document.getElementById('filialId').value;
     const nome = document.getElementById('filialNome').value;
     const descricao = document.getElementById('filialDescricao').value;
     const isEdit = !!id;
-
     if (!nome || !descricao) {
          alertContainer.innerHTML = '<div class="alert alert-error">Nome e Descrição são obrigatórios.</div>';
          return;
     }
-
     const filialData = { nome, descricao };
-
     try {
         if (isEdit) {
             await supabaseRequest(`filiais?id=eq.${id}`, 'PATCH', filialData);
         } else {
             await supabaseRequest('filiais', 'POST', filialData);
         }
-        
-        // Limpar o cache para forçar a atualização na próxima vez
         todasFiliaisCache = []; 
-        
         showNotification(`Filial ${isEdit ? 'atualizada' : 'criada'} com sucesso!`, 'success');
         closeModal('filialModal');
-        loadGerenciarFiliais(); // Recarrega a tabela de filiais
-
+        loadGerenciarFiliais();
     } catch (error) {
          console.error("Erro ao salvar filial:", error);
          alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
     }
 }
-
-/**
- * Remove uma filial após confirmação.
- */
 async function removerFilial(id) {
     if (!confirm(`Tem certeza que deseja remover a Filial #${id}? \n\nAVISO: Isso pode falhar se a filial estiver associada a usuários ou solicitações.`)) {
         return;
     }
-
     try {
         await supabaseRequest(`filiais?id=eq.${id}`, 'DELETE');
-        
-        // Limpar o cache para forçar a atualização na próxima vez
         todasFiliaisCache = []; 
-        
         showNotification(`Filial #${id} removida com sucesso!`, 'success');
-        loadGerenciarFiliais(); // Recarrega a tabela
-
+        loadGerenciarFiliais();
     } catch (error) {
          console.error("Erro ao remover filial:", error);
-         // Erro comum é violação de chave estrangeira
          if (error.message.includes('foreign key constraint')) {
              showNotification(`Erro: Não é possível remover a filial #${id} pois ela está em uso (associada a usuários ou solicitações).`, 'error', 6000);
          } else {
@@ -1466,26 +1628,172 @@ async function removerFilial(id) {
 
 
 // =======================================================
-// === FUNÇÕES DE CONSULTA CGO (PAINEL FLUTUANTE) ===
+// === NOVO: FUNÇÕES DE GERENCIAMENTO DE PRODUTOS ===
 // =======================================================
 
-/**
- * NOVO: Abre o painel (modal) de consulta de CGOs.
- */
+async function loadGerenciarProdutos() {
+    const tbody = document.getElementById('produtosTableBody');
+    tbody.innerHTML = `<tr><td colspan="4" class="loading"><div class="spinner"></div>Carregando produtos...</td></tr>`;
+    try {
+        // Busca produtos e seus CGOs permitidos
+        const produtos = await supabaseRequest('produtos?select=id,codigo,descricao,cgos_permitidos&order=codigo.asc');
+        renderProdutosTable(tbody, produtos || []);
+    } catch (error) {
+        console.error("Erro ao carregar produtos:", error);
+        tbody.innerHTML = `<tr><td colspan="4" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
+    }
+}
+
+function renderProdutosTable(tbody, produtos) {
+    if (!produtos || produtos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">Nenhum produto encontrado.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = produtos.map(p => {
+        // Formata o array de CGOs para exibição
+        let cgosHtml = 'Nenhum';
+        if (p.cgos_permitidos && p.cgos_permitidos.length > 0) {
+            // Mostra CGOs como badges
+            cgosHtml = p.cgos_permitidos.map(cgo => `<span class="status-badge status-aprovada" style="margin: 2px; background-color: #e0e7ff; color: #3730a3;">${cgo}</span>`).join(' ');
+        }
+
+        return `
+            <tr class="text-sm">
+                <td><strong>${p.codigo}</strong></td>
+                <td>${p.descricao}</td>
+                <td>${cgosHtml}</td>
+                <td>
+                    <button class="btn btn-primary btn-small" onclick="abrirProdutoModal(${p.id})">Editar</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function abrirProdutoModal(id = null) {
+    const modal = document.getElementById('produtoModal');
+    const form = document.getElementById('produtoForm');
+    const alertContainer = document.getElementById('produtoAlert');
+    const title = document.getElementById('produtoModalTitle');
+    const cgosContainer = document.getElementById('produtoCgosCheckboxes');
+    alertContainer.innerHTML = '';
+    form.reset();
+    document.getElementById('produtoIdAdmin').value = id || '';
+
+    // 1. Carregar todos os CGOs ativos
+    cgosContainer.innerHTML = '<div class="loading text-sm">Carregando CGOs...</div>';
+    let cgosAtivos = [];
+    try {
+        cgosAtivos = await getCgoCache(true); // Força refresh do cache de CGOs ativos
+        if (cgosAtivos.length > 0) {
+             cgosContainer.innerHTML = cgosAtivos.map(c => `
+                <label class="flex items-center space-x-2 text-sm">
+                    <input type="checkbox" value="${c.codigo_cgo}" name="cgos">
+                    <span>${c.codigo_cgo} - ${c.descricao_cgo}</span>
+                </label>
+             `).join('');
+        } else {
+            cgosContainer.innerHTML = '<div class="text-sm text-red-600">Nenhum CGO ativo cadastrado.</div>';
+        }
+    } catch (e) {
+        alertContainer.innerHTML = `<div class="alert alert-error">Falha fatal ao carregar CGOs: ${e.message}</div>`;
+        return;
+    }
+
+    if (id) {
+        // --- MODO EDIÇÃO ---
+        title.textContent = `Editar Produto #${id}`;
+        document.getElementById('produtoCodigoAdmin').disabled = true; // Não permite editar o código
+        try {
+            const prod = await supabaseRequest(`produtos?id=eq.${id}&select=*`);
+            if (!prod || prod.length === 0) throw new Error("Produto não encontrado.");
+            const produto = prod[0];
+
+            document.getElementById('produtoCodigoAdmin').value = produto.codigo;
+            document.getElementById('produtoDescricaoAdmin').value = produto.descricao;
+            
+            // Marcar os CGOs permitidos
+            if (produto.cgos_permitidos && produto.cgos_permitidos.length > 0) {
+                cgosContainer.querySelectorAll('input[name="cgos"]').forEach(checkbox => {
+                    if (produto.cgos_permitidos.includes(checkbox.value)) {
+                        checkbox.checked = true;
+                    }
+                });
+            }
+        } catch(error) {
+             alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
+             return;
+        }
+    } else {
+        // --- MODO CRIAÇÃO ---
+        title.textContent = 'Novo Produto';
+        document.getElementById('produtoCodigoAdmin').disabled = false;
+    }
+    modal.style.display = 'flex';
+}
+
+async function handleProdutoFormSubmit(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('produtoAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
+
+    const id = document.getElementById('produtoIdAdmin').value;
+    const codigo = document.getElementById('produtoCodigoAdmin').value.trim();
+    const descricao = document.getElementById('produtoDescricaoAdmin').value.trim();
+    const isEdit = !!id;
+
+    // Pega os CGOs selecionados
+    const selectedCgosCheckboxes = document.querySelectorAll('#produtoCgosCheckboxes input[name="cgos"]:checked');
+    const cgos_permitidos = Array.from(selectedCgosCheckboxes).map(cb => cb.value); // Array de strings ["475", "480"]
+
+    if (!codigo || !descricao) {
+         alertContainer.innerHTML = '<div class="alert alert-error">Código e Descrição são obrigatórios.</div>';
+         return;
+    }
+
+    const produtoData = {
+        codigo,
+        descricao,
+        cgos_permitidos // Salva o array de códigos
+    };
+
+    try {
+        if (isEdit) {
+            delete produtoData.codigo; // Não atualiza o código na edição
+            await supabaseRequest(`produtos?id=eq.${id}`, 'PATCH', produtoData);
+        } else {
+            await supabaseRequest('produtos', 'POST', produtoData);
+        }
+        
+        showNotification(`Produto ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
+        closeModal('produtoModal');
+        loadGerenciarProdutos();
+        produtosCache = []; // Limpa o cache de produtos para forçar reload na solicitação
+
+    } catch (error) {
+         console.error("Erro ao salvar produto:", error);
+         let errorMsg = error.message;
+         if (errorMsg.includes('duplicate key value') && errorMsg.includes('produtos_codigo_key')) {
+             errorMsg = "Já existe um produto com este código.";
+         }
+         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${errorMsg}</div>`;
+    }
+}
+
+
+// =======================================================
+// === FUNÇÕES DE CONSULTA CGO (sem alteração) ===
+// =======================================================
+
 async function abrirConsultaCgoModal() {
     const modal = document.getElementById('consultaCgoModal');
     const listContainer = document.getElementById('consultaCgoList');
     listContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando CGOs...</div>';
     modal.style.display = 'flex';
-    
-    // Renderiza os ícones do modal (X de fechar, etc)
     if (typeof feather !== 'undefined') {
         feather.replace();
     }
-    
     try {
-        // Usar o cache de CGOs *ativos*. 
-        // O 'false' significa que ele só busca na API se o cache estiver vazio.
         const cgos = await getCgoCache(false); 
         renderConsultaCgoList(cgos || []);
     } catch (error) {
@@ -1493,17 +1801,12 @@ async function abrirConsultaCgoModal() {
         listContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar: ${error.message}</div>`;
     }
 }
-
-/**
- * NOVO: Renderiza a lista de CGOs no painel de consulta.
- */
 function renderConsultaCgoList(cgos) {
     const listContainer = document.getElementById('consultaCgoList');
     if (!cgos || cgos.length === 0) {
         listContainer.innerHTML = `<div id="cgoConsultaEmptyState">Nenhum CGO ativo encontrado.</div>`;
         return;
     }
-    
     listContainer.innerHTML = cgos.map(c => `
         <div class="cgo-item-card" data-filter-text="${(c.codigo_cgo + ' ' + c.descricao_cgo + ' ' + (c.obs || '')).toLowerCase()}">
             <div class="cgo-item-header">
@@ -1514,15 +1817,10 @@ function renderConsultaCgoList(cgos) {
         </div>
     `).join('');
 }
-
-/**
- * NOVO: Filtra a lista de CGOs no painel de consulta.
- */
 function filtrarCgoConsulta() {
     const searchTerm = document.getElementById('cgoSearchInput').value.toLowerCase();
     const items = document.querySelectorAll('#consultaCgoList .cgo-item-card');
     let itemsFound = 0;
-
     items.forEach(item => {
         const filterText = item.dataset.filterText;
         if (filterText.includes(searchTerm)) {
@@ -1532,8 +1830,6 @@ function filtrarCgoConsulta() {
             item.style.display = 'none';
         }
     });
-
-    // Mostra ou esconde a mensagem de "nenhum resultado"
     let emptyState = document.getElementById('cgoConsultaEmptyState');
     if (itemsFound === 0 && items.length > 0) {
         if (!emptyState) {
@@ -1550,27 +1846,20 @@ function filtrarCgoConsulta() {
 
 
 // =======================================================
-// === FUNÇÕES DE GERENCIAMENTO CGO (ADMIN) ===
+// === FUNÇÕES DE GERENCIAMENTO CGO (sem alteração) ===
 // =======================================================
 
-/**
- * NOVO: Carrega a lista de CGOs para a view de admin.
- */
 async function loadGerenciarCgo() {
     const tbody = document.getElementById('cgoTableBody');
     tbody.innerHTML = `<tr><td colspan="5" class="loading"><div class="spinner"></div>Carregando CGOs...</td></tr>`;
     try {
-        const cgos = await getAllCgoCache(true); // Força refresh (busca todos)
+        const cgos = await getAllCgoCache(true);
         renderCgoTable(tbody, cgos || []);
     } catch (error) {
         console.error("Erro ao carregar CGOs:", error);
         tbody.innerHTML = `<tr><td colspan="5" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
     }
 }
-
-/**
- * NOVO: Renderiza a tabela de CGOs na view de admin.
- */
 function renderCgoTable(tbody, cgos) {
     if (!cgos || cgos.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">Nenhum CGO encontrado.</td></tr>`;
@@ -1582,7 +1871,6 @@ function renderCgoTable(tbody, cgos) {
         const toggleButton = c.ativo
             ? `<button class="btn btn-warning btn-small ml-1" onclick="toggleCgoStatus(${c.id}, false)">Desativar</button>`
             : `<button class="btn btn-success btn-small ml-1" onclick="toggleCgoStatus(${c.id}, true)">Ativar</button>`;
-
         return `
             <tr class="text-sm">
                 <td><strong>${c.codigo_cgo}</strong></td>
@@ -1597,10 +1885,6 @@ function renderCgoTable(tbody, cgos) {
         `;
     }).join('');
 }
-
-/**
- * NOVO: Abre o modal para criar (id=null) ou editar (id=valor) um CGO.
- */
 async function abrirCgoModal(id = null) {
     const modal = document.getElementById('cgoModal');
     const form = document.getElementById('cgoForm');
@@ -1609,80 +1893,55 @@ async function abrirCgoModal(id = null) {
     alertContainer.innerHTML = '';
     form.reset();
     document.getElementById('cgoId').value = id || '';
-
     if (id) {
-        // --- MODO EDIÇÃO ---
         title.textContent = `Editar CGO #${id}`;
-        document.getElementById('cgoCodigo').disabled = true; // Não permite editar o código
+        document.getElementById('cgoCodigo').disabled = true;
         try {
-            // Busca o CGO específico no cache de admin
             const cgos = await getAllCgoCache();
             const cgo = cgos.find(c => c.id === id);
             if (!cgo) throw new Error("CGO não encontrado no cache.");
-
             document.getElementById('cgoCodigo').value = cgo.codigo_cgo;
             document.getElementById('cgoDescricao').value = cgo.descricao_cgo;
             document.getElementById('cgoObs').value = cgo.obs || '';
             document.getElementById('cgoAtivo').checked = cgo.ativo;
-
         } catch(error) {
              alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
              return;
         }
     } else {
-        // --- MODO CRIAÇÃO ---
         title.textContent = 'Novo CGO';
         document.getElementById('cgoCodigo').disabled = false;
-        document.getElementById('cgoAtivo').checked = true; // Default
+        document.getElementById('cgoAtivo').checked = true;
     }
-
     modal.style.display = 'flex';
 }
-
-/**
- * NOVO: Trata a submissão do formulário de criação/edição de CGO.
- */
 async function handleCgoFormSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('cgoAlert');
     alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
-
     const id = document.getElementById('cgoId').value;
     const codigo_cgo = document.getElementById('cgoCodigo').value.trim();
     const descricao_cgo = document.getElementById('cgoDescricao').value.trim();
     const obs = document.getElementById('cgoObs').value.trim();
     const ativo = document.getElementById('cgoAtivo').checked;
     const isEdit = !!id;
-
     if (!codigo_cgo || !descricao_cgo) {
          alertContainer.innerHTML = '<div class="alert alert-error">Código CGO e Descrição são obrigatórios.</div>';
          return;
     }
-
-    const cgoData = {
-        codigo_cgo,
-        descricao_cgo,
-        obs: obs || null, // Salva null se vazio
-        ativo
-    };
-
+    const cgoData = { codigo_cgo, descricao_cgo, obs: obs || null, ativo };
     try {
         if (isEdit) {
-            // Não atualiza o codigo_cgo na edição
             delete cgoData.codigo_cgo;
             await supabaseRequest(`cgo?id=eq.${id}`, 'PATCH', cgoData);
         } else {
             await supabaseRequest('cgo', 'POST', cgoData);
         }
-        
-        // Limpar ambos os caches para forçar a atualização
         cgoCache = []; 
         todosCgoCache = [];
-        
         showNotification(`CGO ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
         closeModal('cgoModal');
-        loadGerenciarCgo(); // Recarrega a tabela de admin
-
+        loadGerenciarCgo();
     } catch (error) {
          console.error("Erro ao salvar CGO:", error);
          let errorMsg = error.message;
@@ -1692,26 +1951,17 @@ async function handleCgoFormSubmit(event) {
          alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${errorMsg}</div>`;
     }
 }
-
-/**
- * NOVO: Ativa ou desativa um CGO.
- */
 async function toggleCgoStatus(id, newStatus) {
     const action = newStatus ? 'ativar' : 'desativar';
     if (!confirm(`Tem certeza que deseja ${action} o CGO #${id}?`)) {
         return;
     }
-
     try {
         await supabaseRequest(`cgo?id=eq.${id}`, 'PATCH', { ativo: newStatus });
-        
-        // Limpar ambos os caches
         cgoCache = []; 
         todosCgoCache = [];
-        
         showNotification(`CGO #${id} ${action.replace('a', 'a')}do com sucesso!`, 'success');
-        loadGerenciarCgo(); // Recarrega a tabela
-
+        loadGerenciarCgo();
     } catch (error) {
          console.error(`Erro ao ${action} CGO:`, error);
          showNotification(`Erro ao ${action} CGO: ${error.message}`, 'error');
