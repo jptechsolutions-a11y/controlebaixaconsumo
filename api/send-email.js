@@ -10,11 +10,13 @@ const EMAIL_FROM = process.env.EMAIL_FROM;
 const APP_URL = process.env.APP_URL || 'https://seu-app.vercel.app';
 const APP_LINK_HTML = `<p>Acesse o sistema clicando aqui: <a href="${APP_URL}">Acessar Controle de Baixas</a></p>`;
 
+// --- NOVAS FUNÇÕES HELPER DE FETCH ---
+
 /**
- * Função helper para buscar dados do Supabase.
- * ATUALIZADO: Adicionado &single para garantir que retorne objeto ou null
+ * Função helper para buscar MÚLTIPLOS registros do Supabase.
+ * Retorna um array.
  */
-async function fetchSupabaseData(endpoint) {
+async function fetchSupabaseQuery(endpoint) {
     const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
     try {
         const response = await fetch(url, {
@@ -22,36 +24,83 @@ async function fetchSupabaseData(endpoint) {
             headers: {
                 'apikey': SUPABASE_ANON_KEY,
                 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Accept': 'application/json',
-                // Adiciona 'single' para garantir que retorne um objeto, não um array
-                'Prefer': 'return=representation,count=exact', 
+                'Accept': 'application/json'
             },
         });
         if (!response.ok) {
             throw new Error(`Supabase fetch failed: ${response.statusText}`);
         }
-        // Se a busca for por ID (limit=1), o Supabase retorna um array.
-        // Se usarmos &single=true (implícito no fetchSupabaseData anterior), ele retorna o objeto direto.
-        // Vamos garantir que ele lide com ambos os casos.
         const data = await response.json();
-        return Array.isArray(data) ? data[0] : data; // Pega o primeiro item se for array
-        
+        return data || []; // Retorna array vazio se a resposta for nula
     } catch (error) {
-        console.error('Erro ao buscar dados do Supabase:', error);
-        return null;
+        console.error('Erro ao buscar query do Supabase:', error);
+        return [];
     }
 }
 
 /**
- * Handler principal da API de e-mail
+ * Função helper para buscar UM ÚNICO registro do Supabase.
+ * Retorna um objeto ou null.
+ */
+async function fetchSupabaseRecord(endpoint) {
+    // Garante que a query peça apenas 1 registro
+    const separator = endpoint.includes('?') ? '&' : '?';
+    const url = `${SUPABASE_URL}/rest/v1/${endpoint}${separator}limit=1`;
+    
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Accept': 'application/json',
+                 // Pede um objeto único em vez de um array
+                'Prefer': 'return=representation'
+            },
+        });
+        if (!response.ok) {
+            throw new Error(`Supabase fetch failed: ${response.statusText}`);
+        }
+        const data = await response.json();
+        return (Array.isArray(data) && data.length > 0) ? data[0] : null; // Retorna o primeiro item ou null
+    } catch (error) {
+        console.error('Erro ao buscar record do Supabase:', error);
+        return null;
+    }
+}
+
+
+/**
+ * Helper para formatar uma lista de itens em HTML
+ */
+function formatarListaItens(itens) {
+    if (!itens || itens.length === 0) return '<p>Nenhum item encontrado.</p>';
+    
+    const totalPedido = itens.reduce((acc, item) => acc + (item.valor_total_solicitado || 0), 0);
+    
+    let itensHtml = '<ul>';
+    itens.forEach(item => {
+        const produtoDesc = item.produtos ? `${item.produtos.codigo} - ${item.produtos.descricao}` : 'Produto desconhecido';
+        itensHtml += `
+            <li>
+                <strong>${produtoDesc}</strong><br>
+                Qtd: ${item.quantidade_solicitada} | 
+                Valor: R$ ${item.valor_total_solicitado.toFixed(2)}
+            </li>
+        `;
+    });
+    itensHtml += '</ul>';
+    itensHtml += `<p><strong>Valor Total do Pedido: R$ ${totalPedido.toFixed(2)}</strong></p>`;
+    return itensHtml;
+}
+
+/**
+ * Handler principal da API de e-mail (REESCRITO)
  */
 export default async (req, res) => {
     if (!EMAIL_FROM) {
         console.error('Erro Crítico: A variável de ambiente EMAIL_FROM não está definida no Vercel.');
-        return res.status(500).json({ 
-            error: 'Configuração de e-mail do servidor está incompleta.', 
-            details: 'A variável EMAIL_FROM precisa ser definida nas Environment Variables do projeto no Vercel.' 
-        });
+        return res.status(500).json({ error: 'Configuração de e-mail do servidor está incompleta.' });
     }
 
     if (req.method !== 'POST') {
@@ -60,130 +109,171 @@ export default async (req, res) => {
 
     try {
         const payload = req.body;
-        console.log('Webhook recebido:', payload.type, 'Record ID:', payload.record?.id);
+        console.log('Webhook recebido:', payload.type, 'Tabela:', payload.table, 'Record ID:', payload.record?.id);
 
         let subject = '';
         let htmlBody = '';
         let toEmails = [];
 
-        if (payload.type === 'INSERT' && payload.table === 'solicitacoes_baixa') {
-            const { id, solicitante_id, filial_id, produto_id } = payload.record;
+        // --- LÓGICA PARA A TABELA DE PEDIDOS (solicitacoes_baixa) ---
+        if (payload.table === 'solicitacoes_baixa') {
             
-            // --- CORREÇÃO: Adicionado 'limit=1&single' para garantir que fetchSupabaseData retorne objeto ---
-            const solicitante = await fetchSupabaseData(`usuarios?id=eq.${solicitante_id}&select=nome,email&limit=1`);
-            const produto = await fetchSupabaseData(`produtos?id=eq.${produto_id}&select=codigo,descricao&limit=1`);
-            const gestoresData = await fetchSupabaseData(`usuario_filiais?filial_id=eq.${filial_id}&select=usuarios(email,role)&usuarios.role=eq.gestor`);
-            
-            // --- CORREÇÃO: Variáveis seguras com fallback ---
-            const solicitanteNome = solicitante?.nome ?? 'Solicitante';
-            const produtoCodigo = produto?.codigo ?? 'Produto';
-            const produtoDesc = produto?.descricao ?? 'N/A';
+            // Evento: Novo Pedido criado
+            if (payload.type === 'INSERT') {
+                const { id, solicitante_id, filial_id } = payload.record;
+                
+                // 1. Buscar o Solicitante (para notificar)
+                const solicitante = await fetchSupabaseRecord(`usuarios?id=eq.${solicitante_id}&select=nome,email`);
+                // 2. Buscar os Gestores (para aprovar)
+                const gestoresData = await fetchSupabaseQuery(`usuario_filiais?filial_id=eq.${filial_id}&select=usuarios(email,role)&usuarios.role=eq.gestor`);
+                // 3. Buscar os Itens do pedido
+                const itens = await fetchSupabaseQuery(`solicitacao_itens?solicitacao_id=eq.${id}&select=quantidade_solicitada,valor_total_solicitado,produtos(codigo,descricao)`);
 
-            if (gestoresData && Array.isArray(gestoresData)) {
-                 toEmails = gestoresData.map(g => g.usuarios.email).filter(Boolean);
+                const solicitanteNome = solicitante?.nome ?? 'Solicitante';
+                if (gestoresData && gestoresData.length > 0) {
+                    toEmails = gestoresData.map(g => g.usuarios.email).filter(Boolean);
+                }
+
+                if (toEmails.length > 0) {
+                    subject = `Nova Solicitação de Baixa (#${id}) - ${itens.length} Iten(s)`;
+                    htmlBody = `
+                        <p>Olá Gestor,</p>
+                        <p>Uma nova solicitação de baixa com ${itens.length} iten(s) foi criada por <strong>${solicitanteNome}</strong> e aguarda sua aprovação.</p>
+                        <h3>Itens do Pedido:</h3>
+                        ${formatarListaItens(itens)}
+                        ${APP_LINK_HTML}`;
+                    
+                    // Adiciona o solicitante na cópia
+                    if (solicitante?.email) toEmails.push(solicitante.email);
+                }
             }
+            
+            // Evento: Pedido foi Aprovado ou Negado
+            else if (payload.type === 'UPDATE') {
+                const { id, status, solicitante_id } = payload.record;
+                const old_status = payload.old_record.status;
 
-            if (toEmails.length > 0) {
-                subject = `Nova Solicitação de Baixa (#${id}) - ${produtoCodigo}`;
-                htmlBody = `
-                    <p>Olá Gestor,</p>
-                    <p>Uma nova solicitação de baixa foi criada por <strong>${solicitanteNome}</strong> e aguarda sua aprovação.</p>
-                    <ul><li><strong>Solicitação ID:</strong> ${id}</li><li><strong>Produto:</strong> ${produtoCodigo} - ${produtoDesc}</li></ul>
-                    ${APP_LINK_HTML}`;
+                if (status === old_status) {
+                    return res.status(200).json({ message: 'Nenhuma mudança de status, e-mail não enviado.' });
+                }
+
+                // 1. Buscar o Solicitante (para notificar)
+                const solicitante = await fetchSupabaseRecord(`usuarios?id=eq.${solicitante_id}&select=nome,email`);
                 if (solicitante?.email) toEmails.push(solicitante.email);
-            }
 
-        } else if (payload.type === 'UPDATE' && payload.table === 'solicitacoes_baixa') {
-            const { id, status } = payload.record;
-            const old_status = payload.old_record.status;
+                // 2. Buscar os Itens do pedido
+                const itens = await fetchSupabaseQuery(`solicitacao_itens?solicitacao_id=eq.${id}&select=quantidade_solicitada,valor_total_solicitado,motivo_negacao,produtos(codigo,descricao),usuarios_aprovador:usuarios!solicitacao_itens_aprovador_id_fkey(nome)`);
 
-            if (status === old_status) {
-                return res.status(200).json({ message: 'Nenhuma mudança de status, e-mail não enviado.' });
-            }
+                const solicitanteNome = solicitante?.nome ?? 'Solicitante';
+                const aprovadorNome = itens[0]?.usuarios_aprovador?.nome ?? 'Gestor';
+                const motivo = itens[0]?.motivo_negacao || 'N/A';
+                const itensHtml = formatarListaItens(itens);
 
-            // --- CORREÇÃO: Adicionado 'limit=1&single' para garantir que fetchSupabaseData retorne objeto ---
-            const sol = await fetchSupabaseData(
-                `solicitacoes_baixa?id=eq.${id}&select=*,foto_retirada_url,produtos(codigo,descricao),anexos_baixa(url_arquivo,nome_arquivo),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome,email),usuarios_aprovador:usuarios!solicitacoes_baixa_aprovador_id_fkey(nome,email),usuarios_executor:usuarios!solicitacoes_baixa_executor_id_fkey(nome,email),usuarios_retirada:usuarios!solicitacoes_baixa_retirada_por_id_fkey(nome,email)&limit=1`
-            );
-
-            if (!sol) {
-                 console.error(`Solicitação ID #${id} não encontrada após o UPDATE.`);
-                 throw new Error('Solicitação não encontrada para envio de e-mail.');
-            }
-            
-            // --- INÍCIO DA CORREÇÃO ---
-            // Variáveis seguras para nomes, evitando o erro 'reading nome of undefined'
-            const solicitanteNome = sol.usuarios?.nome ?? 'Solicitante';
-            const aprovadorNome = sol.usuarios_aprovador?.nome ?? 'Gestor';
-            const executorNome = sol.usuarios_executor?.nome ?? 'Executor';
-            const retiradaNome = sol.usuarios_retirada?.nome ?? 'Operação';
-            const produtoCodigo = sol.produtos?.codigo ?? 'Produto';
-            const produtoDesc = sol.produtos?.descricao ?? 'N/A';
-            // --- FIM DA CORREÇÃO ---
-
-            const solicitanteEmail = sol.usuarios?.email;
-            if (solicitanteEmail) toEmails.push(solicitanteEmail);
-
-            if (status === 'aprovada') {
-                subject = `Solicitação Aprovada (#${id})`;
-                htmlBody = `<p>Olá ${solicitanteNome},</p><p>Sua solicitação #${id} (${produtoCodigo}) foi <strong>APROVADA</strong> por ${aprovadorNome}.</p><p>A equipe de Prevenção já foi notificada para executar a baixa.</p>${APP_LINK_HTML}`;
-            
-            } else if (status === 'negada') {
-                subject = `Solicitação Negada (#${id})`;
-                htmlBody = `<p>Olá ${solicitanteNome},</p><p>Sua solicitação #${id} (${produtoCodigo}) foi <strong>NEGADA</strong> por ${aprovadorNome}.</p><p>Motivo: ${sol.motivo_negacao || 'N/A'}</p>${APP_LINK_HTML}`;
-            
-            } else if (status === 'aguardando_retirada') {
-                subject = `Baixa Pronta para Retirada (#${id})`;
-                htmlBody = `<p>Olá ${solicitanteNome},</p><p>A baixa da sua solicitação #${id} (${produtoCodigo}) foi <strong>EXECUTADA</strong> por ${executorNome} e está pronta para retirada.</p><ul><li><strong>Qtd. Executada:</strong> ${sol.quantidade_executada}</li><li><strong>Valor Total Executado:</strong> R$ ${sol.valor_total_executado.toFixed(2)}</li><li><strong>Justificativa:</strong> ${sol.justificativa_execucao}</li></ul><p>Por favor, acesse o sistema para confirmar a retirada e anexar a foto.</p>${APP_LINK_HTML}`;
-                if (sol.usuarios_aprovador?.email) toEmails.push(sol.usuarios_aprovador.email);
-            
-            } else if (status === 'finalizada') {
-                subject = `Baixa Finalizada (#${id}) - Laudo Completo`;
-                
-                let anexosHtml = 'Nenhum anexo.';
-                if (sol.anexos_baixa && sol.anexos_baixa.length > 0) {
-                    anexosHtml = '<ul>' + sol.anexos_baixa.map(anexo => `<li><a href="${anexo.url_arquivo}">${anexo.nome_arquivo || 'Ver Anexo'}</a></li>`).join('') + '</ul>';
+                if (status === 'aprovada') {
+                    subject = `Pedido Aprovado (#${id})`;
+                    htmlBody = `<p>Olá ${solicitanteNome},</p><p>Seu pedido #${id} foi <strong>APROVADO</strong> por ${aprovadorNome}.</p><p>A equipe de Prevenção já foi notificada para executar a baixa dos itens.</p>${itensHtml}${APP_LINK_HTML}`;
+                } 
+                else if (status === 'negada') {
+                    subject = `Pedido Negado (#${id})`;
+                    htmlBody = `<p>Olá ${solicitanteNome},</p><p>Seu pedido #${id} foi <strong>NEGADO</strong> por ${aprovadorNome}.</p><p>Motivo: ${motivo}</p>${itensHtml}${APP_LINK_HTML}`;
                 }
-                let fotoHtml = '<p>Não foi anexada foto da retirada.</p>';
-                if (sol.foto_retirada_url) {
-                    fotoHtml = `<p><strong>Foto da Retirada:</strong></p><a href="${sol.foto_retirada_url}"><img src="${sol.foto_retirada_url}" alt="Foto da Retirada" style="max-width: 400px; height: auto; border: 1px solid #ccc; border-radius: 8px;" /></a>`;
-                }
-
-                htmlBody = `
-                    <h1>Laudo de Baixa Finalizada - #${id}</h1>
-                    <p>A solicitação de baixa para o produto <strong>${produtoCodigo} - ${produtoDesc}</strong> foi concluída.</p>
-                    <hr>
-                    <h3>Detalhes da Solicitação</h3>
-                    <ul>
-                        <li><strong>Solicitante:</strong> ${solicitanteNome}</li>
-                        <li><strong>Data:</strong> ${new Date(sol.data_solicitacao).toLocaleString('pt-BR')}</li>
-                        <li><strong>Qtd. Solicitada:</strong> ${sol.quantidade_solicitada}</li>
-                        <li><strong>Valor Total Solicitado:</strong> R$ ${sol.valor_total_solicitado.toFixed(2)}</li>
-                    </ul>
-                    <h3>Detalhes da Execução (Prevenção)</h3>
-                    <ul>
-                        <li><strong>Executor:</strong> ${executorNome}</li>
-                        <li><strong>Data:</strong> ${new Date(sol.data_execucao).toLocaleString('pt-BR')}</li>
-                        <li><strong>Qtd. Executada:</strong> ${sol.quantidade_executada}</li>
-                        <li><strong>Valor Total Executado:</strong> R$ ${sol.valor_total_executado.toFixed(2)}</li>
-                        <li><strong>Justificativa:</strong> ${sol.justificativa_execucao}</li>
-                        <li><strong>Anexos da Execução:</strong> ${anexosHtml}</li>
-                    </ul>
-                     <h3>Detalhes da Retirada (Operação)</h3>
-                    <ul>
-                        <li><strong>Retirado por:</strong> ${retiradaNome}</li>
-                        <li><strong>Data:</strong> ${new Date(sol.data_retirada).toLocaleString('pt-BR')}</li>
-                    </ul>
-                    ${fotoHtml}
-                    <hr>
-                    ${APP_LINK_HTML}
-                `;
-                
-                if (sol.usuarios_aprovador?.email) toEmails.push(sol.usuarios_aprovador.email);
-                if (sol.usuarios_executor?.email) toEmails.push(sol.usuarios_executor.email);
-                if (sol.usuarios_retirada?.email) toEmails.push(sol.usuarios_retirada.email);
             }
         }
+        
+        // --- LÓGICA PARA A TABELA DE ITENS (solicitacao_itens) ---
+        else if (payload.table === 'solicitacao_itens') {
+            
+            // Evento: Um item foi atualizado
+            if (payload.type === 'UPDATE') {
+                const { id, status, solicitacao_id } = payload.record;
+                const old_status = payload.old_record.status;
+
+                if (status === old_status) {
+                    return res.status(200).json({ message: 'Nenhuma mudança de status do item.' });
+                }
+                
+                // 1. Buscar o Pedido (para pegar o solicitante)
+                const pedido = await fetchSupabaseRecord(`solicitacoes_baixa?id=eq.${solicitacao_id}&select=usuarios(nome,email)`);
+                const solicitanteNome = pedido?.usuarios?.nome ?? 'Solicitante';
+                const solicitanteEmail = pedido?.usuarios?.email;
+                if (solicitanteEmail) toEmails.push(solicitanteEmail);
+
+                // 2. Buscar os dados completos do ITEM atualizado
+                const item = await fetchSupabaseRecord(
+                    `solicitacao_itens?id=eq.${id}&select=*,produtos(codigo,descricao),usuarios_executor:usuarios!solicitacao_itens_executor_id_fkey(nome,email),usuarios_retirada:usuarios!solicitacao_itens_retirada_por_id_fkey(nome,email),usuarios_aprovador:usuarios!solicitacao_itens_aprovador_id_fkey(nome,email)`
+                );
+                
+                if (!item) throw new Error(`Item #${id} não encontrado.`);
+
+                const executorNome = item.usuarios_executor?.nome ?? 'Executor';
+                const retiradaNome = item.usuarios_retirada?.nome ?? 'Operação';
+                const produtoDesc = item.produtos ? `${item.produtos.codigo} - ${item.produtos.descricao}` : 'Produto';
+
+                // Evento: Item pronto para retirada
+                if (status === 'aguardando_retirada') {
+                    subject = `Item Pronto para Retirada (Pedido #${solicitacao_id}, Item #${id})`;
+                    htmlBody = `
+                        <p>Olá ${solicitanteNome},</p>
+                        <p>O item <strong>${produtoDesc}</strong> (Pedido #${solicitacao_id}) foi <strong>EXECUTADO</strong> por ${executorNome} e está pronto para retirada.</p>
+                        <ul>
+                            <li><strong>Qtd. Executada:</strong> ${item.quantidade_executada}</li>
+                            <li><strong>Valor Total Executado:</strong> R$ ${item.valor_total_executado.toFixed(2)}</li>
+                            <li><strong>Justificativa:</strong> ${item.justificativa_execucao}</li>
+                            <li><strong>CGO:</strong> ${item.codigo_movimentacao}</li>
+                        </ul>
+                        <p>Por favor, acesse o sistema para confirmar a retirada no modal de "Detalhes" do pedido.</p>
+                        ${APP_LINK_HTML}`;
+                    
+                    if (item.usuarios_aprovador?.email) toEmails.push(item.usuarios_aprovador.email);
+                } 
+                
+                // Evento: Item finalizado (Laudo do Item)
+                else if (status === 'finalizada') {
+                    subject = `Baixa de Item Finalizada (Item #${id}) - Laudo`;
+                    
+                    // Busca anexos do PEDIDO PAI (pois o upload.js salva na pasta do pedido)
+                    const anexos = await fetchSupabaseQuery(`anexos_baixa?solicitacao_id=eq.${solicitacao_id}`);
+                    let anexosHtml = 'Nenhum anexo encontrado para este pedido.';
+                    if (anexos && anexos.length > 0) {
+                        anexosHtml = '<ul>' + anexos.map(anexo => `<li><a href="${anexo.url_arquivo}">${anexo.nome_arquivo || 'Ver Anexo'}</a></li>`).join('') + '</ul>';
+                    }
+                    
+                    let fotoHtml = '<p>Não foi anexada foto da retirada.</p>';
+                    if (item.foto_retirada_url) {
+                        fotoHtml = `<p><strong>Foto da Retirada:</strong></p><a href="${item.foto_retirada_url}"><img src="${item.foto_retirada_url}" alt="Foto da Retirada" style="max-width: 400px; height: auto;" /></a>`;
+                    }
+
+                    htmlBody = `
+                        <h1>Laudo de Item Finalizado - (Pedido #${solicitacao_id}, Item #${id})</h1>
+                        <p>A baixa para o item <strong>${produtoDesc}</strong> foi concluída.</p>
+                        <hr>
+                        <h3>Detalhes da Execução (Prevenção)</h3>
+                        <ul>
+                            <li><strong>Executor:</strong> ${executorNome}</li>
+                            <li><strong>Data:</strong> ${new Date(item.data_execucao).toLocaleString('pt-BR')}</li>
+                            <li><strong>Qtd. Executada:</strong> ${item.quantidade_executada}</li>
+                            <li><strong>Valor Total Executado:</strong> R$ ${item.valor_total_executado.toFixed(2)}</li>
+                            <li><strong>Justificativa:</strong> ${item.justificativa_execucao}</li>
+                            <li><strong>Anexos do Pedido:</strong> ${anexosHtml}</li>
+                        </ul>
+                         <h3>Detalhes da Retirada (Operação)</h3>
+                        <ul>
+                            <li><strong>Retirado por:</strong> ${retiradaNome}</li>
+                            <li><strong>Data:</strong> ${new Date(item.data_retirada).toLocaleString('pt-BR')}</li>
+                        </ul>
+                        ${fotoHtml}
+                        <hr>
+                        ${APP_LINK_HTML}
+                    `;
+                    
+                    // Envia o laudo para todos os envolvidos no item
+                    if (item.usuarios_aprovador?.email) toEmails.push(item.usuarios_aprovador.email);
+                    if (item.usuarios_executor?.email) toEmails.push(item.usuarios_executor.email);
+                    if (item.usuarios_retirada?.email) toEmails.push(item.usuarios_retirada.email);
+                }
+            }
+        }
+        
         
         if (toEmails.length > 0) {
             const uniqueEmails = [...new Set(toEmails.filter(Boolean))]; 
