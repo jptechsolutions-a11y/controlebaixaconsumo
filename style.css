@@ -1259,3 +1259,40 @@ input[type="file"]::file-selector-button:hover {
     color: #6b7280;
     font-weight: 500;
 }
+
+/* Adicionar ao final de style.css */
+
+/* Novo status de pedido */
+.status-parcialmente_executado {
+    background-color: #fef3c7; /* Amarelo (igual aguardando) */
+    color: #92400e;
+}
+
+/* Status de item (alguns podem ser repetidos, mas garante) */
+.status-executada {
+    background-color: #dbeafe; /* Azul claro (igual aprovada) */
+    color: #1e40af;
+}
+
+/* Estilos para o novo modal de execução (lista de itens) */
+#executarItensList .bg-gray-50 {
+    border: 1px solid #e5e7eb;
+}
+
+#executarItensList input[type="checkbox"]:checked + div {
+     border-left: 3px solid var(--primary);
+}
+
+/* Estilos para o novo modal de produto (lista de CGOs) */
+#produtoCgosCheckboxes label {
+    transition: all 0.2s ease;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+#produtoCgosCheckboxes label:hover {
+    background-color: #e0e7ff;
+}
+#produtoCgosCheckboxes input[type="checkbox"]:checked + span {
+    font-weight: 600;
+    color: var(--dark);
+}
