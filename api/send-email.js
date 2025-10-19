@@ -221,7 +221,7 @@ export default async (req, res) => {
                             <li><strong>Justificativa:</strong> ${item.justificativa_execucao}</li>
                             <li><strong>CGO:</strong> ${item.codigo_movimentacao}</li>
                         </ul>
-                        <p>Por favor, acesse o sistema para confirmar a retirada no modal de "Detalhes" do pedido.</p>
+                        <p>Por favor, acesse o sistema para confirmar a retirada no modal de "Detalhes" do pedido ou na lista principal.</p>
                         ${APP_LINK_HTML}`;
                     
                     if (item.usuarios_aprovador?.email) toEmails.push(item.usuarios_aprovador.email);
@@ -238,10 +238,21 @@ export default async (req, res) => {
                         anexosHtml = '<ul>' + anexos.map(anexo => `<li><a href="${anexo.url_arquivo}">${anexo.nome_arquivo || 'Ver Anexo'}</a></li>`).join('') + '</ul>';
                     }
                     
-                    let fotoHtml = '<p>Não foi anexada foto da retirada.</p>';
-                    if (item.foto_retirada_url) {
-                        fotoHtml = `<p><strong>Foto da Retirada:</strong></p><a href="${item.foto_retirada_url}"><img src="${item.foto_retirada_url}" alt="Foto da Retirada" style="max-width: 400px; height: auto;" /></a>`;
+                    // **** AJUSTE PARA MÚLTIPLAS FOTOS ****
+                    // Agora lemos o array 'fotos_retirada_urls' e fazemos um loop
+                    let fotosHtml = '<p>Não foram anexadas fotos da retirada.</p>';
+                    if (item.fotos_retirada_urls && item.fotos_retirada_urls.length > 0) {
+                        fotosHtml = '<p><strong>Fotos/Anexos da Retirada:</strong></p>';
+                        item.fotos_retirada_urls.forEach(url => {
+                            // Verifica se é imagem para exibir, senão põe link
+                            if (/\.(jpe?g|png|gif|webp)$/i.test(url)) {
+                                fotosHtml += `<a href="${url}" style="margin-right: 10px; display: inline-block; border: 1px solid #ccc; border-radius: 8px; padding: 5px;"><img src="${url}" alt="Foto da Retirada" style="max-width: 300px; height: auto;" /></a>`;
+                            } else {
+                                fotosHtml += `<a href="${url}" style="display: block; margin-top: 5px;">Ver Anexo (PDF ou outro)</a>`;
+                            }
+                        });
                     }
+                    // **** FIM DO AJUSTE ****
 
                     htmlBody = `
                         <h1>Laudo de Item Finalizado - (Pedido #${solicitacao_id}, Item #${id})</h1>
@@ -254,14 +265,14 @@ export default async (req, res) => {
                             <li><strong>Qtd. Executada:</strong> ${item.quantidade_executada}</li>
                             <li><strong>Valor Total Executado:</strong> R$ ${item.valor_total_executado.toFixed(2)}</li>
                             <li><strong>Justificativa:</strong> ${item.justificativa_execucao}</li>
-                            <li><strong>Anexos do Pedido:</strong> ${anexosHtml}</li>
+                            <li><strong>Anexos do Pedido (Execução):</strong> ${anexosHtml}</li>
                         </ul>
                          <h3>Detalhes da Retirada (Operação)</h3>
                         <ul>
                             <li><strong>Retirado por:</strong> ${retiradaNome}</li>
                             <li><strong>Data:</strong> ${new Date(item.data_retirada).toLocaleString('pt-BR')}</li>
                         </ul>
-                        ${fotoHtml}
+                        ${fotosHtml}
                         <hr>
                         ${APP_LINK_HTML}
                     `;
