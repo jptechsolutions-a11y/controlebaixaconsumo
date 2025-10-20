@@ -1185,7 +1185,17 @@ function showNotification(message, type = 'info', timeout = 4000) {
 // =======================================================
 
 async function getFiliaisCache(forceRefresh = false) { if (typeof todasFiliaisCache === 'undefined' || todasFiliaisCache.length === 0 || forceRefresh) { todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc') || []; } return todasFiliaisCache; }
-async function getCgoCache(forceRefresh = false) { if (typeof cgoCache === 'undefined' || cgoCache.length === 0 || forceRefresh) { cgoCache = await supabaseRequest('cgo?ativo=eq.true&select=id,codigo_cgo,descricao_cgo,obs,linha_orcamentaria_id&order=codigo_cgo.asc') || []; } return cgoCache; }
+async function getCgoCache(forceRefresh = false) {
+    // CORREÇÃO: Garante que a variável exista antes de acessar .length
+    if (typeof cgoCache === 'undefined' || cgoCache.length === 0 || forceRefresh) {
+        console.log(">>> getCgoCache: Buscando CGOs do Supabase..."); // Log 7
+        cgoCache = await supabaseRequest('cgo?ativo=eq.true&select=id,codigo_cgo,descricao_cgo,obs,linha_orcamentaria_id&order=codigo_cgo.asc') || []; // Garante que seja array
+        console.log(">>> getCgoCache: Recebido do Supabase:", cgoCache); // Log 8
+    } else {
+        console.log(">>> getCgoCache: Usando cache."); // Log 9
+    }
+    return cgoCache;
+}
 async function getAllCgoCache(forceRefresh = false) { if (typeof todosCgoCache === 'undefined' || todosCgoCache.length === 0 || forceRefresh) { todosCgoCache = await supabaseRequest('cgo?select=id,codigo_cgo,descricao_cgo,obs,ativo,linha_orcamentaria_id&order=codigo_cgo.asc') || []; } return todosCgoCache; }
 
 // --- Gerenciamento de Usuários (sem alteração) ---
@@ -2306,5 +2316,41 @@ function handleCgoPrevistoChange() {
         if (produtoCodigoInput) produtoCodigoInput.focus();
     } else if (passo2Div) {
         passo2Div.style.display = 'none'; // Esconde o passo 2
+    }
+}
+
+async function iniciarNovaSolicitacao() {
+    console.log(">>> iniciarNovaSolicitacao chamada!"); // Log 1
+    limparCarrinho();
+    const cgoSelect = document.getElementById('cgoPrevistoSelect');
+    const passo2Div = document.getElementById('solicitacaoPasso2');
+    const alertContainer = document.getElementById('cgoPrevistoAlert');
+
+    alertContainer.innerHTML = '';
+    passo2Div.style.display = 'none';
+    cgoSelect.disabled = true;
+    cgoSelect.innerHTML = '<option value="">Carregando tipos de baixa...</option>';
+
+    try {
+        console.log(">>> Tentando chamar getCgoCache..."); // Log 2
+        const cgos = await getCgoCache(true); // Força refresh dos CGOs ativos
+        console.log(">>> getCgoCache retornou:", cgos); // Log 3
+
+        if (cgos && cgos.length > 0) { // Adicionado verificação 'cgos &&'
+            cgoSelect.innerHTML = '<option value="">-- Selecione o Tipo de Baixa (CGO) --</option>';
+            cgos.forEach(cgo => {
+                cgoSelect.innerHTML += `<option value="${cgo.codigo_cgo}">${cgo.codigo_cgo} - ${cgo.descricao_cgo}</option>`;
+            });
+            cgoSelect.disabled = false;
+            console.log(">>> Dropdown de CGOs populado."); // Log 4
+        } else {
+            cgoSelect.innerHTML = '<option value="">Nenhum CGO ativo encontrado</option>';
+            alertContainer.innerHTML = '<div class="alert alert-error">Nenhum Tipo de Baixa (CGO) ativo cadastrado. Contate o administrador.</div>';
+            console.log(">>> Nenhum CGO encontrado ou retornado."); // Log 5
+        }
+    } catch (error) {
+        console.error(">>> Erro DENTRO de iniciarNovaSolicitacao ao carregar CGOs:", error); // Log 6
+        cgoSelect.innerHTML = '<option value="">Erro ao carregar CGOs</option>';
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar tipos de baixa: ${error.message}</div>`;
     }
 }
