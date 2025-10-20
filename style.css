@@ -1296,3 +1296,9 @@ input[type="file"]::file-selector-button:hover {
     font-weight: 600;
     color: var(--dark);
 }
+
+/* Adicionar ao final do style.css */
+.input-error {
+    border-color: red !important;
+    background-color: #fee2e2 !important; /* Cor de fundo vermelha clara */
+}
