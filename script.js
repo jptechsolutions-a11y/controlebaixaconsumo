@@ -2283,3 +2283,28 @@ async function calcularRealizadoLinha(linhaId, filialId, ano, mes) {
     const realizado = (response || []).reduce((sum, item) => sum + (item.valor_total_executado || 0), 0);
     return realizado;
 }
+
+// --- Adicione esta função ao seu script.js ---
+
+/**
+ * NOVO: Chamado quando o CGO previsto é selecionado/alterado
+ */
+function handleCgoPrevistoChange() {
+    const cgoSelecionado = document.getElementById('cgoPrevistoSelect').value;
+    const passo2Div = document.getElementById('solicitacaoPasso2');
+    
+    // Garante que limparCarrinho exista antes de chamar
+    if (typeof limparCarrinho === 'function') {
+        limparCarrinho(); // Reseta itens se trocar o CGO
+    } else {
+        console.error("Função limparCarrinho não definida!");
+    }
+
+    if (cgoSelecionado && passo2Div) {
+        passo2Div.style.display = 'block'; // Mostra o passo 2
+        const produtoCodigoInput = document.getElementById('produtoCodigo');
+        if (produtoCodigoInput) produtoCodigoInput.focus();
+    } else if (passo2Div) {
+        passo2Div.style.display = 'none'; // Esconde o passo 2
+    }
+}
