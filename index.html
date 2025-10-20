@@ -145,17 +145,28 @@
                 <div id="novaSolicitacaoView" class="view-content">
                     <h1 class="text-3xl font-bold text-gray-800 mb-6">Nova Solicitação de Baixa</h1>
                     
-                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-                        <h3 class="text-xl font-semibold mb-4">Passo 1: Intenção da Baixa</h3>
-                        <div class="form-group">
-                            <label for="cgoPrevistoSelect" class="font-semibold">Selecione o Tipo de Baixa (CGO Previsto):</label>
-                            <select id="cgoPrevistoSelect" class="w-full">
-                                <option value="">Carregando CGOs...</option>
-                            </select>
-                            <small class="text-gray-500">Isso definirá o orçamento e validará os itens permitidos.</small>
-                        </div>
-                        <div id="cgoPrevistoAlert" class="mt-4"></div>
-                    </div>
+                  <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+    <h3 class="text-xl font-semibold mb-4">Passo 1: Intenção da Baixa</h3>
+    <div class="form-group">
+        <label for="cgoPrevistoSelect" class="font-semibold">Selecione o Tipo de Baixa (CGO Previsto):</label>
+        <select id="cgoPrevistoSelect" class="w-full">
+            <option value="">Carregando CGOs...</option>
+        </select>
+        <small class="text-gray-500">Isso definirá o orçamento e validará os itens permitidos.</small>
+    </div>
+    <div id="cgoPrevistoAlert" class="mt-4"></div>
+</div>
+<div class="bg-white p-6 rounded-lg shadow-md mb-6">
+    <h3 class="text-xl font-semibold mb-4">Passo 1: Intenção da Baixa</h3>
+    <div class="form-group">
+        <label for="tipoBaixaSelect" class="font-semibold">Selecione o Tipo de Baixa:</label>
+        <select id="tipoBaixaSelect" class="w-full">
+            <option value="">Carregando tipos de baixa...</option>
+        </select>
+        <small class="text-gray-500">Isso definirá os produtos e CGOs permitidos para esta solicitação.</small>
+    </div>
+    <div id="tipoBaixaAlert" class="mt-4"></div>
+</div>
 
                     <div id="solicitacaoPasso2" style="display: none;">
                         <div class="bg-white p-6 rounded-lg shadow-md mb-6">
@@ -511,9 +522,16 @@
             
             <form id="executarForm" class="flex-1 flex flex-col min-h-0">
                 <input type="hidden" id="executarSolicitacaoId">
-                
-                <div class="form-group mb-4 flex-1 overflow-y-auto">
-                    <label class="block mb-2 font-semibold">Itens Aprovados para Execução:</label>
+<input type="hidden" id="executarTipoBaixaId"> 
+
+<p class="mb-3 text-gray-700">
+    <strong>Intenção de Baixa (Tipo):</strong> 
+    <span id="executarIntencaoBaixa" class="font-semibold text-blue-700">Carregando...</span>
+</p>
+
+<div class="form-group mb-4 flex-1 overflow-y-auto">
+    <label class="block mb-2 font-semibold">Itens Aprovados para Execução:</label>
+
                     <div id="executarItensList" class="space-y-3 pr-2">
                         <div class="loading"><div class="spinner"></div>Carregando itens...</div>
                     </div>
