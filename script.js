@@ -212,28 +212,37 @@ function showView(viewId, element = null) {
         if (link) link.classList.add('active');
     }
 
-    // AJUSTADO: Adicionados novos cases
-    switch (viewId) {
-        case 'novaSolicitacaoView': iniciarNovaSolicitacao(); break;
-        case 'minhasSolicitacoesView': loadMinhasSolicitacoes(); break;
-        case 'aprovarSolicitacoesView': loadAprovacoesPendentes(); break;
-        case 'executarSolicitacoesView': loadExecucoesPendentes(); break;
-        case 'historicoBaixasView': loadHistoricoGeral(); break;
-        case 'gerenciarUsuariosView': loadGerenciarUsuarios(); break;
-        case 'gerenciarFiliaisView': loadGerenciarFiliais(); break;
-        case 'gerenciarProdutosView': loadGerenciarProdutos(); break;
-        case 'gerenciarCgoView': loadGerenciarCgo(); break;
-        case 'gerenciarLinhasView': loadGerenciarLinhas(); break; // NOVO case
-        case 'gerenciarOrcamentosView': prepararGerenciarOrcamentos(); break; // NOVO case
+    // Carrega dados específicos da view
+    // Garante que as funções existam antes de chamar
+    try {
+        switch (viewId) {
+            case 'novaSolicitacaoView': if(typeof iniciarNovaSolicitacao === 'function') iniciarNovaSolicitacao(); break;
+            case 'minhasSolicitacoesView': if(typeof loadMinhasSolicitacoes === 'function') loadMinhasSolicitacoes(); break;
+            case 'aprovarSolicitacoesView': if(typeof loadAprovacoesPendentes === 'function') loadAprovacoesPendentes(); break;
+            case 'executarSolicitacoesView': if(typeof loadExecucoesPendentes === 'function') loadExecucoesPendentes(); break;
+            case 'historicoBaixasView': if(typeof loadHistoricoGeral === 'function') loadHistoricoGeral(); break;
+            case 'gerenciarUsuariosView': if(typeof loadGerenciarUsuarios === 'function') loadGerenciarUsuarios(); break;
+            case 'gerenciarFiliaisView': if(typeof loadGerenciarFiliais === 'function') loadGerenciarFiliais(); break;
+            case 'gerenciarProdutosView': if(typeof loadGerenciarProdutos === 'function') loadGerenciarProdutos(); break;
+            case 'gerenciarCgoView': if(typeof loadGerenciarCgo === 'function') loadGerenciarCgo(); break;
+            case 'gerenciarLinhasView': if(typeof loadGerenciarLinhas === 'function') loadGerenciarLinhas(); break; // Corrigido
+            case 'gerenciarOrcamentosView': if(typeof prepararGerenciarOrcamentos === 'function') prepararGerenciarOrcamentos(); break; // Corrigido
+        }
+    } catch(e) {
+        console.error(`Erro ao carregar dados para a view ${viewId}:`, e);
+        // Opcional: Mostrar erro para o usuário
+        // showNotification(`Erro ao carregar view ${viewId}. Verifique o console.`, 'error');
     }
+
     if (typeof feather !== 'undefined') feather.replace();
     if (typeof AOS !== 'undefined') AOS.refresh();
 }
 
+// --- SUBSTITUA a função logout ---
 function logout() {
     currentUser = null; selectedFilial = null;
     todasFiliaisCache = []; cgoCache = []; todosCgoCache = []; carrinhoItens = [];
-    // AJUSTADO: Limpa caches de orçamento
+    // Limpa caches de orçamento
     linhasOrcamentariasCache = []; todasLinhasOrcamentariasCache = []; orcamentosCache = {};
     document.getElementById('mainSystem').style.display = 'none';
     document.getElementById('loginContainer').style.display = 'flex';
@@ -244,11 +253,7 @@ function logout() {
     showNotification('Você foi desconectado.', 'info');
 }
 
-// --- Funções de Lógica de Negócio (Solicitações - NOVO "CARRINHO") ---
 
-/**
- * NOVO: Limpa o carrinho e reseta os formulários da view 'novaSolicitacaoView'
- */
 function limparCarrinho() {
     carrinhoItens = [];
     document.getElementById('addItemForm')?.reset();
@@ -363,68 +368,45 @@ function removerItemDoCarrinho(index) {
 }
 
 
-/**
- * REESCRITO: Busca o produto (sem alteração de lógica)
- */
 async function buscarProdutoPorCodigo() {
     const codigo = document.getElementById('produtoCodigo').value.trim();
     const descricaoInput = document.getElementById('produtoDescricao');
     const produtoIdInput = document.getElementById('produtoId');
     const valorUnitInput = document.getElementById('valorUnitarioSolicitado');
-    const cgoPrevisto = document.getElementById('cgoPrevistoSelect').value; // AJUSTADO: Lê CGO
+    const cgoPrevisto = document.getElementById('cgoPrevistoSelect').value;
 
-    // Limpa campos e erro visual
-    descricaoInput.value = '';
-    produtoIdInput.value = '';
-    valorUnitInput.value = '';
-    descricaoInput.classList.remove('input-error'); // AJUSTADO: Limpa erro
-    calcularValorTotalSolicitado();
+    descricaoInput.value = ''; produtoIdInput.value = ''; valorUnitInput.value = '';
+    descricaoInput.classList.remove('input-error'); calcularValorTotalSolicitado();
 
-    if (!codigo || !cgoPrevisto) { // AJUSTADO: Não busca se não tiver CGO ou código
-        return;
-    }
+    if (!codigo || !cgoPrevisto) return;
 
     try {
         let produto = produtosCache.find(p => p.codigo === codigo);
         if (!produto) {
-            // AJUSTADO: Busca cgos_permitidos
             const response = await supabaseRequest(`produtos?codigo=eq.${codigo}&select=id,descricao,cgos_permitidos`);
-            if (response && response.length > 0) {
-                produto = response[0];
-                produtosCache.push(produto);
-            }
+            if (response && response[0]) { produto = response[0]; produtosCache.push(produto); }
         }
 
         if (produto) {
-            // AJUSTADO: VALIDAÇÃO CGO
             if (produto.cgos_permitidos && produto.cgos_permitidos.includes(cgoPrevisto)) {
-                descricaoInput.value = produto.descricao;
-                produtoIdInput.value = produto.id;
-                valorUnitInput.focus();
+                descricaoInput.value = produto.descricao; produtoIdInput.value = produto.id; valorUnitInput.focus();
             } else {
-                // NÃO PERMITIDO
                 descricaoInput.value = `${produto.descricao} (NÃO PERMITIDO p/ CGO ${cgoPrevisto})`;
-                produtoIdInput.value = ''; // Invalida o ID
-                descricaoInput.classList.add('input-error'); // Destaca em vermelho
+                produtoIdInput.value = ''; descricaoInput.classList.add('input-error');
                 showNotification('Produto não permitido para este tipo de baixa.', 'error');
             }
         } else {
-            descricaoInput.value = 'Produto não encontrado';
-            produtoIdInput.value = '';
+            descricaoInput.value = 'Produto não encontrado'; produtoIdInput.value = '';
             showNotification('Produto não cadastrado.', 'error');
         }
         calcularValorTotalSolicitado();
-
     } catch (error) {
         console.error("Erro ao buscar produto:", error);
-        descricaoInput.value = 'Erro ao buscar';
-        produtoIdInput.value = '';
+        descricaoInput.value = 'Erro ao buscar'; produtoIdInput.value = '';
         showNotification('Erro ao buscar produto.', 'error');
     }
 }
-/**
- * REESCRITO: Calcula o total (sem alteração de lógica)
- */
+
 function calcularValorTotalSolicitado() {
     const qtd = parseFloat(document.getElementById('quantidadeSolicitada').value) || 0;
     const valorUnit = parseFloat(document.getElementById('valorUnitarioSolicitado').value) || 0;
@@ -438,22 +420,19 @@ function calcularValorTotalSolicitado() {
 async function handleNovaSolicitacaoSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('novaSolicitacaoAlert');
-    const cgoPrevisto = document.getElementById('cgoPrevistoSelect').value; // AJUSTADO: Lê CGO
+    const cgoPrevisto = document.getElementById('cgoPrevistoSelect').value;
     alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Enviando solicitação...</div>';
 
-    if (!cgoPrevisto) { alertContainer.innerHTML = '<div class="alert alert-error">Selecione o Tipo de Baixa (CGO).</div>'; return; } // AJUSTADO: Valida CGO
+    if (!cgoPrevisto) { alertContainer.innerHTML = '<div class="alert alert-error">Selecione o Tipo de Baixa (CGO).</div>'; return; }
     if (carrinhoItens.length === 0) { alertContainer.innerHTML = '<div class="alert alert-error">Adicione itens ao pedido.</div>'; return; }
 
     try {
-        // AJUSTADO: Inclui cgoPrevisto no cabeçalho
         const solicitacaoHeader = {
-            filial_id: selectedFilial.id,
-            solicitante_id: currentUser.id,
-            status: 'aguardando_aprovacao',
-            codigo_movimentacao_previsto: cgoPrevisto // SALVA A INTENÇÃO
+            filial_id: selectedFilial.id, solicitante_id: currentUser.id,
+            status: 'aguardando_aprovacao', codigo_movimentacao_previsto: cgoPrevisto
         };
         const response = await supabaseRequest('solicitacoes_baixa', 'POST', solicitacaoHeader);
-        if (!response || !response[0]?.id) throw new Error('Falha ao criar o cabeçalho da solicitação.');
+        if (!response || !response[0]?.id) throw new Error('Falha ao criar o cabeçalho.');
         const novaSolicitacaoId = response[0].id;
 
         const itensParaInserir = carrinhoItens.map(item => ({
@@ -464,13 +443,13 @@ async function handleNovaSolicitacaoSubmit(event) {
         await supabaseRequest('solicitacao_itens', 'POST', itensParaInserir);
 
         showNotification('Solicitação enviada!', 'success');
-        iniciarNovaSolicitacao(); // AJUSTADO: Chama a função que reseta a view corretamente
+        if(typeof iniciarNovaSolicitacao === 'function') iniciarNovaSolicitacao(); // Chama a função que reseta
         showView('minhasSolicitacoesView', document.querySelector('a[href="#minhasSolicitacoes"]'));
 
     } catch (error) {
         console.error("Erro ao enviar solicitação:", error);
-        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao enviar: ${error.message}</div>`;
-        // TODO: Adicionar lógica para deletar o "cabeçalho" caso a inserção dos itens falhe (rollback manual)
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`;
+        // TODO: Rollback
     }
 }
 
@@ -742,91 +721,33 @@ function closeModal(modalId) {
     const alertDiv = modal.querySelector('[id$="Alert"]');
     if (alertDiv) alertDiv.innerHTML = '';
 
-    // AJUSTADO: Limpeza específica de cada modal
-    if (modalId === 'usuarioModal') { document.getElementById('usuarioForm').reset(); document.getElementById('usuarioId').value = ''; }
-    if (modalId === 'filialModal') { document.getElementById('filialForm').reset(); document.getElementById('filialId').value = ''; }
-    if (modalId === 'cgoModal') { document.getElementById('cgoForm').reset(); document.getElementById('cgoId').value = ''; }
-    if (modalId === 'produtoModal') { document.getElementById('produtoForm').reset(); document.getElementById('produtoIdAdmin').value = ''; }
-    if (modalId === 'linhaModal') { document.getElementById('linhaForm').reset(); document.getElementById('linhaId').value = ''; } // NOVO case
-    if (modalId === 'consultaCgoModal') { document.getElementById('cgoSearchInput').value = ''; filtrarCgoConsulta(); }
+    // Limpeza específica de cada modal
+    if (modalId === 'usuarioModal' && document.getElementById('usuarioForm')) { document.getElementById('usuarioForm').reset(); document.getElementById('usuarioId').value = ''; }
+    if (modalId === 'filialModal' && document.getElementById('filialForm')) { document.getElementById('filialForm').reset(); document.getElementById('filialId').value = ''; }
+    if (modalId === 'cgoModal' && document.getElementById('cgoForm')) { document.getElementById('cgoForm').reset(); document.getElementById('cgoId').value = ''; }
+    if (modalId === 'produtoModal' && document.getElementById('produtoForm')) { document.getElementById('produtoForm').reset(); document.getElementById('produtoIdAdmin').value = ''; }
+    if (modalId === 'linhaModal' && document.getElementById('linhaForm')) { document.getElementById('linhaForm').reset(); document.getElementById('linhaId').value = ''; }
+    if (modalId === 'consultaCgoModal' && document.getElementById('cgoSearchInput')) { document.getElementById('cgoSearchInput').value = ''; if(typeof filtrarCgoConsulta === 'function') filtrarCgoConsulta(); }
 }
 
-/**
- * REESCRITO: Abre detalhes do PEDIDO e lista seus ITENS
- */
-async function abrirDetalhesModal(id) { // id é solicitacao_id
-    const modal = document.getElementById('detalhesModal');
-    const content = document.getElementById('detalhesContent');
-    const orcamentoSection = document.getElementById('detalhesOrcamentoSection'); // AJUSTADO
-    document.getElementById('detalhesId').textContent = id;
-    content.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
-    orcamentoSection.style.display = 'none'; // AJUSTADO: Esconde orçamento
-    modal.style.display = 'flex';
-
+async function abrirDetalhesModal(id) {
+    const modal = document.getElementById('detalhesModal'); const content = document.getElementById('detalhesContent'); const orcamentoSection = document.getElementById('detalhesOrcamentoSection');
+    document.getElementById('detalhesId').textContent = id; content.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>'; orcamentoSection.style.display = 'none'; modal.style.display = 'flex';
     try {
-        // AJUSTADO: Busca CGO previsto
-        const s = await supabaseRequest(
-            `solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),codigo_movimentacao_previsto`
-        );
-        if (!s || !s[0]) throw new Error('Solicitação não encontrada.');
-        const sol = s[0];
-
-        const itens = await supabaseRequest(
-            `solicitacao_itens?solicitacao_id=eq.${id}&select=*,produtos(codigo,descricao),usuarios_aprovador:usuarios!solicitacao_itens_aprovador_id_fkey(nome),usuarios_executor:usuarios!solicitacao_itens_executor_id_fkey(nome),usuarios_retirada:usuarios!solicitacao_itens_retirada_por_id_fkey(nome)&order=id.asc`
-        );
-
+        const s = await supabaseRequest(`solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),codigo_movimentacao_previsto`); if (!s || !s[0]) throw new Error('Solicitação não encontrada.'); const sol = s[0];
+        const itens = await supabaseRequest(`solicitacao_itens?solicitacao_id=eq.${id}&select=*,produtos(codigo,descricao),usuarios_aprovador:usuarios!solicitacao_itens_aprovador_id_fkey(nome),usuarios_executor:usuarios!solicitacao_itens_executor_id_fkey(nome),usuarios_retirada:usuarios!solicitacao_itens_retirada_por_id_fkey(nome)&order=id.asc`);
         const anexos = await supabaseRequest(`anexos_baixa?solicitacao_id=eq.${id}`);
-
-        const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleString('pt-BR') : 'N/A';
-        let anexosHtml = 'Nenhum anexo.';
-        if (anexos && anexos.length > 0) { anexosHtml = anexos.map(a => `<a href="${a.url_arquivo}" target="_blank" class="text-blue-600 hover:underline block">${a.nome_arquivo || 'Ver Anexo'}</a>`).join(''); }
-
-        // AJUSTADO: Mostra CGO previsto
-        let headerHtml = `
-            <p><strong>Status do Pedido:</strong> <span class="status-badge status-${sol.status}">${getStatusLabel(sol.status)}</span></p>
-            <p><strong>Filial:</strong> ${sol.filiais.nome} - ${sol.filiais.descricao}</p>
-            <p><strong>Solicitante:</strong> ${sol.usuarios.nome}</p>
-            <p><strong>Data:</strong> ${formatDate(sol.data_solicitacao)}</p>
-            <p><strong>Tipo Previsto (CGO):</strong> ${sol.codigo_movimentacao_previsto || 'N/A'}</p>
-            <p><strong>Anexos do Pedido:</strong></p> <div>${anexosHtml}</div>
-            <hr class="my-4">
-            <h4 class="text-lg font-semibold mb-2">Itens do Pedido</h4>`;
-
-        let itensHtml = (itens || []).map(item => {
-            const fotosRetiradaHtml = (item.fotos_retirada_urls && item.fotos_retirada_urls.length > 0)
-                ? item.fotos_retirada_urls.map(url => `<a href="${url}" target="_blank" class="text-blue-600 hover:underline mr-2">Ver Foto/Anexo</a>`).join('')
-                : 'Nenhum';
-            // Botão de retirada individual removido
-            return `
-                <div class="bg-gray-50 p-4 rounded border border-gray-200 mb-3">
-                    <p class="font-bold text-base">${item.produtos.codigo} - ${item.produtos.descricao}</p>
-                    <p><strong>Status Item:</strong> <span class="status-badge status-${item.status}">${getStatusLabel(item.status)}</span></p> <hr class="my-2">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 text-sm">
-                        <div><h5 class="font-semibold mb-1">Solicitação</h5> <p><strong>Qtd.:</strong> ${item.quantidade_solicitada}</p> <p><strong>Valor Total:</strong> R$ ${item.valor_total_solicitado.toFixed(2)}</p> </div>
-                        <div><h5 class="font-semibold mb-1">Aprovação</h5> <p><strong>Por:</strong> ${item.usuarios_aprovador?.nome || 'Pendente'}</p> ${item.status === 'negada' ? `<p><strong>Motivo:</strong> ${item.motivo_negacao || 'N/A'}</p>` : ''} </div>
-                        <div class="mt-2"><h5 class="font-semibold mb-1">Execução</h5> <p><strong>Por:</strong> ${item.usuarios_executor?.nome || 'Pendente'}</p> <p><strong>Qtd.:</strong> ${item.quantidade_executada ?? 'N/A'}</p> <p><strong>Valor Total:</strong> R$ ${item.valor_total_executado?.toFixed(2) ?? 'N/A'}</p> <p><strong>CGO:</strong> ${item.codigo_movimentacao || 'N/A'}</p> <p><strong>Justificativa:</strong> ${item.justificativa_execucao || 'N/A'}</p> </div>
-                        <div class="mt-2"><h5 class="font-semibold mb-1">Retirada</h5> <p><strong>Por:</strong> ${item.usuarios_retirada?.nome || 'Pendente'}</p> <p><strong>Anexos:</strong> ${fotosRetiradaHtml}</p> </div>
-                    </div>
-                </div>`;
-        }).join('');
-
-        content.innerHTML = headerHtml + (itensHtml || '<p>Nenhum item encontrado.</p>');
-        if (typeof feather !== 'undefined') feather.replace();
-
-        // AJUSTADO: Mostra simulação se aplicável
-        if ((currentUser.role === 'gestor' || currentUser.role === 'admin') && sol.status === 'aguardando_aprovacao' && sol.codigo_movimentacao_previsto) {
+        const formatDate = (d) => d ? new Date(d).toLocaleString('pt-BR') : 'N/A'; let anexosHtml = 'Nenhum.'; if (anexos && anexos.length > 0) { anexosHtml = anexos.map(a => `<a href="${a.url_arquivo}" target="_blank" class="text-blue-600 hover:underline block">${a.nome_arquivo || 'Ver'}</a>`).join(''); }
+        let headerHtml = `<p><strong>Status:</strong> <span class="status-badge status-${sol.status}">${getStatusLabel(sol.status)}</span></p> <p><strong>Filial:</strong> ${sol.filiais.nome} - ${sol.filiais.descricao}</p> <p><strong>Solicitante:</strong> ${sol.usuarios.nome}</p> <p><strong>Data:</strong> ${formatDate(sol.data_solicitacao)}</p> <p><strong>Tipo Previsto:</strong> ${sol.codigo_movimentacao_previsto || 'N/A'}</p> <p><strong>Anexos:</strong></p> <div>${anexosHtml}</div> <hr class="my-4"> <h4 class="text-lg font-semibold mb-2">Itens</h4>`;
+        let itensHtml = (itens || []).map(item => { const fotosHtml = (item.fotos_retirada_urls && item.fotos_retirada_urls.length > 0) ? item.fotos_retirada_urls.map(url => `<a href="${url}" target="_blank" class="text-blue-600 hover:underline mr-2">Ver</a>`).join('') : 'Nenhum'; return `<div class="bg-gray-50 p-4 rounded border mb-3"> <p class="font-bold">${item.produtos.codigo} - ${item.produtos.descricao}</p> <p><strong>Status Item:</strong> <span class="status-badge status-${item.status}">${getStatusLabel(item.status)}</span></p> <hr class="my-2"> <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 text-sm"> <div><h5>Solicitação</h5> <p>Qtd: ${item.quantidade_solicitada}</p> <p>Valor: R$ ${item.valor_total_solicitado.toFixed(2)}</p> </div> <div><h5>Aprovação</h5> <p>Por: ${item.usuarios_aprovador?.nome || '-'}</p> ${item.status === 'negada' ? `<p>Motivo: ${item.motivo_negacao || 'N/A'}</p>` : ''} </div> <div class="mt-2"><h5>Execução</h5> <p>Por: ${item.usuarios_executor?.nome || '-'}</p> <p>Qtd: ${item.quantidade_executada ?? '-'}</p> <p>Valor: R$ ${item.valor_total_executado?.toFixed(2) ?? '-'}</p> <p>CGO: ${item.codigo_movimentacao || '-'}</p> <p>Justif: ${item.justificativa_execucao || '-'}</p> </div> <div class="mt-2"><h5>Retirada</h5> <p>Por: ${item.usuarios_retirada?.nome || '-'}</p> <p>Anexos: ${fotosHtml}</p> </div> </div> </div>`; }).join('');
+        content.innerHTML = headerHtml + (itensHtml || '<p>Nenhum item.</p>'); if (typeof feather !== 'undefined') feather.replace();
+        // Chama simulação se aplicável
+        if ((currentUser.role === 'gestor' || currentUser.role === 'admin') && sol.status === 'aguardando_aprovacao' && sol.codigo_movimentacao_previsto && typeof mostrarSimulacaoOrcamento === 'function') {
             mostrarSimulacaoOrcamento(sol.codigo_movimentacao_previsto, sol.filial_id, itens);
         }
-
-    } catch (error) {
-        console.error("Erro ao carregar detalhes:", error);
-        content.innerHTML = `<div class="alert alert-error">Erro ao carregar: ${error.message}</div>`;
-        orcamentoSection.style.display = 'none';
-    }
+    } catch (error) { content.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`; orcamentoSection.style.display = 'none'; }
 }
-/**
- * REESCRITO: Abre modal de Execução para um PEDIDO
- */
+
 async function abrirExecutarModal(id) { // id é solicitacao_id
     const modal = document.getElementById('executarModal');
     document.getElementById('executarId').textContent = id;
@@ -1263,26 +1184,9 @@ function showNotification(message, type = 'info', timeout = 4000) {
 // === FUNÇÕES DE GERENCIAMENTO (ADMIN) ===
 // =======================================================
 
-async function getFiliaisCache() {
-    if (todasFiliaisCache.length === 0) {
-        todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc');
-    }
-    return todasFiliaisCache;
-}
-
-async function getCgoCache(forceRefresh = false) {
-    if (cgoCache.length === 0 || forceRefresh) {
-        cgoCache = await supabaseRequest('cgo?ativo=eq.true&select=codigo_cgo,descricao_cgo,obs&order=codigo_cgo.asc');
-    }
-    return cgoCache;
-}
-
-async function getAllCgoCache(forceRefresh = false) {
-    if (todosCgoCache.length === 0 || forceRefresh) {
-        todosCgoCache = await supabaseRequest('cgo?select=id,codigo_cgo,descricao_cgo,obs,ativo&order=codigo_cgo.asc');
-    }
-    return todosCgoCache;
-}
+async function getFiliaisCache(forceRefresh = false) { if (typeof todasFiliaisCache === 'undefined' || todasFiliaisCache.length === 0 || forceRefresh) { todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc') || []; } return todasFiliaisCache; }
+async function getCgoCache(forceRefresh = false) { if (typeof cgoCache === 'undefined' || cgoCache.length === 0 || forceRefresh) { cgoCache = await supabaseRequest('cgo?ativo=eq.true&select=id,codigo_cgo,descricao_cgo,obs,linha_orcamentaria_id&order=codigo_cgo.asc') || []; } return cgoCache; }
+async function getAllCgoCache(forceRefresh = false) { if (typeof todosCgoCache === 'undefined' || todosCgoCache.length === 0 || forceRefresh) { todosCgoCache = await supabaseRequest('cgo?select=id,codigo_cgo,descricao_cgo,obs,ativo,linha_orcamentaria_id&order=codigo_cgo.asc') || []; } return todosCgoCache; }
 
 // --- Gerenciamento de Usuários (sem alteração) ---
 async function loadGerenciarUsuarios() {
@@ -1798,86 +1702,42 @@ function renderCgoTable(tbody, cgos) {
         `;
     }).join('');
 }
+
 async function abrirCgoModal(id = null) {
-    const modal = document.getElementById('cgoModal');
-    const form = document.getElementById('cgoForm');
-    const alertContainer = document.getElementById('cgoAlert');
-    const title = document.getElementById('cgoModalTitle');
-    const linhaSelect = document.getElementById('cgoLinhaOrcamentaria'); // AJUSTADO
-    alertContainer.innerHTML = ''; form.reset(); document.getElementById('cgoId').value = id || '';
-
-    // AJUSTADO: Carrega Linhas Orçamentárias
-    linhaSelect.innerHTML = '<option value="">Carregando linhas...</option>';
-    linhaSelect.disabled = true;
+    const modal = document.getElementById('cgoModal'); const form = document.getElementById('cgoForm'); const alertC = document.getElementById('cgoAlert'); const title = document.getElementById('cgoModalTitle'); const linhaSelect = document.getElementById('cgoLinhaOrcamentaria');
+    alertC.innerHTML = ''; form.reset(); document.getElementById('cgoId').value = id || '';
+    linhaSelect.innerHTML = '<option value="">Carregando...</option>'; linhaSelect.disabled = true;
     try {
-        const linhas = await getLinhasOrcamentariasCache(true); // Força refresh
-        linhaSelect.innerHTML = '<option value="">Nenhuma (Não debita do orçamento)</option>';
-        if (linhas.length > 0) {
-            linhas.forEach(l => { linhaSelect.innerHTML += `<option value="${l.id}">${l.codigo} - ${l.descricao}</option>`; });
-        }
+        // Garante que a função getLinhasOrcamentariasCache existe antes de chamar
+        if (typeof getLinhasOrcamentariasCache !== 'function') throw new Error("Função getLinhasOrcamentariasCache não definida.");
+        const linhas = await getLinhasOrcamentariasCache(true);
+        linhaSelect.innerHTML = '<option value="">Nenhuma</option>';
+        if (linhas && linhas.length > 0) { linhas.forEach(l => { linhaSelect.innerHTML += `<option value="${l.id}">${l.codigo} - ${l.descricao}</option>`; }); }
         linhaSelect.disabled = false;
-    } catch (e) {
-        alertContainer.innerHTML = `<div class="alert alert-error">Falha ao carregar Linhas Orçamentárias: ${e.message}</div>`; return;
-    }
-
+    } catch (e) { alertC.innerHTML = `<div class="alert alert-error">Erro Linhas: ${e.message}</div>`; return; }
     if (id) {
-        title.textContent = `Editar CGO #${id}`;
-        document.getElementById('cgoCodigo').disabled = true;
+        title.textContent = `Editar CGO #${id}`; document.getElementById('cgoCodigo').disabled = true;
         try {
-            const cgos = await getAllCgoCache();
-            const cgo = cgos.find(c => c.id === id);
-            if (!cgo) throw new Error("CGO não encontrado.");
-            document.getElementById('cgoCodigo').value = cgo.codigo_cgo;
-            document.getElementById('cgoDescricao').value = cgo.descricao_cgo;
-            document.getElementById('cgoObs').value = cgo.obs || '';
-            document.getElementById('cgoAtivo').checked = cgo.ativo;
-            linhaSelect.value = cgo.linha_orcamentaria_id || ''; // AJUSTADO: Seleciona linha
-        } catch(error) {
-             alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`; return;
-        }
-    } else {
-        title.textContent = 'Novo CGO';
-        document.getElementById('cgoCodigo').disabled = false;
-        document.getElementById('cgoAtivo').checked = true;
-    }
+            if (typeof getAllCgoCache !== 'function') throw new Error("Função getAllCgoCache não definida.");
+            const cgos = await getAllCgoCache(); const cgo = cgos.find(c => c.id === id); if (!cgo) throw new Error("CGO não encontrado.");
+            document.getElementById('cgoCodigo').value = cgo.codigo_cgo; document.getElementById('cgoDescricao').value = cgo.descricao_cgo; document.getElementById('cgoObs').value = cgo.obs || ''; document.getElementById('cgoAtivo').checked = cgo.ativo; linhaSelect.value = cgo.linha_orcamentaria_id || '';
+        } catch(error) { alertC.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`; return; }
+    } else { title.textContent = 'Novo CGO'; document.getElementById('cgoCodigo').disabled = false; document.getElementById('cgoAtivo').checked = true; }
     modal.style.display = 'flex';
 }
 
 async function handleCgoFormSubmit(event) {
-    event.preventDefault();
-    const alertContainer = document.getElementById('cgoAlert');
-    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
-    const id = document.getElementById('cgoId').value;
-    const codigo_cgo = document.getElementById('cgoCodigo').value.trim();
-    const descricao_cgo = document.getElementById('cgoDescricao').value.trim();
-    const obs = document.getElementById('cgoObs').value.trim();
-    const ativo = document.getElementById('cgoAtivo').checked;
-    // AJUSTADO: Pega ID da linha ou null
-    const linha_orcamentaria_id = document.getElementById('cgoLinhaOrcamentaria').value ? parseInt(document.getElementById('cgoLinhaOrcamentaria').value) : null;
-    const isEdit = !!id;
-
-    if (!codigo_cgo || !descricao_cgo) { alertContainer.innerHTML = '<div class="alert alert-error">Código e Descrição são obrigatórios.</div>'; return; }
-
-    // AJUSTADO: Inclui linha_id
-    const cgoData = { codigo_cgo, descricao_cgo, obs: obs || null, ativo, linha_orcamentaria_id };
-
+    event.preventDefault(); const alertC = document.getElementById('cgoAlert'); alertC.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>'; const id = document.getElementById('cgoId').value; const codigo_cgo = document.getElementById('cgoCodigo').value.trim(); const desc = document.getElementById('cgoDescricao').value.trim(); const obs = document.getElementById('cgoObs').value.trim(); const ativo = document.getElementById('cgoAtivo').checked; const linha_id = document.getElementById('cgoLinhaOrcamentaria').value ? parseInt(document.getElementById('cgoLinhaOrcamentaria').value) : null; const isEdit = !!id;
+    if (!codigo_cgo || !desc) { alertC.innerHTML = '<div class="alert alert-error">Código e Descrição obrigatórios.</div>'; return; }
+    const cgoData = { codigo_cgo, descricao_cgo: desc, obs: obs || null, ativo, linha_orcamentaria_id: linha_id };
     try {
-        if (isEdit) {
-            delete cgoData.codigo_cgo;
-            await supabaseRequest(`cgo?id=eq.${id}`, 'PATCH', cgoData);
-        } else {
-            await supabaseRequest('cgo', 'POST', cgoData);
-        }
+        if (isEdit) { delete cgoData.codigo_cgo; await supabaseRequest(`cgo?id=eq.${id}`, 'PATCH', cgoData); }
+        else { await supabaseRequest('cgo', 'POST', cgoData); }
         cgoCache = []; todosCgoCache = []; // Limpa caches
-        showNotification(`CGO ${isEdit ? 'atualizado' : 'criado'}!`, 'success');
-        closeModal('cgoModal');
-        loadGerenciarCgo();
-    } catch (error) {
-        console.error("Erro ao salvar CGO:", error);
-        let errorMsg = error.message;
-        if (errorMsg.includes('duplicate key value') && errorMsg.includes('cgo_codigo_cgo_key')) { errorMsg = "Já existe CGO com este código."; }
-        alertContainer.innerHTML = `<div class="alert alert-error">Erro: ${errorMsg}</div>`;
-     }
+        showNotification(`CGO ${isEdit ? 'atualizado' : 'criado'}!`, 'success'); closeModal('cgoModal');
+        // Garante que a função existe antes de chamar
+        if (typeof loadGerenciarCgo === 'function') loadGerenciarCgo();
+    } catch (error) { let msg = error.message; if (msg.includes('duplicate key') && msg.includes('cgo_codigo_cgo_key')) { msg = "Código já existe."; } alertC.innerHTML = `<div class="alert alert-error">Erro: ${msg}</div>`; }
 }
 
 async function toggleCgoStatus(id, newStatus) {
@@ -2047,23 +1907,18 @@ async function handleRetiradaSubmit(event) {
 /**
  * NOVO Helper: Cache de Linhas Orçamentárias Ativas
  */
-async function getLinhasOrcamentariasCache(forceRefresh = false) {
-    if (linhasOrcamentariasCache.length === 0 || forceRefresh) {
-        linhasOrcamentariasCache = await supabaseRequest('linhas_orcamentarias?ativo=eq.true&select=id,codigo,descricao&order=codigo.asc');
-    }
-    return linhasOrcamentariasCache;
-}
+async function getLinhasOrcamentariasCache(forceRefresh = false) { if (typeof linhasOrcamentariasCache === 'undefined' || linhasOrcamentariasCache.length === 0 || forceRefresh) { linhasOrcamentariasCache = await supabaseRequest('linhas_orcamentarias?ativo=eq.true&select=id,codigo,descricao&order=codigo.asc') || []; } return linhasOrcamentariasCache; }
 
 /**
  * NOVO Helper: Cache de TODAS as Linhas Orçamentárias (para admin)
  */
 async function getAllLinhasOrcamentariasCache(forceRefresh = false) {
-    if (todasLinhasOrcamentariasCache.length === 0 || forceRefresh) {
-        todasLinhasOrcamentariasCache = await supabaseRequest('linhas_orcamentarias?select=id,codigo,descricao,ativo&order=codigo.asc');
+    // CORREÇÃO: Verifica se a variável existe antes de acessar .length
+    if (typeof todasLinhasOrcamentariasCache === 'undefined' || todasLinhasOrcamentariasCache.length === 0 || forceRefresh) {
+        todasLinhasOrcamentariasCache = await supabaseRequest('linhas_orcamentarias?select=id,codigo,descricao,ativo&order=codigo.asc') || []; // Garante que seja array
     }
     return todasLinhasOrcamentariasCache;
 }
-
 
 /**
  * NOVO: Carrega a lista de Linhas Orçamentárias para a view de admin.
