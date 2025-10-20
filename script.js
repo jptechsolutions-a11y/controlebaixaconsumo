@@ -7,38 +7,64 @@ let cgoCache = []; // NOVO: Cache de CGOs ativos
 let todosCgoCache = []; // NOVO: Cache de TODOS os CGOs (para admin)
 let carrinhoItens = []; // NOVO: Array para o "carrinho" da nova solicitação
 
-// --- Inicialização ---
+// --- Inicialização (SUBSTITUIR esta parte dentro do DOMContentLoaded) ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
 
-    // Listeners para cálculo automático e busca de produto (Formulário de ADICIONAR ITEM)
+    // Nova Solicitação
     const qtdInput = document.getElementById('quantidadeSolicitada');
     const valorInput = document.getElementById('valorUnitarioSolicitado');
     const codigoInput = document.getElementById('produtoCodigo');
+    const cgoPrevistoSelect = document.getElementById('cgoPrevistoSelect'); // AJUSTADO
 
     if (qtdInput && valorInput) {
         qtdInput.addEventListener('input', calcularValorTotalSolicitado);
         valorInput.addEventListener('input', calcularValorTotalSolicitado);
     }
     if (codigoInput) {
-        codigoInput.addEventListener('blur', buscarProdutoPorCodigo); // Ao sair do campo
+        codigoInput.addEventListener('blur', buscarProdutoPorCodigo); // AJUSTADO
+    }
+    if (cgoPrevistoSelect) { // AJUSTADO
+        cgoPrevistoSelect.addEventListener('change', handleCgoPrevistoChange);
     }
 
-    // Listeners para modal de execução (REMOVIDO, agora é dinâmico)
-
-    // Bind forms (novos e antigos)
-    document.getElementById('addItemForm')?.addEventListener('submit', handleAddItem); // NOVO
-    document.getElementById('submitPedidoButton')?.addEventListener('click', handleNovaSolicitacaoSubmit); // NOVO
+    // Bind forms (adicionado linhaForm)
+    document.getElementById('addItemForm')?.addEventListener('submit', handleAddItem);
+    document.getElementById('submitPedidoButton')?.addEventListener('click', handleNovaSolicitacaoSubmit);
     document.getElementById('executarForm')?.addEventListener('submit', handleExecucaoSubmit);
     document.getElementById('retiradaForm')?.addEventListener('submit', handleRetiradaSubmit);
     document.getElementById('usuarioForm')?.addEventListener('submit', handleUsuarioFormSubmit);
     document.getElementById('filialForm')?.addEventListener('submit', handleFilialFormSubmit);
     document.getElementById('cgoForm')?.addEventListener('submit', handleCgoFormSubmit);
-    document.getElementById('produtoForm')?.addEventListener('submit', handleProdutoFormSubmit); // NOVO
+    document.getElementById('produtoForm')?.addEventListener('submit', handleProdutoFormSubmit);
+    document.getElementById('linhaForm')?.addEventListener('submit', handleLinhaFormSubmit); // AJUSTADO
 
-    // NOVO: Listeners para o painel de consulta CGO
+    // Consulta CGO
     document.getElementById('helpCgoButton')?.addEventListener('click', abrirConsultaCgoModal);
     document.getElementById('cgoSearchInput')?.addEventListener('input', filtrarCgoConsulta);
+
+    // Gerenciar Orçamentos (AJUSTADO)
+    document.getElementById('buscarOrcamentosBtn')?.addEventListener('click', loadGerenciarOrcamentos);
+
+    // Adiciona listener para salvar orçamento via delegation (AJUSTADO)
+    const orcamentosTableBody = document.getElementById('orcamentosTableBody');
+    if (orcamentosTableBody) {
+        orcamentosTableBody.addEventListener('click', function(event) {
+            if (event.target && event.target.matches('button.btn-success')) {
+                const button = event.target;
+                const row = button.closest('tr');
+                // Pega linhaId do data attribute do BOTÃO
+                const linhaId = button.dataset.linhaId;
+                const filialId = document.getElementById('orcamentoFilialSelect').value;
+                const ano = document.getElementById('orcamentoAnoSelect').value;
+                if (linhaId && filialId && ano && row) {
+                    salvarOrcamento(linhaId, filialId, ano, row);
+                } else {
+                    console.error("Faltando dados para salvar orçamento:", { linhaId, filialId, ano, row });
+                }
+            }
+        });
+    }
 });
 
 // --- Funções de Autenticação e Navegação ---
@@ -174,78 +200,44 @@ function filterSidebarNav() {
 
 
 function showView(viewId, element = null) {
-    // Esconde todas as views
     document.querySelectorAll('.view-content').forEach(view => view.classList.remove('active'));
-    // Mostra a view desejada
     const targetView = document.getElementById(viewId);
-    if (targetView) {
-        targetView.classList.add('active');
-    }
+    if (targetView) targetView.classList.add('active');
 
-    // Atualiza o item ativo na navegação
     document.querySelectorAll('.sidebar nav .nav-item').forEach(item => item.classList.remove('active'));
-    if (element) {
-        element.classList.add('active');
-    } else {
-        // Se nenhum elemento foi passado, tenta encontrar pelo href
+    if (element) { element.classList.add('active'); }
+    else {
         const linkSelector = viewId === 'homeView' ? '.sidebar nav a[href="#homeView"]' : `.sidebar nav a[href="#${viewId.replace('View', '')}"]`;
         const link = document.querySelector(linkSelector);
         if (link) link.classList.add('active');
     }
 
-
-    // Carrega dados específicos da view
+    // AJUSTADO: Adicionados novos cases
     switch (viewId) {
-        case 'novaSolicitacaoView':
-            limparCarrinho(); // NOVO: Limpa o carrinho ao entrar na view
-            break;
-        case 'minhasSolicitacoesView':
-            loadMinhasSolicitacoes();
-            break;
-        case 'aprovarSolicitacoesView':
-            loadAprovacoesPendentes();
-            break;
-        case 'executarSolicitacoesView':
-            loadExecucoesPendentes();
-            break;
-        case 'historicoBaixasView':
-            loadHistoricoGeral();
-            break;
-        // NOVOS CASES
-        case 'gerenciarUsuariosView':
-            loadGerenciarUsuarios();
-            break;
-        case 'gerenciarFiliaisView':
-            loadGerenciarFiliais();
-            break;
-        case 'gerenciarProdutosView': // NOVO
-            loadGerenciarProdutos();
-            break;
-        case 'gerenciarCgoView': // NOVO
-            loadGerenciarCgo();
-            break;
+        case 'novaSolicitacaoView': iniciarNovaSolicitacao(); break;
+        case 'minhasSolicitacoesView': loadMinhasSolicitacoes(); break;
+        case 'aprovarSolicitacoesView': loadAprovacoesPendentes(); break;
+        case 'executarSolicitacoesView': loadExecucoesPendentes(); break;
+        case 'historicoBaixasView': loadHistoricoGeral(); break;
+        case 'gerenciarUsuariosView': loadGerenciarUsuarios(); break;
+        case 'gerenciarFiliaisView': loadGerenciarFiliais(); break;
+        case 'gerenciarProdutosView': loadGerenciarProdutos(); break;
+        case 'gerenciarCgoView': loadGerenciarCgo(); break;
+        case 'gerenciarLinhasView': loadGerenciarLinhas(); break; // NOVO case
+        case 'gerenciarOrcamentosView': prepararGerenciarOrcamentos(); break; // NOVO case
     }
-
-    // Re-renderizar ícones Feather (importante após mudar views)
-    if (typeof feather !== 'undefined') {
-        feather.replace();
-    }
-     // Re-inicializar AOS para animações na nova view (se usar)
-    if (typeof AOS !== 'undefined') {
-        AOS.refresh();
-    }
+    if (typeof feather !== 'undefined') feather.replace();
+    if (typeof AOS !== 'undefined') AOS.refresh();
 }
 
 function logout() {
-    currentUser = null;
-    selectedFilial = null;
-    todasFiliaisCache = []; // Limpa o cache de admin
-    cgoCache = []; 
-    todosCgoCache = []; 
-    carrinhoItens = []; // NOVO: Limpa o carrinho
+    currentUser = null; selectedFilial = null;
+    todasFiliaisCache = []; cgoCache = []; todosCgoCache = []; carrinhoItens = [];
+    // AJUSTADO: Limpa caches de orçamento
+    linhasOrcamentariasCache = []; todasLinhasOrcamentariasCache = []; orcamentosCache = {};
     document.getElementById('mainSystem').style.display = 'none';
     document.getElementById('loginContainer').style.display = 'flex';
-    document.getElementById('helpCgoButton').style.display = 'none'; // NOVO: Esconde o botão flutuante
+    document.getElementById('helpCgoButton').style.display = 'none';
     document.getElementById('loginForm').reset();
     document.getElementById('loginAlert').innerHTML = '';
     document.getElementById('filialSelectGroup').style.display = 'none';
@@ -378,53 +370,58 @@ async function buscarProdutoPorCodigo() {
     const codigo = document.getElementById('produtoCodigo').value.trim();
     const descricaoInput = document.getElementById('produtoDescricao');
     const produtoIdInput = document.getElementById('produtoId');
-    const valorUnitInput = document.getElementById('valorUnitarioSolicitado'); // Campo de valor unitário
+    const valorUnitInput = document.getElementById('valorUnitarioSolicitado');
+    const cgoPrevisto = document.getElementById('cgoPrevistoSelect').value; // AJUSTADO: Lê CGO
 
-    if (!codigo) {
-        descricaoInput.value = '';
-        produtoIdInput.value = '';
-        valorUnitInput.value = ''; // Limpa o valor unitário
-        calcularValorTotalSolicitado();
+    // Limpa campos e erro visual
+    descricaoInput.value = '';
+    produtoIdInput.value = '';
+    valorUnitInput.value = '';
+    descricaoInput.classList.remove('input-error'); // AJUSTADO: Limpa erro
+    calcularValorTotalSolicitado();
+
+    if (!codigo || !cgoPrevisto) { // AJUSTADO: Não busca se não tiver CGO ou código
         return;
     }
 
     try {
-        // Tenta buscar no cache simples
         let produto = produtosCache.find(p => p.codigo === codigo);
-
         if (!produto) {
-            // Se não está no cache, busca no banco
-            // IMPORTANTE: Agora também buscamos 'cgos_permitidos'
+            // AJUSTADO: Busca cgos_permitidos
             const response = await supabaseRequest(`produtos?codigo=eq.${codigo}&select=id,descricao,cgos_permitidos`);
             if (response && response.length > 0) {
                 produto = response[0];
-                produtosCache.push(produto); // Adiciona ao cache
+                produtosCache.push(produto);
             }
         }
 
         if (produto) {
-            descricaoInput.value = produto.descricao;
-            produtoIdInput.value = produto.id;
-            // Limpa o valor unitário - o usuário DEVE digitar
-            valorUnitInput.value = '';
-            valorUnitInput.focus(); // Coloca o foco no campo de valor
+            // AJUSTADO: VALIDAÇÃO CGO
+            if (produto.cgos_permitidos && produto.cgos_permitidos.includes(cgoPrevisto)) {
+                descricaoInput.value = produto.descricao;
+                produtoIdInput.value = produto.id;
+                valorUnitInput.focus();
+            } else {
+                // NÃO PERMITIDO
+                descricaoInput.value = `${produto.descricao} (NÃO PERMITIDO p/ CGO ${cgoPrevisto})`;
+                produtoIdInput.value = ''; // Invalida o ID
+                descricaoInput.classList.add('input-error'); // Destaca em vermelho
+                showNotification('Produto não permitido para este tipo de baixa.', 'error');
+            }
         } else {
             descricaoInput.value = 'Produto não encontrado';
             produtoIdInput.value = '';
-            valorUnitInput.value = ''; // Limpa o valor unitário
             showNotification('Produto não cadastrado.', 'error');
         }
-        calcularValorTotalSolicitado(); // Recalcula total (que será 0)
+        calcularValorTotalSolicitado();
 
     } catch (error) {
         console.error("Erro ao buscar produto:", error);
         descricaoInput.value = 'Erro ao buscar';
         produtoIdInput.value = '';
-        valorUnitInput.value = ''; // Limpa o valor unitário
         showNotification('Erro ao buscar produto.', 'error');
     }
 }
-
 /**
  * REESCRITO: Calcula o total (sem alteração de lógica)
  */
@@ -441,46 +438,33 @@ function calcularValorTotalSolicitado() {
 async function handleNovaSolicitacaoSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('novaSolicitacaoAlert');
+    const cgoPrevisto = document.getElementById('cgoPrevistoSelect').value; // AJUSTADO: Lê CGO
     alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Enviando solicitação...</div>';
-    
-    if (carrinhoItens.length === 0) {
-         alertContainer.innerHTML = '<div class="alert alert-error">Adicione pelo menos um item ao pedido.</div>';
-        return;
-    }
+
+    if (!cgoPrevisto) { alertContainer.innerHTML = '<div class="alert alert-error">Selecione o Tipo de Baixa (CGO).</div>'; return; } // AJUSTADO: Valida CGO
+    if (carrinhoItens.length === 0) { alertContainer.innerHTML = '<div class="alert alert-error">Adicione itens ao pedido.</div>'; return; }
 
     try {
-        // 1. Criar o "cabeçalho" da solicitação
+        // AJUSTADO: Inclui cgoPrevisto no cabeçalho
         const solicitacaoHeader = {
             filial_id: selectedFilial.id,
             solicitante_id: currentUser.id,
-            status: 'aguardando_aprovacao' // Status geral do pedido
+            status: 'aguardando_aprovacao',
+            codigo_movimentacao_previsto: cgoPrevisto // SALVA A INTENÇÃO
         };
-        
-        // Usamos 'Prefer: return=representation' para pegar o ID de volta
         const response = await supabaseRequest('solicitacoes_baixa', 'POST', solicitacaoHeader);
-        
-        if (!response || response.length === 0 || !response[0].id) {
-            throw new Error('Falha ao criar o cabeçalho da solicitação.');
-        }
-
+        if (!response || !response[0]?.id) throw new Error('Falha ao criar o cabeçalho da solicitação.');
         const novaSolicitacaoId = response[0].id;
-        
-        // 2. Preparar os itens
-        const itensParaInserir = carrinhoItens.map(item => ({
-            solicitacao_id: novaSolicitacaoId,
-            produto_id: item.produto_id,
-            quantidade_solicitada: item.quantidade_solicitada,
-            valor_unitario_solicitado: item.valor_unitario_solicitado,
-            valor_total_solicitado: item.valor_total_solicitado,
-            status: 'aguardando_aprovacao' // Status de cada item
-        }));
 
-        // 3. Inserir todos os itens
+        const itensParaInserir = carrinhoItens.map(item => ({
+            solicitacao_id: novaSolicitacaoId, produto_id: item.produto_id,
+            quantidade_solicitada: item.quantidade_solicitada, valor_unitario_solicitado: item.valor_unitario_solicitado,
+            valor_total_solicitado: item.valor_total_solicitado, status: 'aguardando_aprovacao'
+        }));
         await supabaseRequest('solicitacao_itens', 'POST', itensParaInserir);
 
-        // 4. Sucesso
-        showNotification('Solicitação de baixa enviada com sucesso!', 'success');
-        limparCarrinho();
+        showNotification('Solicitação enviada!', 'success');
+        iniciarNovaSolicitacao(); // AJUSTADO: Chama a função que reseta a view corretamente
         showView('minhasSolicitacoesView', document.querySelector('a[href="#minhasSolicitacoes"]'));
 
     } catch (error) {
@@ -753,32 +737,18 @@ async function negarSolicitacao(id) { // id é solicitacao_id
 
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.style.display = 'none';
-        const alertDiv = modal.querySelector('[id$="Alert"]');
-        if (alertDiv) alertDiv.innerHTML = '';
-        
-        if (modalId === 'usuarioModal') {
-            document.getElementById('usuarioForm').reset();
-            document.getElementById('usuarioId').value = '';
-        }
-        if (modalId === 'filialModal') {
-            document.getElementById('filialForm').reset();
-            document.getElementById('filialId').value = '';
-        }
-        if (modalId === 'cgoModal') {
-            document.getElementById('cgoForm').reset();
-            document.getElementById('cgoId').value = '';
-        }
-        if (modalId === 'produtoModal') { // NOVO
-            document.getElementById('produtoForm').reset();
-            document.getElementById('produtoIdAdmin').value = '';
-        }
-        if (modalId === 'consultaCgoModal') {
-            document.getElementById('cgoSearchInput').value = '';
-            filtrarCgoConsulta();
-        }
-    }
+    if (!modal) return;
+    modal.style.display = 'none';
+    const alertDiv = modal.querySelector('[id$="Alert"]');
+    if (alertDiv) alertDiv.innerHTML = '';
+
+    // AJUSTADO: Limpeza específica de cada modal
+    if (modalId === 'usuarioModal') { document.getElementById('usuarioForm').reset(); document.getElementById('usuarioId').value = ''; }
+    if (modalId === 'filialModal') { document.getElementById('filialForm').reset(); document.getElementById('filialId').value = ''; }
+    if (modalId === 'cgoModal') { document.getElementById('cgoForm').reset(); document.getElementById('cgoId').value = ''; }
+    if (modalId === 'produtoModal') { document.getElementById('produtoForm').reset(); document.getElementById('produtoIdAdmin').value = ''; }
+    if (modalId === 'linhaModal') { document.getElementById('linhaForm').reset(); document.getElementById('linhaId').value = ''; } // NOVO case
+    if (modalId === 'consultaCgoModal') { document.getElementById('cgoSearchInput').value = ''; filtrarCgoConsulta(); }
 }
 
 /**
@@ -787,108 +757,73 @@ function closeModal(modalId) {
 async function abrirDetalhesModal(id) { // id é solicitacao_id
     const modal = document.getElementById('detalhesModal');
     const content = document.getElementById('detalhesContent');
+    const orcamentoSection = document.getElementById('detalhesOrcamentoSection'); // AJUSTADO
     document.getElementById('detalhesId').textContent = id;
     content.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
+    orcamentoSection.style.display = 'none'; // AJUSTADO: Esconde orçamento
     modal.style.display = 'flex';
 
     try {
-        // 1. Busca o Pedido (cabeçalho)
+        // AJUSTADO: Busca CGO previsto
         const s = await supabaseRequest(
-            `solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome)`
+            `solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),codigo_movimentacao_previsto`
         );
-        if (!s || s.length === 0) throw new Error('Solicitação não encontrada.');
+        if (!s || !s[0]) throw new Error('Solicitação não encontrada.');
         const sol = s[0];
 
-        // 2. Busca os Itens
         const itens = await supabaseRequest(
             `solicitacao_itens?solicitacao_id=eq.${id}&select=*,produtos(codigo,descricao),usuarios_aprovador:usuarios!solicitacao_itens_aprovador_id_fkey(nome),usuarios_executor:usuarios!solicitacao_itens_executor_id_fkey(nome),usuarios_retirada:usuarios!solicitacao_itens_retirada_por_id_fkey(nome)&order=id.asc`
         );
-        
-        // 3. Busca Anexos do Pedido
+
         const anexos = await supabaseRequest(`anexos_baixa?solicitacao_id=eq.${id}`);
 
-
         const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleString('pt-BR') : 'N/A';
-
-        // Links de Anexos (Nível Pedido)
         let anexosHtml = 'Nenhum anexo.';
-        if (anexos && anexos.length > 0) {
-            anexosHtml = anexos.map(anexo =>
-                `<a href="${anexo.url_arquivo}" target="_blank" class="text-blue-600 hover:underline block">${anexo.nome_arquivo || 'Ver Anexo'}</a>`
-            ).join('');
-        }
+        if (anexos && anexos.length > 0) { anexosHtml = anexos.map(a => `<a href="${a.url_arquivo}" target="_blank" class="text-blue-600 hover:underline block">${a.nome_arquivo || 'Ver Anexo'}</a>`).join(''); }
 
-        // Renderiza o Cabeçalho
+        // AJUSTADO: Mostra CGO previsto
         let headerHtml = `
             <p><strong>Status do Pedido:</strong> <span class="status-badge status-${sol.status}">${getStatusLabel(sol.status)}</span></p>
             <p><strong>Filial:</strong> ${sol.filiais.nome} - ${sol.filiais.descricao}</p>
             <p><strong>Solicitante:</strong> ${sol.usuarios.nome}</p>
             <p><strong>Data:</strong> ${formatDate(sol.data_solicitacao)}</p>
-            <p><strong>Anexos do Pedido:</strong></p>
-            <div>${anexosHtml}</div>
+            <p><strong>Tipo Previsto (CGO):</strong> ${sol.codigo_movimentacao_previsto || 'N/A'}</p>
+            <p><strong>Anexos do Pedido:</strong></p> <div>${anexosHtml}</div>
             <hr class="my-4">
-            <h4 class="text-lg font-semibold mb-2">Itens do Pedido</h4>
-        `;
+            <h4 class="text-lg font-semibold mb-2">Itens do Pedido</h4>`;
 
-        // Renderiza cada Item
         let itensHtml = (itens || []).map(item => {
-            const fotoRetiradaHtml = item.foto_retirada_url
-                ? `<a href="${item.foto_retirada_url}" target="_blank" class="text-blue-600 hover:underline">Ver Foto</a>`
-                : 'Não anexada';
-
-            // NOVO: Botão de Retirada por item
-            let retiradaBtn = '';
-            if (item.status === 'aguardando_retirada' && (currentUser.role === 'operacao' || currentUser.role === 'admin')) {
-                retiradaBtn = `<button class="btn btn-success btn-small mt-2" onclick="abrirRetiradaModal(${item.id}, ${sol.id})">Confirmar Retirada</button>`;
-            }
-
+            const fotosRetiradaHtml = (item.fotos_retirada_urls && item.fotos_retirada_urls.length > 0)
+                ? item.fotos_retirada_urls.map(url => `<a href="${url}" target="_blank" class="text-blue-600 hover:underline mr-2">Ver Foto/Anexo</a>`).join('')
+                : 'Nenhum';
+            // Botão de retirada individual removido
             return `
                 <div class="bg-gray-50 p-4 rounded border border-gray-200 mb-3">
                     <p class="font-bold text-base">${item.produtos.codigo} - ${item.produtos.descricao}</p>
-                    <p><strong>Status do Item:</strong> <span class="status-badge status-${item.status}">${getStatusLabel(item.status)}</span></p>
-                    <hr class="my-2">
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-                        <div>
-                            <h5 class="font-semibold mb-1">Solicitação</h5>
-                            <p><strong>Qtd.:</strong> ${item.quantidade_solicitada}</p>
-                            <p><strong>Valor Total:</strong> R$ ${item.valor_total_solicitado.toFixed(2)}</p>
-                        </div>
-                        <div>
-                            <h5 class="font-semibold mb-1">Aprovação</h5>
-                            <p><strong>Por:</strong> ${item.usuarios_aprovador?.nome || 'Pendente'}</p>
-                            ${item.status === 'negada' ? `<p><strong>Motivo:</strong> ${item.motivo_negacao || 'N/A'}</p>` : ''}
-                        </div>
-                        <div>
-                            <h5 class="font-semibold mb-1 mt-2">Execução (Prevenção)</h5>
-                            <p><strong>Por:</strong> ${item.usuarios_executor?.nome || 'Pendente'}</p>
-                            <p><strong>Qtd.:</strong> ${item.quantidade_executada ?? 'N/A'}</p>
-                            <p><strong>Valor Total:</strong> R$ ${item.valor_total_executado?.toFixed(2) ?? 'N/A'}</p>
-                            <p><strong>CGO:</strong> ${item.codigo_movimentacao || 'N/A'}</p>
-                            <p><strong>Justificativa:</strong> ${item.justificativa_execucao || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <h5 class="font-semibold mb-1 mt-2">Retirada (Operação)</h5>
-                            <p><strong>Por:</strong> ${item.usuarios_retirada?.nome || 'Pendente'}</p>
-                            <p><strong>Foto:</strong> ${fotoRetiradaHtml}</p>
-                            ${retiradaBtn}
-                        </div>
+                    <p><strong>Status Item:</strong> <span class="status-badge status-${item.status}">${getStatusLabel(item.status)}</span></p> <hr class="my-2">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 text-sm">
+                        <div><h5 class="font-semibold mb-1">Solicitação</h5> <p><strong>Qtd.:</strong> ${item.quantidade_solicitada}</p> <p><strong>Valor Total:</strong> R$ ${item.valor_total_solicitado.toFixed(2)}</p> </div>
+                        <div><h5 class="font-semibold mb-1">Aprovação</h5> <p><strong>Por:</strong> ${item.usuarios_aprovador?.nome || 'Pendente'}</p> ${item.status === 'negada' ? `<p><strong>Motivo:</strong> ${item.motivo_negacao || 'N/A'}</p>` : ''} </div>
+                        <div class="mt-2"><h5 class="font-semibold mb-1">Execução</h5> <p><strong>Por:</strong> ${item.usuarios_executor?.nome || 'Pendente'}</p> <p><strong>Qtd.:</strong> ${item.quantidade_executada ?? 'N/A'}</p> <p><strong>Valor Total:</strong> R$ ${item.valor_total_executado?.toFixed(2) ?? 'N/A'}</p> <p><strong>CGO:</strong> ${item.codigo_movimentacao || 'N/A'}</p> <p><strong>Justificativa:</strong> ${item.justificativa_execucao || 'N/A'}</p> </div>
+                        <div class="mt-2"><h5 class="font-semibold mb-1">Retirada</h5> <p><strong>Por:</strong> ${item.usuarios_retirada?.nome || 'Pendente'}</p> <p><strong>Anexos:</strong> ${fotosRetiradaHtml}</p> </div>
                     </div>
-                </div>
-            `;
+                </div>`;
         }).join('');
 
         content.innerHTML = headerHtml + (itensHtml || '<p>Nenhum item encontrado.</p>');
-        if (typeof feather !== 'undefined') {
-            feather.replace();
+        if (typeof feather !== 'undefined') feather.replace();
+
+        // AJUSTADO: Mostra simulação se aplicável
+        if ((currentUser.role === 'gestor' || currentUser.role === 'admin') && sol.status === 'aguardando_aprovacao' && sol.codigo_movimentacao_previsto) {
+            mostrarSimulacaoOrcamento(sol.codigo_movimentacao_previsto, sol.filial_id, itens);
         }
 
     } catch (error) {
         console.error("Erro ao carregar detalhes:", error);
-        content.innerHTML = `<div class="alert alert-error">Erro ao carregar detalhes: ${error.message}</div>`;
+        content.innerHTML = `<div class="alert alert-error">Erro ao carregar: ${error.message}</div>`;
+        orcamentoSection.style.display = 'none';
     }
 }
-
 /**
  * REESCRITO: Abre modal de Execução para um PEDIDO
  */
@@ -1252,64 +1187,41 @@ async function handleRetiradaSubmit(event) {
 /**
  * REESCRITO: supabaseRequest (Mantendo o error handling melhorado)
  */
-async function supabaseRequest(endpoint, method = 'GET', data = null) {
+async function supabaseRequest(endpoint, method = 'GET', data = null, headers = {}) { // AJUSTADO: Aceita headers
     const [endpointBase, queryParams] = endpoint.split('?', 2);
-    if (typeof SUPABASE_PROXY_URL === 'undefined') {
-        throw new Error("SUPABASE_PROXY_URL não está definida.");
-    }
+    if (typeof SUPABASE_PROXY_URL === 'undefined') throw new Error("SUPABASE_PROXY_URL não definida.");
     let proxyUrl = `${SUPABASE_PROXY_URL}?endpoint=${endpointBase}`;
-    if (queryParams) {
-        proxyUrl += `&${queryParams}`;
-    }
+    if (queryParams) proxyUrl += `&${queryParams}`;
 
+    // AJUSTADO: Mescla headers padrão com os opcionais
     const options = {
         method,
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            ...headers // Inclui headers extras (como o 'Prefer' do UPSERT)
         }
     };
-    if (data && (method === 'POST' || method === 'PATCH')) {
-        options.body = JSON.stringify(data);
-    }
+
+    if (data && (method === 'POST' || method === 'PATCH')) options.body = JSON.stringify(data);
 
     try {
         const response = await fetch(proxyUrl, options);
-
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[Frontend] Proxy/Supabase Error Response Text:', response.status, errorText);
-            let errorJson;
-            let errorMessage = errorText || `Erro ${response.status} na comunicação.`;
-            try {
-                errorJson = JSON.parse(errorText);
-                errorMessage = errorJson.message || errorJson.error || errorMessage;
-            } catch (parseError) {
-                // ignore
-            }
+            console.error('[Frontend] Proxy/Supabase Error:', response.status, errorText);
+            let errorJson; let errorMessage = errorText || `Erro ${response.status}.`;
+            try { errorJson = JSON.parse(errorText); errorMessage = errorJson.message || errorJson.error || errorMessage; } catch (e) { /* ignore */ }
             throw new Error(errorMessage);
         }
-
-        if (response.status === 204 || method === 'DELETE') {
-             return null;
-        }
-        try {
-            return await response.json();
-        } catch (e) {
-             console.warn("Resposta bem-sucedida não era JSON válido, retornando null.");
-             return null;
-        }
+        if (response.status === 204 || method === 'DELETE') return null;
+        try { return await response.json(); } catch (e) { console.warn("Resposta não era JSON."); return null; }
     } catch (error) {
-        console.error(`Falha na requisição via Proxy [${method} ${endpoint}]:`, error);
-        if (typeof showNotification === 'function') {
-            showNotification(`Erro de comunicação: ${error.message}`, 'error');
-        } else {
-            alert(`Erro de comunicação: ${error.message}`);
-        }
+        console.error(`Falha Proxy [${method} ${endpoint}]:`, error);
+        if (typeof showNotification === 'function') showNotification(`Erro: ${error.message}`, 'error'); else alert(`Erro: ${error.message}`);
         throw error;
     }
 }
-
 
 // Função de Notificação (sem alteração)
 function showNotification(message, type = 'info', timeout = 4000) {
@@ -1891,23 +1803,37 @@ async function abrirCgoModal(id = null) {
     const form = document.getElementById('cgoForm');
     const alertContainer = document.getElementById('cgoAlert');
     const title = document.getElementById('cgoModalTitle');
-    alertContainer.innerHTML = '';
-    form.reset();
-    document.getElementById('cgoId').value = id || '';
+    const linhaSelect = document.getElementById('cgoLinhaOrcamentaria'); // AJUSTADO
+    alertContainer.innerHTML = ''; form.reset(); document.getElementById('cgoId').value = id || '';
+
+    // AJUSTADO: Carrega Linhas Orçamentárias
+    linhaSelect.innerHTML = '<option value="">Carregando linhas...</option>';
+    linhaSelect.disabled = true;
+    try {
+        const linhas = await getLinhasOrcamentariasCache(true); // Força refresh
+        linhaSelect.innerHTML = '<option value="">Nenhuma (Não debita do orçamento)</option>';
+        if (linhas.length > 0) {
+            linhas.forEach(l => { linhaSelect.innerHTML += `<option value="${l.id}">${l.codigo} - ${l.descricao}</option>`; });
+        }
+        linhaSelect.disabled = false;
+    } catch (e) {
+        alertContainer.innerHTML = `<div class="alert alert-error">Falha ao carregar Linhas Orçamentárias: ${e.message}</div>`; return;
+    }
+
     if (id) {
         title.textContent = `Editar CGO #${id}`;
         document.getElementById('cgoCodigo').disabled = true;
         try {
             const cgos = await getAllCgoCache();
             const cgo = cgos.find(c => c.id === id);
-            if (!cgo) throw new Error("CGO não encontrado no cache.");
+            if (!cgo) throw new Error("CGO não encontrado.");
             document.getElementById('cgoCodigo').value = cgo.codigo_cgo;
             document.getElementById('cgoDescricao').value = cgo.descricao_cgo;
             document.getElementById('cgoObs').value = cgo.obs || '';
             document.getElementById('cgoAtivo').checked = cgo.ativo;
+            linhaSelect.value = cgo.linha_orcamentaria_id || ''; // AJUSTADO: Seleciona linha
         } catch(error) {
-             alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
-             return;
+             alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`; return;
         }
     } else {
         title.textContent = 'Novo CGO';
@@ -1916,6 +1842,7 @@ async function abrirCgoModal(id = null) {
     }
     modal.style.display = 'flex';
 }
+
 async function handleCgoFormSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('cgoAlert');
@@ -1925,12 +1852,15 @@ async function handleCgoFormSubmit(event) {
     const descricao_cgo = document.getElementById('cgoDescricao').value.trim();
     const obs = document.getElementById('cgoObs').value.trim();
     const ativo = document.getElementById('cgoAtivo').checked;
+    // AJUSTADO: Pega ID da linha ou null
+    const linha_orcamentaria_id = document.getElementById('cgoLinhaOrcamentaria').value ? parseInt(document.getElementById('cgoLinhaOrcamentaria').value) : null;
     const isEdit = !!id;
-    if (!codigo_cgo || !descricao_cgo) {
-         alertContainer.innerHTML = '<div class="alert alert-error">Código CGO e Descrição são obrigatórios.</div>';
-         return;
-    }
-    const cgoData = { codigo_cgo, descricao_cgo, obs: obs || null, ativo };
+
+    if (!codigo_cgo || !descricao_cgo) { alertContainer.innerHTML = '<div class="alert alert-error">Código e Descrição são obrigatórios.</div>'; return; }
+
+    // AJUSTADO: Inclui linha_id
+    const cgoData = { codigo_cgo, descricao_cgo, obs: obs || null, ativo, linha_orcamentaria_id };
+
     try {
         if (isEdit) {
             delete cgoData.codigo_cgo;
@@ -1938,20 +1868,18 @@ async function handleCgoFormSubmit(event) {
         } else {
             await supabaseRequest('cgo', 'POST', cgoData);
         }
-        cgoCache = []; 
-        todosCgoCache = [];
-        showNotification(`CGO ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
+        cgoCache = []; todosCgoCache = []; // Limpa caches
+        showNotification(`CGO ${isEdit ? 'atualizado' : 'criado'}!`, 'success');
         closeModal('cgoModal');
         loadGerenciarCgo();
     } catch (error) {
-         console.error("Erro ao salvar CGO:", error);
-         let errorMsg = error.message;
-         if (errorMsg.includes('duplicate key value violates unique constraint "cgo_codigo_cgo_key"')) {
-             errorMsg = "Já existe um CGO com este código.";
-         }
-         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${errorMsg}</div>`;
-    }
+        console.error("Erro ao salvar CGO:", error);
+        let errorMsg = error.message;
+        if (errorMsg.includes('duplicate key value') && errorMsg.includes('cgo_codigo_cgo_key')) { errorMsg = "Já existe CGO com este código."; }
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro: ${errorMsg}</div>`;
+     }
 }
+
 async function toggleCgoStatus(id, newStatus) {
     const action = newStatus ? 'ativar' : 'desativar';
     if (!confirm(`Tem certeza que deseja ${action} o CGO #${id}?`)) {
@@ -2110,4 +2038,393 @@ async function handleRetiradaSubmit(event) {
         console.error("Erro ao confirmar retirada:", error);
         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao confirmar: ${error.message}</div>`;
     }
+}
+
+// =======================================================
+// === NOVO: FUNÇÕES DE GERENCIAMENTO DE LINHAS ORÇAMENTÁRIAS ===
+// =======================================================
+
+/**
+ * NOVO Helper: Cache de Linhas Orçamentárias Ativas
+ */
+async function getLinhasOrcamentariasCache(forceRefresh = false) {
+    if (linhasOrcamentariasCache.length === 0 || forceRefresh) {
+        linhasOrcamentariasCache = await supabaseRequest('linhas_orcamentarias?ativo=eq.true&select=id,codigo,descricao&order=codigo.asc');
+    }
+    return linhasOrcamentariasCache;
+}
+
+/**
+ * NOVO Helper: Cache de TODAS as Linhas Orçamentárias (para admin)
+ */
+async function getAllLinhasOrcamentariasCache(forceRefresh = false) {
+    if (todasLinhasOrcamentariasCache.length === 0 || forceRefresh) {
+        todasLinhasOrcamentariasCache = await supabaseRequest('linhas_orcamentarias?select=id,codigo,descricao,ativo&order=codigo.asc');
+    }
+    return todasLinhasOrcamentariasCache;
+}
+
+
+/**
+ * NOVO: Carrega a lista de Linhas Orçamentárias para a view de admin.
+ */
+async function loadGerenciarLinhas() {
+    const tbody = document.getElementById('linhasTableBody');
+    tbody.innerHTML = `<tr><td colspan="4" class="loading"><div class="spinner"></div>Carregando linhas...</td></tr>`;
+    try {
+        const linhas = await getAllLinhasOrcamentariasCache(true); // Força refresh
+        renderLinhasTable(tbody, linhas || []);
+    } catch (error) {
+        console.error("Erro ao carregar Linhas Orçamentárias:", error);
+        tbody.innerHTML = `<tr><td colspan="4" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
+    }
+}
+
+/**
+ * NOVO: Renderiza a tabela de Linhas Orçamentárias na view de admin.
+ */
+function renderLinhasTable(tbody, linhas) {
+    if (!linhas || linhas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">Nenhuma linha encontrada.</td></tr>`; return;
+    }
+    tbody.innerHTML = linhas.map(l => {
+        const statusClass = l.ativo ? 'text-green-600' : 'text-red-600';
+        const statusText = l.ativo ? 'Ativa' : 'Inativa';
+        const toggleButton = l.ativo
+            ? `<button class="btn btn-warning btn-small ml-1" onclick="toggleLinhaStatus(${l.id}, false)">Desativar</button>`
+            : `<button class="btn btn-success btn-small ml-1" onclick="toggleLinhaStatus(${l.id}, true)">Ativar</button>`;
+        return `
+            <tr class="text-sm">
+                <td><strong>${l.codigo}</strong></td> <td>${l.descricao}</td>
+                <td><span class="font-semibold ${statusClass}">${statusText}</span></td>
+                <td> <button class="btn btn-primary btn-small" onclick="abrirLinhaModal(${l.id})">Editar</button> ${toggleButton} </td>
+            </tr>`;
+    }).join('');
+}
+
+/**
+ * NOVO: Abre o modal para criar (id=null) ou editar (id=valor) uma Linha Orçamentária.
+ */
+async function abrirLinhaModal(id = null) {
+    const modal = document.getElementById('linhaModal');
+    const form = document.getElementById('linhaForm');
+    const alertContainer = document.getElementById('linhaAlert');
+    const title = document.getElementById('linhaModalTitle');
+    alertContainer.innerHTML = ''; form.reset(); document.getElementById('linhaId').value = id || '';
+
+    if (id) {
+        title.textContent = `Editar Linha #${id}`;
+        document.getElementById('linhaCodigo').disabled = true;
+        try {
+            const linhas = await getAllLinhasOrcamentariasCache();
+            const linha = linhas.find(l => l.id === id);
+            if (!linha) throw new Error("Linha não encontrada.");
+            document.getElementById('linhaCodigo').value = linha.codigo;
+            document.getElementById('linhaDescricao').value = linha.descricao;
+            document.getElementById('linhaAtivo').checked = linha.ativo;
+        } catch(error) { alertContainer.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`; return; }
+    } else {
+        title.textContent = 'Nova Linha Orçamentária';
+        document.getElementById('linhaCodigo').disabled = false;
+        document.getElementById('linhaAtivo').checked = true;
+    }
+    modal.style.display = 'flex';
+}
+
+/**
+ * NOVO: Trata a submissão do formulário de criação/edição de Linha Orçamentária.
+ */
+async function handleLinhaFormSubmit(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('linhaAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
+    const id = document.getElementById('linhaId').value;
+    const codigo = document.getElementById('linhaCodigo').value.trim();
+    const descricao = document.getElementById('linhaDescricao').value.trim();
+    const ativo = document.getElementById('linhaAtivo').checked;
+    const isEdit = !!id;
+
+    if (!codigo || !descricao) { alertContainer.innerHTML = '<div class="alert alert-error">Código e Descrição são obrigatórios.</div>'; return; }
+
+    const linhaData = { codigo, descricao, ativo };
+    try {
+        if (isEdit) {
+            delete linhaData.codigo;
+            await supabaseRequest(`linhas_orcamentarias?id=eq.${id}`, 'PATCH', linhaData);
+        } else {
+            await supabaseRequest('linhas_orcamentarias', 'POST', linhaData);
+        }
+        linhasOrcamentariasCache = []; todasLinhasOrcamentariasCache = []; // Limpa caches
+        showNotification(`Linha ${isEdit ? 'atualizada' : 'criada'}!`, 'success');
+        closeModal('linhaModal');
+        loadGerenciarLinhas();
+    } catch (error) {
+        console.error("Erro ao salvar Linha:", error);
+        let errorMsg = error.message;
+        if (errorMsg.includes('duplicate key value') && errorMsg.includes('linhas_orcamentarias_codigo_key')) { errorMsg = "Já existe uma linha com este código."; }
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro: ${errorMsg}</div>`;
+    }
+}
+
+/**
+ * NOVO: Ativa ou desativa uma Linha Orçamentária.
+ */
+async function toggleLinhaStatus(id, newStatus) {
+    const action = newStatus ? 'ativar' : 'desativar';
+    if (!confirm(`Tem certeza que deseja ${action} a Linha #${id}?`)) return;
+    try {
+        await supabaseRequest(`linhas_orcamentarias?id=eq.${id}`, 'PATCH', { ativo: newStatus });
+        linhasOrcamentariasCache = []; todasLinhasOrcamentariasCache = []; // Limpa caches
+        showNotification(`Linha #${id} ${action}da!`, 'success');
+        loadGerenciarLinhas();
+    } catch (error) {
+        console.error(`Erro ao ${action} Linha:`, error);
+        showNotification(`Erro ao ${action} Linha: ${error.message}`, 'error');
+     }
+}
+
+
+// =======================================================
+// === NOVO: FUNÇÕES DE GERENCIAMENTO DE ORÇAMENTOS ===
+// =======================================================
+
+/**
+ * NOVO: Prepara a view 'gerenciarOrcamentosView' carregando filtros
+ */
+async function prepararGerenciarOrcamentos() {
+    const filialSelect = document.getElementById('orcamentoFilialSelect');
+    const anoSelect = document.getElementById('orcamentoAnoSelect');
+    const tbody = document.getElementById('orcamentosTableBody');
+
+    // Reseta a tabela
+    tbody.innerHTML = `<tr><td colspan="14" class="text-center py-4 text-gray-500">Selecione uma filial e um ano para começar.</td></tr>`;
+
+    // Carrega filiais
+    filialSelect.innerHTML = '<option value="">Carregando filiais...</option>';
+    try {
+        const filiais = await getFiliaisCache(true); // Força refresh
+        filialSelect.innerHTML = '<option value="">-- Selecione uma Filial --</option>';
+        filiais.forEach(f => { filialSelect.innerHTML += `<option value="${f.id}">${f.nome} - ${f.descricao}</option>`; });
+    } catch (e) { filialSelect.innerHTML = '<option value="">Erro ao carregar</option>'; }
+
+    // Popula anos (ex: 2024, 2025, 2026)
+    const anoAtual = new Date().getFullYear();
+    anoSelect.innerHTML = '';
+    for (let i = anoAtual - 1; i <= anoAtual + 1; i++) {
+        anoSelect.innerHTML += `<option value="${i}" ${i === anoAtual ? 'selected' : ''}>${i}</option>`;
+    }
+}
+
+/**
+ * NOVO: Carrega a "planilha" de orçamentos para a filial/ano selecionados
+ */
+async function loadGerenciarOrcamentos() {
+    const filialId = document.getElementById('orcamentoFilialSelect').value;
+    const ano = document.getElementById('orcamentoAnoSelect').value;
+    const tbody = document.getElementById('orcamentosTableBody');
+    const alertContainer = document.getElementById('orcamentosAlert');
+    alertContainer.innerHTML = '';
+
+    if (!filialId || !ano) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Selecione a Filial e o Ano.</div>'; return;
+    }
+
+    tbody.innerHTML = `<tr><td colspan="14" class="loading"><div class="spinner"></div>Carregando orçamentos...</td></tr>`;
+
+    try {
+        // 1. Busca todas as Linhas Orçamentárias ATIVAS
+        const linhas = await getLinhasOrcamentariasCache(true);
+
+        // 2. Busca os Orçamentos existentes para esta filial/ano
+        const orcamentosExistentes = await supabaseRequest(
+            `orcamentos_mensais?filial_id=eq.${filialId}&ano=eq.${ano}&select=linha_id,mes_1,mes_2,mes_3,mes_4,mes_5,mes_6,mes_7,mes_8,mes_9,mes_10,mes_11,mes_12`
+        );
+        // Cria um mapa para acesso rápido: { linhaId: { mes_1: valor, ... } }
+        const orcamentoMap = new Map(orcamentosExistentes.map(o => [o.linha_id, o]));
+
+        // 3. Renderiza a tabela
+        renderOrcamentosTable(tbody, linhas, orcamentoMap, filialId, ano);
+
+    } catch (error) {
+        console.error("Erro ao carregar Orçamentos:", error);
+        tbody.innerHTML = `<tr><td colspan="14" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
+    }
+}
+
+/**
+ * NOVO: Renderiza a tabela de orçamentos, permitindo edição
+ */
+function renderOrcamentosTable(tbody, linhas, orcamentoMap, filialId, ano) {
+    if (!linhas || linhas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="14" class="text-center py-4 text-gray-500">Nenhuma Linha Orçamentária ativa encontrada.</td></tr>`; return;
+    }
+
+    tbody.innerHTML = linhas.map(linha => {
+        const orcamentoLinha = orcamentoMap.get(linha.id) || {}; // Pega o orçamento da linha ou um objeto vazio
+        let inputsMeses = '';
+        for (let mes = 1; mes <= 12; mes++) {
+            const valor = orcamentoLinha[`mes_${mes}`] || 0;
+            inputsMeses += `
+                <td class="p-1">
+                    <input type="number" step="0.01" min="0"
+                           class="w-24 text-right orcamento-input p-1 border rounded"
+                           data-linha-id="${linha.id}"
+                           data-mes="${mes}"
+                           value="${valor.toFixed(2)}">
+                </td>`;
+        }
+
+        // Adiciona data-linha-id ao botão Salvar para delegation
+        return `
+            <tr class="text-sm hover:bg-gray-50">
+                <td class="font-semibold p-2">${linha.codigo} - ${linha.descricao}</td>
+                ${inputsMeses}
+                <td class="p-1">
+                    <button class="btn btn-success btn-small" data-linha-id="${linha.id}">
+                        Salvar
+                    </button>
+                </td>
+            </tr>`;
+    }).join('');
+}
+
+
+/**
+ * NOVO: Salva (UPSERT) o orçamento de uma linha/filial/ano
+ */
+async function salvarOrcamento(linhaId, filialId, ano, tableRow) {
+    const inputs = tableRow.querySelectorAll('.orcamento-input');
+    const alertContainer = document.getElementById('orcamentosAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
+
+    const orcamentoData = {
+        linha_id: parseInt(linhaId), // Garante que seja número
+        filial_id: parseInt(filialId), // Garante que seja número
+        ano: parseInt(ano), // Garante que seja número
+    };
+
+    let hasError = false;
+    inputs.forEach(input => {
+        const mes = input.dataset.mes;
+        const valor = parseFloat(input.value);
+        if (isNaN(valor) || valor < 0) {
+            input.classList.add('input-error'); // Destaca erro
+            hasError = true;
+        } else {
+            input.classList.remove('input-error');
+            orcamentoData[`mes_${mes}`] = valor.toFixed(2); // Garante 2 casas decimais
+        }
+    });
+
+    if (hasError) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Valores inválidos encontrados. Corrija os campos em vermelho.</div>';
+        return;
+    }
+
+    try {
+        // Usa UPSERT via POST com header 'Prefer' e parâmetro 'on_conflict'
+        await supabaseRequest(
+            `orcamentos_mensais?on_conflict=linha_id,filial_id,ano`,
+            'POST',
+            orcamentoData,
+            { 'Prefer': 'resolution=merge-duplicates' } // Header essencial para UPSERT
+        );
+        alertContainer.innerHTML = ''; // Limpa alerta em caso de sucesso
+        showNotification(`Orçamento para Linha ID ${linhaId} salvo!`, 'success', 1500);
+    } catch (error) {
+        console.error("Erro ao salvar orçamento:", error);
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
+    }
+}
+
+/**
+ * NOVO: Calcula e exibe a simulação de orçamento no modal de detalhes
+ */
+async function mostrarSimulacaoOrcamento(cgoPrevisto, filialId, itensSolicitados) {
+    const orcamentoSection = document.getElementById('detalhesOrcamentoSection');
+    orcamentoSection.innerHTML = '<div class="loading"><div class="spinner"></div>Simulando orçamento...</div>';
+    orcamentoSection.style.display = 'block';
+
+    try {
+        // 1. Encontrar a Linha Orçamentária vinculada ao CGO previsto
+        const cgos = await getAllCgoCache(); // Pega todos os CGOs (inclui linha_id)
+        const cgoInfo = cgos.find(c => c.codigo_cgo === cgoPrevisto);
+        if (!cgoInfo || !cgoInfo.linha_orcamentaria_id) {
+            orcamentoSection.innerHTML = '<p class="text-gray-600">Este tipo de baixa (CGO) não está vinculado a uma linha orçamentária.</p>';
+            return;
+        }
+        const linhaId = cgoInfo.linha_orcamentaria_id;
+
+        // 2. Buscar a descrição da Linha
+        const linhas = await getAllLinhasOrcamentariasCache();
+        const linhaInfo = linhas.find(l => l.id === linhaId);
+        const linhaDesc = linhaInfo ? `${linhaInfo.codigo} - ${linhaInfo.descricao}` : `Linha ID ${linhaId}`;
+
+        // 3. Calcular o Impacto desta solicitação
+        const impacto = itensSolicitados.reduce((sum, item) => sum + item.valor_total_solicitado, 0);
+
+        // 4. Obter o Orçado para o mês/ano atual
+        const hoje = new Date();
+        const anoAtual = hoje.getFullYear();
+        const mesAtual = hoje.getMonth() + 1; // 1-12
+
+        // Busca o orçamento da filial/linha/ano
+        const orcamento = await supabaseRequest(
+            `orcamentos_mensais?filial_id=eq.${filialId}&linha_id=eq.${linhaId}&ano=eq.${anoAtual}&select=mes_${mesAtual}`
+        );
+        const orcadoMes = (orcamento && orcamento.length > 0) ? orcamento[0][`mes_${mesAtual}`] : 0;
+
+        // 5. Calcular o Realizado até agora no mês
+        const realizadoMes = await calcularRealizadoLinha(linhaId, filialId, anoAtual, mesAtual);
+
+        // 6. Calcular Saldos
+        const saldoAtual = orcadoMes - realizadoMes;
+        const saldoPosAprovacao = saldoAtual - impacto;
+
+        // 7. Exibir
+        orcamentoSection.innerHTML = `
+            <h5 class="font-semibold text-blue-800 mb-2">Simulação Orçamentária</h5>
+            <p><strong>Linha:</strong> ${linhaDesc}</p>
+            <p><strong>Orçado Mês (${mesAtual}/${anoAtual}):</strong> R$ ${orcadoMes.toFixed(2)}</p>
+            <p><strong>Realizado Mês (até agora):</strong> R$ ${realizadoMes.toFixed(2)}</p>
+            <p class="font-bold text-blue-700"><strong>Saldo Atual:</strong> R$ ${saldoAtual.toFixed(2)}</p>
+            <p><strong>Impacto desta Solicitação:</strong> - R$ ${impacto.toFixed(2)}</p>
+            <p class="font-bold ${saldoPosAprovacao < 0 ? 'text-red-600' : 'text-green-600'}">
+                <strong>Saldo Pós-Aprovação:</strong> R$ ${saldoPosAprovacao.toFixed(2)}
+                ${saldoPosAprovacao < 0 ? ' (Orçamento Estourado!)' : ''}
+            </p>
+        `;
+
+    } catch (error) {
+        console.error("Erro ao simular orçamento:", error);
+        orcamentoSection.innerHTML = `<p class="text-red-600">Erro ao simular orçamento: ${error.message}</p>`;
+    }
+}
+
+/**
+ * NOVO Helper: Calcula o valor já realizado para uma linha/filial/mês/ano
+ */
+async function calcularRealizadoLinha(linhaId, filialId, ano, mes) {
+    // Busca todos os CGOs que debitam desta linha
+    const cgos = await getAllCgoCache();
+    const cgosDaLinha = cgos.filter(c => c.linha_orcamentaria_id === linhaId).map(c => c.codigo_cgo);
+
+    if (cgosDaLinha.length === 0) return 0; // Nenhum CGO debita desta linha
+
+    // Formata as datas de início e fim do mês
+    const inicioMes = new Date(ano, mes - 1, 1).toISOString();
+    const fimMes = new Date(ano, mes, 0, 23, 59, 59, 999).toISOString(); // Último dia do mês
+
+    // Busca itens EXECUTADOS ou FINALIZADOS que:
+    // - Pertencem a pedidos da filial correta
+    // - Ocorreram dentro do mês/ano
+    // - Usaram um dos CGOs que debitam da linha
+    // IMPORTANTE: Seleciona a tabela PAI (solicitacoes_baixa) para filtrar pela filial
+    const response = await supabaseRequest(
+        `solicitacao_itens?select=valor_total_executado,solicitacoes_baixa!inner(filial_id)&solicitacoes_baixa.filial_id=eq.${filialId}&data_execucao=gte.${inicioMes}&data_execucao=lte.${fimMes}&codigo_movimentacao=in.(${cgosDaLinha.join(',')})&status=in.(aguardando_retirada,finalizada)`
+    );
+
+    // Soma os valores
+    const realizado = (response || []).reduce((sum, item) => sum + (item.valor_total_executado || 0), 0);
+    return realizado;
 }
