@@ -6,7 +6,7 @@ let todasFiliaisCache = []; // Cache de todas as filiais para admin
 let cgoCache = []; // NOVO: Cache de CGOs ativos
 let todosCgoCache = []; // NOVO: Cache de TODOS os CGOs (para admin)
 let carrinhoItens = []; // NOVO: Array para o "carrinho" da nova solicitação
-
+let tiposBaixaCache = []
 // --- Inicialização (SUBSTITUIR esta parte dentro do DOMContentLoaded) ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const qtdInput = document.getElementById('quantidadeSolicitada');
     const valorInput = document.getElementById('valorUnitarioSolicitado');
     const codigoInput = document.getElementById('produtoCodigo');
-    const cgoPrevistoSelect = document.getElementById('cgoPrevistoSelect'); // AJUSTADO
+    const tipoBaixaSelect = document.getElementById('tipoBaixaSelect');
 
     if (qtdInput && valorInput) {
         qtdInput.addEventListener('input', calcularValorTotalSolicitado);
@@ -24,9 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (codigoInput) {
         codigoInput.addEventListener('blur', buscarProdutoPorCodigo); // AJUSTADO
     }
-    if (cgoPrevistoSelect) { // AJUSTADO
-        cgoPrevistoSelect.addEventListener('change', handleCgoPrevistoChange);
-    }
+    if (tipoBaixaSelect) { // AJUSTADO
+    tipoBaixaSelect.addEventListener('change', handleTipoBaixaChange); // NOVA FUNÇÃO
+}
 
     // Bind forms (adicionado linhaForm)
     document.getElementById('addItemForm')?.addEventListener('submit', handleAddItem);
@@ -368,19 +368,22 @@ function removerItemDoCarrinho(index) {
 }
 
 
+// SUBSTITUA A FUNÇÃO ANTIGA
 async function buscarProdutoPorCodigo() {
     const codigo = document.getElementById('produtoCodigo').value.trim();
     const descricaoInput = document.getElementById('produtoDescricao');
     const produtoIdInput = document.getElementById('produtoId');
     const valorUnitInput = document.getElementById('valorUnitarioSolicitado');
-    const cgoPrevisto = document.getElementById('cgoPrevistoSelect').value;
+    const selectedTipoBaixaId = document.getElementById('tipoBaixaSelect').value; // MUDOU
+    const tipoBaixaNome = document.getElementById('tipoBaixaSelect').options[document.getElementById('tipoBaixaSelect').selectedIndex].text;
 
     descricaoInput.value = ''; produtoIdInput.value = ''; valorUnitInput.value = '';
     descricaoInput.classList.remove('input-error'); calcularValorTotalSolicitado();
 
-    if (!codigo || !cgoPrevisto) return;
+    if (!codigo || !selectedTipoBaixaId) return; // MUDOU
 
     try {
+        // 1. Busca o produto
         let produto = produtosCache.find(p => p.codigo === codigo);
         if (!produto) {
             const response = await supabaseRequest(`produtos?codigo=eq.${codigo}&select=id,descricao,cgos_permitidos`);
@@ -388,15 +391,40 @@ async function buscarProdutoPorCodigo() {
         }
 
         if (produto) {
-            if (produto.cgos_permitidos && produto.cgos_permitidos.includes(cgoPrevisto)) {
-                descricaoInput.value = produto.descricao; produtoIdInput.value = produto.id; valorUnitInput.focus();
+            // 2. Busca todos os CGOs (para mapear tipo_baixa_id -> codigo_cgo)
+            const allCgos = await getAllCgoCache(false); // Pega do cache se possível
+
+            // 3. Filtra CGOs que pertencem ao Tipo de Baixa selecionado
+            const cgosDoTipo = allCgos
+                .filter(c => c.tipo_baixa_id == selectedTipoBaixaId)
+                .map(c => c.codigo_cgo); // Array de códigos: ["750", "753"]
+
+            if (cgosDoTipo.length === 0) {
+                showNotification('Este Tipo de Baixa não tem CGOs associados.', 'error');
+                descricaoInput.value = 'Tipo de Baixa não configurado';
+                descricaoInput.classList.add('input-error');
+                return;
+            }
+
+            // 4. Pega os CGOs permitidos do Produto
+            const cgosDoProduto = produto.cgos_permitidos || []; // Array: ["750", "499"]
+
+            // 5. Verifica se há INTERSEÇÃO (overlap)
+            const isPermitido = cgosDoProduto.some(cgoProduto => cgosDoTipo.includes(cgoProduto));
+
+            if (isPermitido) {
+                descricaoInput.value = produto.descricao; 
+                produtoIdInput.value = produto.id; 
+                valorUnitInput.focus();
             } else {
-                descricaoInput.value = `${produto.descricao} (NÃO PERMITIDO p/ CGO ${cgoPrevisto})`;
-                produtoIdInput.value = ''; descricaoInput.classList.add('input-error');
-                showNotification('Produto não permitido para este tipo de baixa.', 'error');
+                descricaoInput.value = `${produto.descricao} (NÃO PERMITIDO p/ ${tipoBaixaNome})`;
+                produtoIdInput.value = ''; 
+                descricaoInput.classList.add('input-error');
+                showNotification('Produto não permitido para este Tipo de Baixa.', 'error');
             }
         } else {
-            descricaoInput.value = 'Produto não encontrado'; produtoIdInput.value = '';
+            descricaoInput.value = 'Produto não encontrado'; 
+            produtoIdInput.value = '';
             showNotification('Produto não cadastrado.', 'error');
         }
         calcularValorTotalSolicitado();
@@ -414,31 +442,40 @@ function calcularValorTotalSolicitado() {
     document.getElementById('valorTotalSolicitado').value = total.toFixed(2);
 }
 
-/**
- * REESCRITO: Envia o "carrinho" (pedido e itens)
- */
+// SUBSTITUA A FUNÇÃO ANTIGA
 async function handleNovaSolicitacaoSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('novaSolicitacaoAlert');
-    const cgoPrevisto = document.getElementById('cgoPrevistoSelect').value;
+    const tipoBaixaId = document.getElementById('tipoBaixaSelect').value; // MUDOU
     alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Enviando solicitação...</div>';
 
-    if (!cgoPrevisto) { alertContainer.innerHTML = '<div class="alert alert-error">Selecione o Tipo de Baixa (CGO).</div>'; return; }
-    if (carrinhoItens.length === 0) { alertContainer.innerHTML = '<div class="alert alert-error">Adicione itens ao pedido.</div>'; return; }
+    if (!tipoBaixaId) { // MUDOU
+        alertContainer.innerHTML = '<div class="alert alert-error">Selecione o Tipo de Baixa.</div>'; 
+        return; 
+    }
+    if (carrinhoItens.length === 0) { 
+        alertContainer.innerHTML = '<div class="alert alert-error">Adicione itens ao pedido.</div>'; 
+        return; 
+    }
 
     try {
         const solicitacaoHeader = {
-            filial_id: selectedFilial.id, solicitante_id: currentUser.id,
-            status: 'aguardando_aprovacao', codigo_movimentacao_previsto: cgoPrevisto
+            filial_id: selectedFilial.id, 
+            solicitante_id: currentUser.id,
+            status: 'aguardando_aprovacao', 
+            tipo_baixa_id: parseInt(tipoBaixaId) // MUDOU
         };
         const response = await supabaseRequest('solicitacoes_baixa', 'POST', solicitacaoHeader);
         if (!response || !response[0]?.id) throw new Error('Falha ao criar o cabeçalho.');
         const novaSolicitacaoId = response[0].id;
 
         const itensParaInserir = carrinhoItens.map(item => ({
-            solicitacao_id: novaSolicitacaoId, produto_id: item.produto_id,
-            quantidade_solicitada: item.quantidade_solicitada, valor_unitario_solicitado: item.valor_unitario_solicitado,
-            valor_total_solicitado: item.valor_total_solicitado, status: 'aguardando_aprovacao'
+            solicitacao_id: novaSolicitacaoId, 
+            produto_id: item.produto_id,
+            quantidade_solicitada: item.quantidade_solicitada, 
+            valor_unitario_solicitado: item.valor_unitario_solicitado,
+            valor_total_solicitado: item.valor_total_solicitado, 
+            status: 'aguardando_aprovacao'
         }));
         await supabaseRequest('solicitacao_itens', 'POST', itensParaInserir);
 
@@ -449,15 +486,9 @@ async function handleNovaSolicitacaoSubmit(event) {
     } catch (error) {
         console.error("Erro ao enviar solicitação:", error);
         alertContainer.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`;
-        // TODO: Rollback
     }
 }
 
-// --- Funções de Carregamento de Dados das Views (REESCRITAS) ---
-
-/**
- * REESCRITO: Carrega os PEDIDOS do usuário
- */
 async function loadMinhasSolicitacoes() {
     const tbody = document.getElementById('minhasSolicitacoesBody');
     tbody.innerHTML = `<tr><td colspan="7" class="loading"><div class="spinner"></div>Carregando...</td></tr>`;
@@ -730,43 +761,78 @@ function closeModal(modalId) {
     if (modalId === 'consultaCgoModal' && document.getElementById('cgoSearchInput')) { document.getElementById('cgoSearchInput').value = ''; if(typeof filtrarCgoConsulta === 'function') filtrarCgoConsulta(); }
 }
 
+// SUBSTITUA A FUNÇÃO ANTIGA
 async function abrirDetalhesModal(id) {
     const modal = document.getElementById('detalhesModal'); const content = document.getElementById('detalhesContent'); const orcamentoSection = document.getElementById('detalhesOrcamentoSection');
     document.getElementById('detalhesId').textContent = id; content.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>'; orcamentoSection.style.display = 'none'; modal.style.display = 'flex';
     try {
-        const s = await supabaseRequest(`solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),codigo_movimentacao_previsto`); if (!s || !s[0]) throw new Error('Solicitação não encontrada.'); const sol = s[0];
-        const itens = await supabaseRequest(`solicitacao_itens?solicitacao_id=eq.${id}&select=*,produtos(codigo,descricao),usuarios_aprovador:usuarios!solicitacao_itens_aprovador_id_fkey(nome),usuarios_executor:usuarios!solicitacao_itens_executor_id_fkey(nome),usuarios_retirada:usuarios!solicitacao_itens_retirada_por_id_fkey(nome)&order=id.asc`);
+        // AJUSTE: Adicionado tipo_baixa_id e tipos_baixa(nome) ao select
+        const s = await supabaseRequest(`solicitacoes_baixa?id=eq.${id}&select=*,filiais(nome,descricao),usuarios:usuarios!solicitacoes_baixa_solicitante_id_fkey(nome),tipo_baixa_id,tipos_baixa(nome)`); 
+        if (!s || !s[0]) throw new Error('Solicitação não encontrada.'); const sol = s[0];
+
+        // AJUSTE: Adicionado produtos(codigo,descricao) para a simulação
+        const itens = await supabaseRequest(`solicitacao_itens?solicitacao_id=eq.${id}&select=*,produtos(id,codigo,descricao),usuarios_aprovador:usuarios!solicitacao_itens_aprovador_id_fkey(nome),usuarios_executor:usuarios!solicitacao_itens_executor_id_fkey(nome),usuarios_retirada:usuarios!solicitacao_itens_retirada_por_id_fkey(nome)&order=id.asc`);
+
         const anexos = await supabaseRequest(`anexos_baixa?solicitacao_id=eq.${id}`);
         const formatDate = (d) => d ? new Date(d).toLocaleString('pt-BR') : 'N/A'; let anexosHtml = 'Nenhum.'; if (anexos && anexos.length > 0) { anexosHtml = anexos.map(a => `<a href="${a.url_arquivo}" target="_blank" class="text-blue-600 hover:underline block">${a.nome_arquivo || 'Ver'}</a>`).join(''); }
-        let headerHtml = `<p><strong>Status:</strong> <span class="status-badge status-${sol.status}">${getStatusLabel(sol.status)}</span></p> <p><strong>Filial:</strong> ${sol.filiais.nome} - ${sol.filiais.descricao}</p> <p><strong>Solicitante:</strong> ${sol.usuarios.nome}</p> <p><strong>Data:</strong> ${formatDate(sol.data_solicitacao)}</p> <p><strong>Tipo Previsto:</strong> ${sol.codigo_movimentacao_previsto || 'N/A'}</p> <p><strong>Anexos:</strong></p> <div>${anexosHtml}</div> <hr class="my-4"> <h4 class="text-lg font-semibold mb-2">Itens</h4>`;
+
+        // AJUSTE: Exibe o Tipo de Baixa (Intenção)
+        const tipoBaixaNome = sol.tipos_baixa ? sol.tipos_baixa.nome : (sol.codigo_movimentacao_previsto || 'N/A (Antigo)'); // Fallback
+
+        let headerHtml = `<p><strong>Status:</strong> <span class="status-badge status-${sol.status}">${getStatusLabel(sol.status)}</span></p> <p><strong>Filial:</strong> ${sol.filiais.nome} - ${sol.filiais.descricao}</p> <p><strong>Solicitante:</strong> ${sol.usuarios.nome}</p> <p><strong>Data:</strong> ${formatDate(sol.data_solicitacao)}</p> <p><strong>Tipo de Baixa:</strong> ${tipoBaixaNome}</p> <p><strong>Anexos:</strong></p> <div>${anexosHtml}</div> <hr class="my-4"> <h4 class="text-lg font-semibold mb-2">Itens</h4>`;
+
         let itensHtml = (itens || []).map(item => { const fotosHtml = (item.fotos_retirada_urls && item.fotos_retirada_urls.length > 0) ? item.fotos_retirada_urls.map(url => `<a href="${url}" target="_blank" class="text-blue-600 hover:underline mr-2">Ver</a>`).join('') : 'Nenhum'; return `<div class="bg-gray-50 p-4 rounded border mb-3"> <p class="font-bold">${item.produtos.codigo} - ${item.produtos.descricao}</p> <p><strong>Status Item:</strong> <span class="status-badge status-${item.status}">${getStatusLabel(item.status)}</span></p> <hr class="my-2"> <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 text-sm"> <div><h5>Solicitação</h5> <p>Qtd: ${item.quantidade_solicitada}</p> <p>Valor: R$ ${item.valor_total_solicitado.toFixed(2)}</p> </div> <div><h5>Aprovação</h5> <p>Por: ${item.usuarios_aprovador?.nome || '-'}</p> ${item.status === 'negada' ? `<p>Motivo: ${item.motivo_negacao || 'N/A'}</p>` : ''} </div> <div class="mt-2"><h5>Execução</h5> <p>Por: ${item.usuarios_executor?.nome || '-'}</p> <p>Qtd: ${item.quantidade_executada ?? '-'}</p> <p>Valor: R$ ${item.valor_total_executado?.toFixed(2) ?? '-'}</p> <p>CGO: ${item.codigo_movimentacao || '-'}</p> <p>Justif: ${item.justificativa_execucao || '-'}</p> </div> <div class="mt-2"><h5>Retirada</h5> <p>Por: ${item.usuarios_retirada?.nome || '-'}</p> <p>Anexos: ${fotosHtml}</p> </div> </div> </div>`; }).join('');
         content.innerHTML = headerHtml + (itensHtml || '<p>Nenhum item.</p>'); if (typeof feather !== 'undefined') feather.replace();
-        // Chama simulação se aplicável
-        if ((currentUser.role === 'gestor' || currentUser.role === 'admin') && sol.status === 'aguardando_aprovacao' && sol.codigo_movimentacao_previsto && typeof mostrarSimulacaoOrcamento === 'function') {
-            mostrarSimulacaoOrcamento(sol.codigo_movimentacao_previsto, sol.filial_id, itens);
+
+        // AJUSTE: Chama a simulação com o tipo_baixa_id
+        if ((currentUser.role === 'gestor' || currentUser.role === 'admin') && sol.status === 'aguardando_aprovacao' && sol.tipo_baixa_id && typeof mostrarSimulacaoOrcamento === 'function') {
+            // Passa o ID do tipo, a filial e os itens (que agora têm produtos)
+            mostrarSimulacaoOrcamento(sol.tipo_baixa_id, sol.filial_id, itens);
         }
     } catch (error) { content.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`; orcamentoSection.style.display = 'none'; }
 }
 
+// SUBSTITUA A FUNÇÃO ANTIGA
 async function abrirExecutarModal(id) { // id é solicitacao_id
     const modal = document.getElementById('executarModal');
     document.getElementById('executarId').textContent = id;
     document.getElementById('executarSolicitacaoId').value = id;
     document.getElementById('executarForm').reset();
     document.getElementById('executarAlert').innerHTML = '';
-    
+
+    // IDs dos novos campos
+    const tipoBaixaIdInput = document.getElementById('executarTipoBaixaId');
+    const intencaoBaixaSpan = document.getElementById('executarIntencaoBaixa');
+
     const listContainer = document.getElementById('executarItensList');
     listContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando itens...</div>';
-    
+
     const cgoSelect = document.getElementById('codigoMovimentacao');
     cgoSelect.innerHTML = '<option value="">Selecione os itens primeiro...</option>';
     cgoSelect.disabled = true;
 
+    intencaoBaixaSpan.textContent = 'Carregando...';
+    tipoBaixaIdInput.value = '';
+
     modal.style.display = 'flex';
 
     try {
-        // Busca todos os itens APROVADOS desta solicitação
-        // E já traz os dados do produto, incluindo a nova coluna 'cgos_permitidos'
+        // 1. Busca o Tipo de Baixa da Solicitação
+        const solResponse = await supabaseRequest(
+            `solicitacoes_baixa?id=eq.${id}&select=tipo_baixa_id,tipos_baixa(nome,descricao)`
+        );
+        if (!solResponse || !solResponse[0] || !solResponse[0].tipo_baixa_id) {
+            throw new Error('Não foi possível encontrar a intenção (Tipo de Baixa) desta solicitação.');
+        }
+
+        const tipoBaixa = solResponse[0].tipos_baixa;
+        const tipoBaixaId = solResponse[0].tipo_baixa_id;
+
+        // 2. Preenche os campos no modal
+        tipoBaixaIdInput.value = tipoBaixaId;
+        intencaoBaixaSpan.textContent = `${tipoBaixa.nome} ${tipoBaixa.descricao ? `(${tipoBaixa.descricao})` : ''}`;
+
+        // 3. Busca os itens aprovados (lógica antiga mantida)
         const response = await supabaseRequest(
             `solicitacao_itens?solicitacao_id=eq.${id}&status=eq.aprovada&select=*,produtos(codigo,descricao,cgos_permitidos)&order=id.asc`
         );
@@ -776,11 +842,9 @@ async function abrirExecutarModal(id) { // id é solicitacao_id
             return;
         }
 
-        // Renderiza a lista de itens com checkboxes
+        // Renderiza a lista de itens (lógica antiga mantida)
         listContainer.innerHTML = response.map(item => {
             const produto = item.produtos;
-            // Armazena os CGOs permitidos num data attribute
-            // JSON.stringify é uma forma fácil de guardar o array como string
             const cgosPermitidos = JSON.stringify(produto.cgos_permitidos || []);
 
             return `
@@ -789,14 +853,14 @@ async function abrirExecutarModal(id) { // id é solicitacao_id
                            class="h-5 w-5 mt-1 mr-3" 
                            onchange="atualizarCgosPermitidos()"
                            data-cgos='${cgosPermitidos}'>
-                    
+
                     <div class="flex-1">
                         <p class="font-semibold">${produto.codigo} - ${produto.descricao}</p>
                         <p class="text-sm text-gray-700">
                             Qtd. Aprovada: ${item.quantidade_solicitada} | 
                             Valor Total: R$ ${item.valor_total_solicitado.toFixed(2)}
                         </p>
-                        
+
                         <div class="form-grid mt-2" style="grid-template-columns: 1fr 1fr; gap: 8px;">
                             <div class="form-group">
                                 <label for="qtd_exec_${item.id}" class="text-xs font-semibold">Qtd. Real:</label>
@@ -815,64 +879,71 @@ async function abrirExecutarModal(id) { // id é solicitacao_id
     } catch (error) {
         console.error("Erro ao carregar itens para execução:", error);
         listContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar itens: ${error.message}</div>`;
+        intencaoBaixaSpan.textContent = 'Erro!';
     }
 }
 
-
-/**
- * NOVO: Filtra o dropdown de CGOs com base nos itens selecionados
- */
+// SUBSTITUA A FUNÇÃO ANTIGA
 async function atualizarCgosPermitidos() {
     const cgoSelect = document.getElementById('codigoMovimentacao');
     const checkedItems = document.querySelectorAll('input[name="executar_item_ids"]:checked');
+
+    // 1. Pega o TIPO DE BAIXA ID da solicitação (armazenado no input oculto)
+    const tipoBaixaId = document.getElementById('executarTipoBaixaId').value;
 
     if (checkedItems.length === 0) {
         cgoSelect.innerHTML = '<option value="">Selecione os itens primeiro...</option>';
         cgoSelect.disabled = true;
         return;
     }
+    if (!tipoBaixaId) {
+         cgoSelect.innerHTML = '<option value="">Erro: Tipo de Baixa não definido.</option>';
+         cgoSelect.disabled = true;
+         return;
+    }
 
-    let cgosPermitidosComuns = null;
+    let cgosComunsDosProdutos = null;
 
-    // Itera por todos os itens checados
+    // 2. Encontra a INTERSEÇÃO de CGOs permitidos pelos PRODUTOS (lógica antiga)
     for (const item of checkedItems) {
-        // Lê o array de CGOs do data-attribute
-        const cgosDoItem = JSON.parse(item.dataset.cgos); // ex: ["475", "480"]
+        const cgosDoItem = JSON.parse(item.dataset.cgos); // ex: ["475", "480", "750"]
 
-        if (cgosPermitidosComuns === null) {
-            // No primeiro item, o conjunto comum é o conjunto dele
-            cgosPermitidosComuns = new Set(cgosDoItem);
+        if (cgosComunsDosProdutos === null) {
+            cgosComunsDosProdutos = new Set(cgosDoItem);
         } else {
-            // Nos itens seguintes, faz a INTERSEÇÃO
-            cgosPermitidosComuns = new Set(
-                [...cgosPermitidosComuns].filter(cgo => cgosDoItem.includes(cgo))
+            cgosComunsDosProdutos = new Set(
+                [...cgosComunsDosProdutos].filter(cgo => cgosDoItem.includes(cgo))
             );
         }
     }
+    // Agora cgosComunsDosProdutos = Set {"750", "499"}
 
-    // Agora cgosPermitidosComuns (um Set) contém apenas CGOs presentes em TODOS os itens selecionados
-    
-    // Busca os detalhes desses CGOs no cache
+    // 3. Encontra os CGOs permitidos pelo TIPO DE BAIXA
+    const allCgos = await getAllCgoCache(false);
+    const cgosDoTipo = allCgos
+        .filter(c => c.tipo_baixa_id == tipoBaixaId)
+        .map(c => c.codigo_cgo); // Array ["750", "753"]
+
+    // 4. Filtra a lista de CGOs dos produtos (passo 2) contra a lista do Tipo de Baixa (passo 3)
+    const cgosFinaisPermitidos = [...cgosComunsDosProdutos].filter(cgo => cgosDoTipo.includes(cgo));
+    // Ex: {"750", "499"} filtrado por ["750", "753"] = ["750"]
+
+    // 5. Busca os detalhes desses CGOs no cache para exibir
     const cgosDoCache = await getCgoCache(); // Pega CGOs ativos
-    
-    const cgosFiltrados = cgosDoCache.filter(cgo => cgosPermitidosComuns.has(cgo.codigo_cgo));
+    const cgosFiltradosParaDropdown = cgosDoCache.filter(cgo => cgosFinaisPermitidos.includes(cgo.codigo_cgo));
 
-    if (cgosFiltrados.length === 0) {
-        cgoSelect.innerHTML = '<option value="">Nenhum CGO em comum para os itens selecionados.</option>';
+    if (cgosFiltradosParaDropdown.length === 0) {
+        cgoSelect.innerHTML = '<option value="">Nenhum CGO em comum para (Itens + Tipo de Baixa).</option>';
         cgoSelect.disabled = true;
     } else {
         cgoSelect.innerHTML = '<option value="">-- Selecione um CGO --</option>';
-        cgosFiltrados.forEach(cgo => {
+        cgosFiltradosParaDropdown.forEach(cgo => {
             cgoSelect.innerHTML += `<option value="${cgo.codigo_cgo}">${cgo.codigo_cgo} - ${cgo.descricao_cgo}</option>`;
         });
         cgoSelect.disabled = false;
     }
 }
-
-
-/**
- * REESCRITO: Submissão do formulário de Execução
- */
+ 
 async function handleExecucaoSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('executarAlert');
@@ -2202,63 +2273,121 @@ async function salvarOrcamento(linhaId, filialId, ano, tableRow) {
     }
 }
 
-/**
- * NOVO: Calcula e exibe a simulação de orçamento no modal de detalhes
- */
-async function mostrarSimulacaoOrcamento(cgoPrevisto, filialId, itensSolicitados) {
+// SUBSTITUA A FUNÇÃO ANTIGA
+async function mostrarSimulacaoOrcamento(tipoBaixaId, filialId, itensSolicitados) {
     const orcamentoSection = document.getElementById('detalhesOrcamentoSection');
     orcamentoSection.innerHTML = '<div class="loading"><div class="spinner"></div>Simulando orçamento...</div>';
     orcamentoSection.style.display = 'block';
 
     try {
-        // 1. Encontrar a Linha Orçamentária vinculada ao CGO previsto
-        const cgos = await getAllCgoCache(); // Pega todos os CGOs (inclui linha_id)
-        const cgoInfo = cgos.find(c => c.codigo_cgo === cgoPrevisto);
-        if (!cgoInfo || !cgoInfo.linha_orcamentaria_id) {
-            orcamentoSection.innerHTML = '<p class="text-gray-600">Este tipo de baixa (CGO) não está vinculado a uma linha orçamentária.</p>';
+        // 1. Encontrar CGOs e Linhas vinculados a este Tipo de Baixa
+        const allCgos = await getAllCgoCache(false);
+        const cgosDoTipo = allCgos.filter(c => c.tipo_baixa_id == tipoBaixaId);
+
+        if (cgosDoTipo.length === 0) {
+            orcamentoSection.innerHTML = '<p class="text-gray-600">Este Tipo de Baixa não tem CGOs associados.</p>';
             return;
         }
-        const linhaId = cgoInfo.linha_orcamentaria_id;
 
-        // 2. Buscar a descrição da Linha
-        const linhas = await getAllLinhasOrcamentariasCache();
-        const linhaInfo = linhas.find(l => l.id === linhaId);
-        const linhaDesc = linhaInfo ? `${linhaInfo.codigo} - ${linhaInfo.descricao}` : `Linha ID ${linhaId}`;
+        // 2. Mapear o impacto de CADA ITEM para sua(s) linha(s) orçamentária(s)
+        // (Esta é a lógica de "rateio" que você pediu)
+        const impactoPorLinha = new Map(); // Key: linhaId, Value: { total: 0, itens: [] }
+        let itensIndefinidos = []; // Itens que não puderam ser mapeados
+        let valorIndefinido = 0;
 
-        // 3. Calcular o Impacto desta solicitação
-        const impacto = itensSolicitados.reduce((sum, item) => sum + item.valor_total_solicitado, 0);
+        // Usaremos um cache de produtos para não buscar no loop
+        const produtoInfoCache = new Map();
 
-        // 4. Obter o Orçado para o mês/ano atual
+        for (const item of itensSolicitados) {
+            let produto;
+            if (produtoInfoCache.has(item.produto_id)) {
+                produto = produtoInfoCache.get(item.produto_id);
+            } else {
+                const prodRes = await supabaseRequest(`produtos?id=eq.${item.produto_id}&select=cgos_permitidos`);
+                produto = (prodRes && prodRes[0]) ? prodRes[0] : { cgos_permitidos: [] };
+                produtoInfoCache.set(item.produto_id, produto);
+            }
+
+            const cgosPermitidosDoProduto = produto.cgos_permitidos || [];
+
+            // Encontra CGOs válidos (Interseção de CGOs do Produto E CGOs do Tipo de Baixa)
+            const cgosValidosParaItem = cgosDoTipo.filter(cgo => 
+                cgosPermitidosDoProduto.includes(cgo.codigo_cgo) && cgo.linha_orcamentaria_id
+            );
+
+            // Encontra as linhas orçamentárias únicas para esses CGOs válidos
+            const linhasValidas = [...new Set(cgosValidosParaItem.map(c => c.linha_orcamentaria_id))];
+
+            if (linhasValidas.length === 1) {
+                // Cenário ideal: O item só pode ir para UMA linha orçamentária
+                const linhaId = linhasValidas[0];
+                const data = impactoPorLinha.get(linhaId) || { total: 0, itens: [] };
+                data.total += item.valor_total_solicitado;
+                data.itens.push(item.produtos.codigo); // item.produtos já foi buscado no modal
+                impactoPorLinha.set(linhaId, data);
+            } else {
+                // Cenário ambíguo (0 ou múltiplas linhas)
+                // O custo não pode ser alocado com certeza
+                itensIndefinidos.push(item.produtos.codigo);
+                valorIndefinido += item.valor_total_solicitado;
+            }
+        }
+
+        // 3. Buscar Orçado e Realizado para cada linha afetada
         const hoje = new Date();
         const anoAtual = hoje.getFullYear();
         const mesAtual = hoje.getMonth() + 1; // 1-12
+        let htmlResult = `<h5 class="font-semibold text-blue-800 mb-2">Simulação Orçamentária (Mês ${mesAtual}/${anoAtual})</h5>`;
 
-        // Busca o orçamento da filial/linha/ano
-        const orcamento = await supabaseRequest(
-            `orcamentos_mensais?filial_id=eq.${filialId}&linha_id=eq.${linhaId}&ano=eq.${anoAtual}&select=mes_${mesAtual}`
-        );
-        const orcadoMes = (orcamento && orcamento.length > 0) ? orcamento[0][`mes_${mesAtual}`] : 0;
+        if (impactoPorLinha.size === 0 && valorIndefinido === 0) {
+             htmlResult += '<p>Nenhum item desta solicitação impacta o orçamento (CGOs não vinculados a linhas).</p>';
+             orcamentoSection.innerHTML = htmlResult;
+             return;
+        }
 
-        // 5. Calcular o Realizado até agora no mês
-        const realizadoMes = await calcularRealizadoLinha(linhaId, filialId, anoAtual, mesAtual);
+        const todasLinhas = await getAllLinhasOrcamentariasCache(false);
 
-        // 6. Calcular Saldos
-        const saldoAtual = orcadoMes - realizadoMes;
-        const saldoPosAprovacao = saldoAtual - impacto;
+        for (const [linhaId, impactoData] of impactoPorLinha.entries()) {
+            const linhaInfo = todasLinhas.find(l => l.id == linhaId) || { codigo: '?', descricao: `Linha ID ${linhaId}` };
 
-        // 7. Exibir
-        orcamentoSection.innerHTML = `
-            <h5 class="font-semibold text-blue-800 mb-2">Simulação Orçamentária</h5>
-            <p><strong>Linha:</strong> ${linhaDesc}</p>
-            <p><strong>Orçado Mês (${mesAtual}/${anoAtual}):</strong> R$ ${orcadoMes.toFixed(2)}</p>
-            <p><strong>Realizado Mês (até agora):</strong> R$ ${realizadoMes.toFixed(2)}</p>
-            <p class="font-bold text-blue-700"><strong>Saldo Atual:</strong> R$ ${saldoAtual.toFixed(2)}</p>
-            <p><strong>Impacto desta Solicitação:</strong> - R$ ${impacto.toFixed(2)}</p>
-            <p class="font-bold ${saldoPosAprovacao < 0 ? 'text-red-600' : 'text-green-600'}">
-                <strong>Saldo Pós-Aprovação:</strong> R$ ${saldoPosAprovacao.toFixed(2)}
-                ${saldoPosAprovacao < 0 ? ' (Orçamento Estourado!)' : ''}
-            </p>
-        `;
+            // Busca o Orçado
+            const orcamento = await supabaseRequest(
+                `orcamentos_mensais?filial_id=eq.${filialId}&linha_id=eq.${linhaId}&ano=eq.${anoAtual}&select=mes_${mesAtual}`
+            );
+            const orcadoMes = (orcamento && orcamento[0]) ? orcamento[0][`mes_${mesAtual}`] : 0;
+
+            // Calcula o Realizado
+            const realizadoMes = await calcularRealizadoLinha(linhaId, filialId, anoAtual, mesAtual);
+
+            // Calcula Saldos
+            const saldoAtual = orcadoMes - realizadoMes;
+            const saldoPosAprovacao = saldoAtual - impactoData.total;
+
+            htmlResult += `
+                <div class="border-t pt-3 mt-3">
+                    <p><strong>Linha:</strong> ${linhaInfo.codigo} - ${linhaInfo.descricao}</p>
+                    <p><strong>Orçado Mês:</strong> R$ ${orcadoMes.toFixed(2)}</p>
+                    <p><strong>Realizado Mês:</strong> R$ ${realizadoMes.toFixed(2)}</p>
+                    <p class="font-bold text-blue-700"><strong>Saldo Atual:</strong> R$ ${saldoAtual.toFixed(2)}</p>
+                    <p><strong>Impacto (Itens ${impactoData.itens.join(', ')}):</strong> - R$ ${impactoData.total.toFixed(2)}</p>
+                    <p class="font-bold ${saldoPosAprovacao < 0 ? 'text-red-600' : 'text-green-600'}">
+                        <strong>Saldo Pós-Aprovação:</strong> R$ ${saldoPosAprovacao.toFixed(2)}
+                        ${saldoPosAprovacao < 0 ? ' (Orçamento Estourado!)' : ''}
+                    </p>
+                </div>
+            `;
+        }
+
+        if (valorIndefinido > 0) {
+             htmlResult += `
+                <div class="border-t pt-3 mt-3">
+                    <p class="font-bold text-yellow-700">Aviso de Custo Indefinido</p>
+                    <p>Um valor de <strong>R$ ${valorIndefinido.toFixed(2)}</strong> (itens: ${itensIndefinidos.join(', ')}) não pôde ser alocado a uma linha específica devido a ambiguidades (produto permitido em CGOs de linhas diferentes) e não está na simulação acima.</p>
+                </div>
+            `;
+        }
+
+        orcamentoSection.innerHTML = htmlResult;
 
     } catch (error) {
         console.error("Erro ao simular orçamento:", error);
@@ -2266,9 +2395,6 @@ async function mostrarSimulacaoOrcamento(cgoPrevisto, filialId, itensSolicitados
     }
 }
 
-/**
- * NOVO Helper: Calcula o valor já realizado para uma linha/filial/mês/ano
- */
 async function calcularRealizadoLinha(linhaId, filialId, ano, mes) {
     // Busca todos os CGOs que debitam desta linha
     const cgos = await getAllCgoCache();
@@ -2294,63 +2420,65 @@ async function calcularRealizadoLinha(linhaId, filialId, ano, mes) {
     return realizado;
 }
 
-// --- Adicione esta função ao seu script.js ---
-
-/**
- * NOVO: Chamado quando o CGO previsto é selecionado/alterado
- */
-function handleCgoPrevistoChange() {
-    const cgoSelecionado = document.getElementById('cgoPrevistoSelect').value;
+function handleTipoBaixaChange() {
+    const tipoBaixaId = document.getElementById('tipoBaixaSelect').value; // RENOMEADO
     const passo2Div = document.getElementById('solicitacaoPasso2');
-    
-    // Garante que limparCarrinho exista antes de chamar
+
     if (typeof limparCarrinho === 'function') {
-        limparCarrinho(); // Reseta itens se trocar o CGO
+        limparCarrinho(); // Reseta itens se trocar o Tipo
     } else {
         console.error("Função limparCarrinho não definida!");
     }
 
-    if (cgoSelecionado && passo2Div) {
-        passo2Div.style.display = 'block'; // Mostra o passo 2
+    if (tipoBaixaId && passo2Div) {
+        passo2Div.style.display = 'block'; 
         const produtoCodigoInput = document.getElementById('produtoCodigo');
         if (produtoCodigoInput) produtoCodigoInput.focus();
     } else if (passo2Div) {
-        passo2Div.style.display = 'none'; // Esconde o passo 2
+        passo2Div.style.display = 'none'; 
     }
 }
 
 async function iniciarNovaSolicitacao() {
-    console.log(">>> iniciarNovaSolicitacao chamada!"); // Log 1
+    console.log(">>> iniciarNovaSolicitacao chamada!"); 
     limparCarrinho();
-    const cgoSelect = document.getElementById('cgoPrevistoSelect');
+    const tipoBaixaSelect = document.getElementById('tipoBaixaSelect'); // RENOMEADO
     const passo2Div = document.getElementById('solicitacaoPasso2');
-    const alertContainer = document.getElementById('cgoPrevistoAlert');
+    const alertContainer = document.getElementById('tipoBaixaAlert'); // RENOMEADO
 
     alertContainer.innerHTML = '';
     passo2Div.style.display = 'none';
-    cgoSelect.disabled = true;
-    cgoSelect.innerHTML = '<option value="">Carregando tipos de baixa...</option>';
+    tipoBaixaSelect.disabled = true;
+    tipoBaixaSelect.innerHTML = '<option value="">Carregando tipos de baixa...</option>';
 
     try {
-        console.log(">>> Tentando chamar getCgoCache..."); // Log 2
-        const cgos = await getCgoCache(true); // Força refresh dos CGOs ativos
-        console.log(">>> getCgoCache retornou:", cgos); // Log 3
+        console.log(">>> Tentando chamar getTiposBaixaCache..."); 
+        const tipos = await getTiposBaixaCache(true); // NOVO: Busca tipos de baixa
+        console.log(">>> getTiposBaixaCache retornou:", tipos); 
 
-        if (cgos && cgos.length > 0) { // Adicionado verificação 'cgos &&'
-            cgoSelect.innerHTML = '<option value="">-- Selecione o Tipo de Baixa (CGO) --</option>';
-            cgos.forEach(cgo => {
-                cgoSelect.innerHTML += `<option value="${cgo.codigo_cgo}">${cgo.codigo_cgo} - ${cgo.descricao_cgo}</option>`;
+        if (tipos && tipos.length > 0) { 
+            tipoBaixaSelect.innerHTML = '<option value="">-- Selecione o Tipo de Baixa --</option>';
+            tipos.forEach(tipo => {
+                // USA O ID DO TIPO, E MOSTRA NOME/DESCRIÇÃO
+                tipoBaixaSelect.innerHTML += `<option value="${tipo.id}">${tipo.nome} ${tipo.descricao ? `(${tipo.descricao})` : ''}</option>`;
             });
-            cgoSelect.disabled = false;
-            console.log(">>> Dropdown de CGOs populado."); // Log 4
+            tipoBaixaSelect.disabled = false;
+            console.log(">>> Dropdown de Tipos de Baixa populado."); 
         } else {
-            cgoSelect.innerHTML = '<option value="">Nenhum CGO ativo encontrado</option>';
-            alertContainer.innerHTML = '<div class="alert alert-error">Nenhum Tipo de Baixa (CGO) ativo cadastrado. Contate o administrador.</div>';
-            console.log(">>> Nenhum CGO encontrado ou retornado."); // Log 5
+            tipoBaixaSelect.innerHTML = '<option value="">Nenhum Tipo de Baixa ativo</option>';
+            alertContainer.innerHTML = '<div class="alert alert-error">Nenhum Tipo de Baixa ativo cadastrado. Contate o administrador.</div>';
+            console.log(">>> Nenhum Tipo de Baixa encontrado."); 
         }
     } catch (error) {
-        console.error(">>> Erro DENTRO de iniciarNovaSolicitacao ao carregar CGOs:", error); // Log 6
-        cgoSelect.innerHTML = '<option value="">Erro ao carregar CGOs</option>';
+        console.error(">>> Erro DENTRO de iniciarNovaSolicitacao ao carregar Tipos:", error); 
+        tipoBaixaSelect.innerHTML = '<option value="">Erro ao carregar</option>';
         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar tipos de baixa: ${error.message}</div>`;
     }
+}
+
+async function getTiposBaixaCache(forceRefresh = false) {
+    if (typeof tiposBaixaCache === 'undefined' || tiposBaixaCache.length === 0 || forceRefresh) {
+        tiposBaixaCache = await supabaseRequest('tipos_baixa?ativo=eq.true&select=id,nome,descricao&order=nome.asc') || [];
+    }
+    return tiposBaixaCache;
 }
