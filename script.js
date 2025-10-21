@@ -8,6 +8,10 @@ let todosCgoCache = []; // NOVO: Cache de TODOS os CGOs (para admin)
 let carrinhoItens = []; // NOVO: Array para o "carrinho" da nova solicitação
 let tiposBaixaCache = []
 let todasTiposBaixaCache = []; // NOVO: Cache de TODOS os tipos (admin)
+let todasTiposBaixaCache = []; // Cache de TODOS os tipos (admin)
+let carrinhoFinanceiro = []; // NOVO: Carrinho para NFs
+let lancamentosCache = []; // NOVO: Cache de despesas externas
+let carrinhoItens = [];
 // --- Inicialização (SUBSTITUIR esta parte dentro do DOMContentLoaded) ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
@@ -40,6 +44,15 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('produtoForm')?.addEventListener('submit', handleProdutoFormSubmit);
     document.getElementById('tipoBaixaForm')?.addEventListener('submit', handleTipoBaixaFormSubmit);
     document.getElementById('linhaForm')?.addEventListener('submit', handleLinhaFormSubmit); // AJUSTADO
+    document.getElementById('addItemNfForm')?.addEventListener('submit', handleAddItemFinanceiro);
+    document.getElementById('submitLancamentoNfButton')?.addEventListener('click', handleLancamentoNfSubmit);
+    document.getElementById('nfLinhaOrcamentariaSelect')?.addEventListener('change', simularImpactoOrcamentoNF);
+    document.getElementById('carrinhoNfItensBody')?.addEventListener('click', function(event) {
+        if (event.target.closest('.remover-nf-item')) {
+            const index = event.target.closest('.remover-nf-item').dataset.index;
+            removerItemFinanceiro(index);
+        }
+    });
 
     // Consulta CGO
     document.getElementById('helpCgoButton')?.addEventListener('click', abrirConsultaCgoModal);
@@ -230,25 +243,23 @@ function showView(viewId, element = null) {
             case 'gerenciarTiposBaixaView': if(typeof loadGerenciarTiposBaixa === 'function') loadGerenciarTiposBaixa(); break;
             case 'gerenciarLinhasView': if(typeof loadGerenciarLinhas === 'function') loadGerenciarLinhas(); break; // Corrigido
             case 'gerenciarOrcamentosView': if(typeof prepararGerenciarOrcamentos === 'function') prepararGerenciarOrcamentos(); break; // Corrigido
+            case 'lancamentosFinanceirosView': if(typeof loadLancamentosFinanceiros === 'function') loadLancamentosFinanceiros(); break;    
         }
     } catch(e) {
         console.error(`Erro ao carregar dados para a view ${viewId}:`, e);
-        // Opcional: Mostrar erro para o usuário
-        // showNotification(`Erro ao carregar view ${viewId}. Verifique o console.`, 'error');
     }
 
     if (typeof feather !== 'undefined') feather.replace();
     if (typeof AOS !== 'undefined') AOS.refresh();
 }
 
-// SUBSTITUA A FUNÇÃO ANTIGA
+// SUBSTITUA A FUNÇÃO 'logout' (Linha ~234)
 function logout() {
     currentUser = null; selectedFilial = null;
     todasFiliaisCache = []; cgoCache = []; todosCgoCache = []; carrinhoItens = [];
-    // Limpa caches de orçamento
     linhasOrcamentariasCache = []; todasLinhasOrcamentariasCache = []; orcamentosCache = {};
-    // NOVO: Limpa caches de tipo de baixa
     tiposBaixaCache = []; todasTiposBaixaCache = []; 
+    carrinhoFinanceiro = []; lancamentosCache = [];
     document.getElementById('mainSystem').style.display = 'none';
     document.getElementById('loginContainer').style.display = 'flex';
     document.getElementById('helpCgoButton').style.display = 'none';
@@ -258,17 +269,6 @@ function logout() {
     showNotification('Você foi desconectado.', 'info');
 }
 
-function limparCarrinho() {
-    carrinhoItens = [];
-    document.getElementById('addItemForm')?.reset();
-    document.getElementById('addItemAlert').innerHTML = '';
-    document.getElementById('novaSolicitacaoAlert').innerHTML = '';
-    renderCarrinho();
-}
-
-/**
- * NOVO: Adiciona um item ao array 'carrinhoItens'
- */
 function handleAddItem(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('addItemAlert');
@@ -762,6 +762,7 @@ function closeModal(modalId) {
     if (modalId === 'cgoModal' && document.getElementById('cgoForm')) { document.getElementById('cgoForm').reset(); document.getElementById('cgoId').value = ''; }
     if (modalId === 'produtoModal' && document.getElementById('produtoForm')) { document.getElementById('produtoForm').reset(); document.getElementById('produtoIdAdmin').value = ''; }
     if (modalId === 'tipoBaixaModal' && document.getElementById('tipoBaixaForm')) { document.getElementById('tipoBaixaForm').reset(); document.getElementById('tipoBaixaId').value = ''; }
+    if (modalId === 'detalhesDespesaModal') { /* Apenas fecha */ }
     if (modalId === 'linhaModal' && document.getElementById('linhaForm')) { document.getElementById('linhaForm').reset(); document.getElementById('linhaId').value = ''; }
     if (modalId === 'consultaCgoModal' && document.getElementById('cgoSearchInput')) { document.getElementById('cgoSearchInput').value = ''; if(typeof filtrarCgoConsulta === 'function') filtrarCgoConsulta(); }
 }
@@ -2603,30 +2604,39 @@ async function mostrarSimulacaoOrcamento(tipoBaixaId, filialId, itensSolicitados
     }
 }
 
+// SUBSTITUA A FUNÇÃO 'calcularRealizadoLinha' (Linha ~1458)
 async function calcularRealizadoLinha(linhaId, filialId, ano, mes) {
-    // Busca todos os CGOs que debitam desta linha
-    const cgos = await getAllCgoCache();
-    const cgosDaLinha = cgos.filter(c => c.linha_orcamentaria_id === linhaId).map(c => c.codigo_cgo);
-
-    if (cgosDaLinha.length === 0) return 0; // Nenhum CGO debita desta linha
-
     // Formata as datas de início e fim do mês
     const inicioMes = new Date(ano, mes - 1, 1).toISOString();
     const fimMes = new Date(ano, mes, 0, 23, 59, 59, 999).toISOString(); // Último dia do mês
 
-    // Busca itens EXECUTADOS ou FINALIZADOS que:
-    // - Pertencem a pedidos da filial correta
-    // - Ocorreram dentro do mês/ano
-    // - Usaram um dos CGOs que debitam da linha
-    // IMPORTANTE: Seleciona a tabela PAI (solicitacoes_baixa) para filtrar pela filial
-    const response = await supabaseRequest(
-        `solicitacao_itens?select=valor_total_executado,solicitacoes_baixa!inner(filial_id)&solicitacoes_baixa.filial_id=eq.${filialId}&data_execucao=gte.${inicioMes}&data_execucao=lte.${fimMes}&codigo_movimentacao=in.(${cgosDaLinha.join(',')})&status=in.(aguardando_retirada,finalizada)`
-    );
+    let realizadoBaixas = 0;
+    let realizadoDespesas = 0;
 
-    // Soma os valores
-    const realizado = (response || []).reduce((sum, item) => sum + (item.valor_total_executado || 0), 0);
-    return realizado;
+    // --- PARTE 1: Calcula o realizado das BAIXAS (lógica antiga) ---
+    const cgos = await getAllCgoCache();
+    const cgosDaLinha = cgos.filter(c => c.linha_orcamentaria_id === linhaId).map(c => c.codigo_cgo);
+
+    if (cgosDaLinha.length > 0) {
+        const responseBaixas = await supabaseRequest(
+            `solicitacao_itens?select=valor_total_executado,solicitacoes_baixa!inner(filial_id)&solicitacoes_baixa.filial_id=eq.${filialId}&data_execucao=gte.${inicioMes}&data_execucao=lte.${fimMes}&codigo_movimentacao=in.(${cgosDaLinha.join(',')})&status=in.(aguardando_retirada,finalizada)`
+        );
+        realizadoBaixas = (responseBaixas || []).reduce((sum, item) => sum + (item.valor_total_executado || 0), 0);
+    }
+
+    // --- PARTE 2: Calcula o realizado das DESPESAS EXTERNAS (lógica nova) ---
+    const responseDespesas = await supabaseRequest(
+        `despesas_externas?filial_id=eq.${filialId}&linha_orcamentaria_id=eq.${linhaId}&data_nf=gte.${inicioMes}&data_nf=lte.${fimMes}&select=valor_total_nf`
+    );
+    realizadoDespesas = (responseDespesas || []).reduce((sum, item) => sum + (item.valor_total_nf || 0), 0);
+    
+    // --- PARTE 3: Soma tudo ---
+    const realizadoTotal = realizadoBaixas + realizadoDespesas;
+    console.log(`Realizado Linha ${linhaId} (Mês ${mes}): Baixas R$ ${realizadoBaixas} + Despesas NF R$ ${realizadoDespesas} = R$ ${realizadoTotal}`);
+    
+    return realizadoTotal;
 }
+
 
 function handleTipoBaixaChange() {
     const tipoBaixaId = document.getElementById('tipoBaixaSelect').value; // RENOMEADO
@@ -2689,4 +2699,366 @@ async function getTiposBaixaCache(forceRefresh = false) {
         tiposBaixaCache = await supabaseRequest('tipos_baixa?ativo=eq.true&select=id,nome,descricao&order=nome.asc') || [];
     }
     return tiposBaixaCache;
+}
+
+// =======================================================
+// === NOVO: FUNÇÕES DE LANÇAMENTOS FINANCEIROS (NF) ===
+// =======================================================
+
+/**
+ * Carrega a view de Lançamentos Financeiros
+ */
+async function loadLancamentosFinanceiros() {
+    const linhaSelect = document.getElementById('nfLinhaOrcamentariaSelect');
+    linhaSelect.innerHTML = '<option value="">Carregando linhas...</option>';
+    linhaSelect.disabled = true;
+
+    // Limpa o formulário
+    document.getElementById('lancamentoNfForm').reset();
+    document.getElementById('addItemNfForm').reset();
+    document.getElementById('nfSimulacaoOrcamento').style.display = 'none';
+    document.getElementById('lancamentoNfAlert').innerHTML = '';
+    document.getElementById('addItemNfAlert').innerHTML = '';
+    carrinhoFinanceiro = [];
+    renderCarrinhoFinanceiro();
+    
+    // 1. Carrega o dropdown de Linhas Orçamentárias
+    try {
+        const linhas = await getLinhasOrcamentariasCache(true);
+        if (linhas && linhas.length > 0) {
+            linhaSelect.innerHTML = '<option value="">-- Selecione uma Linha --</option>';
+            linhas.forEach(l => {
+                linhaSelect.innerHTML += `<option value="${l.id}">${l.codigo} - ${l.descricao}</option>`;
+            });
+            linhaSelect.disabled = false;
+        } else {
+            linhaSelect.innerHTML = '<option value="">Nenhuma linha cadastrada</option>';
+        }
+    } catch (e) {
+        linhaSelect.innerHTML = '<option value="">Erro ao carregar linhas</option>';
+    }
+    
+    // 2. Carrega o histórico de lançamentos
+    const tbody = document.getElementById('lancamentosNfTableBody');
+    tbody.innerHTML = `<tr><td colspan="8" class="loading"><div class="spinner"></div>Carregando...</td></tr>`;
+    try {
+        lancamentosCache = await supabaseRequest(
+            `despesas_externas?filial_id=eq.${selectedFilial.id}&select=*,linhas_orcamentarias(codigo,descricao)&order=created_at.desc&limit=50`
+        ) || [];
+        renderLancamentosTable(tbody, lancamentosCache);
+    } catch (error) {
+        console.error("Erro ao carregar despesas:", error);
+        tbody.innerHTML = `<tr><td colspan="8" class="alert alert-error">Erro: ${error.message}</td></tr>`;
+    }
+}
+
+/**
+ * Renderiza a tabela de histórico de NFs
+ */
+function renderLancamentosTable(tbody, despesas) {
+    if (!despesas || despesas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">Nenhum lançamento encontrado.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = despesas.map(d => {
+        const dataLanc = new Date(d.created_at).toLocaleDateString('pt-BR');
+        const dataNf = d.data_nf ? new Date(d.data_nf).toLocaleDateString('pt-BR') : 'N/A';
+        const linhaDesc = d.linhas_orcamentarias ? `${d.linhas_orcamentarias.codigo} - ${d.linhas_orcamentarias.descricao}` : 'Linha não encontrada';
+        
+        const anexoLink = d.anexo_nf_url
+            ? `<a href="${d.anexo_nf_url}" target="_blank" class="text-blue-600 hover:underline">${d.nome_anexo_nf || 'Ver Anexo'}</a>`
+            : 'Nenhum';
+            
+        return `
+            <tr class="text-sm">
+                <td>${d.id}</td>
+                <td>${dataLanc}</td>
+                <td>${dataNf}</td>
+                <td>${d.numero_nf}</td>
+                <td>${linhaDesc}</td>
+                <td class="text-right">R$ ${d.valor_total_nf.toFixed(2)}</td>
+                <td>${anexoLink}</td>
+                <td>
+                    <button class="btn btn-primary btn-small" onclick="abrirDetalhesDespesaModal(${d.id})">
+                        <i data-feather="eye" class="h-4 w-4"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    if (typeof feather !== 'undefined') feather.replace();
+}
+
+/**
+ * Adiciona um item ao carrinho financeiro
+ */
+function handleAddItemFinanceiro(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('addItemNfAlert');
+    alertContainer.innerHTML = '';
+    
+    const descricao = document.getElementById('nfItemDescricao').value;
+    const quantidade = parseFloat(document.getElementById('nfItemQtd').value);
+    const valorUnitario = parseFloat(document.getElementById('nfItemValorUnit').value);
+    
+    if (!descricao || isNaN(quantidade) || quantidade <= 0 || isNaN(valorUnitario) || valorUnitario < 0) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Preencha todos os campos do item com valores válidos.</div>';
+        return;
+    }
+    
+    carrinhoFinanceiro.push({
+        descricao_item: descricao,
+        quantidade: quantidade,
+        valor_unitario: valorUnitario,
+        valor_total: quantidade * valorUnitario
+    });
+    
+    renderCarrinhoFinanceiro();
+    simularImpactoOrcamentoNF(); // Re-simula
+    document.getElementById('addItemNfForm').reset();
+    document.getElementById('nfItemDescricao').focus();
+}
+
+/**
+ * Renderiza a tabela do carrinho financeiro
+ */
+function renderCarrinhoFinanceiro() {
+    const tbody = document.getElementById('carrinhoNfItensBody');
+    const totalSpan = document.getElementById('carrinhoNfValorTotal');
+    const submitButton = document.getElementById('submitLancamentoNfButton');
+    
+    if (carrinhoFinanceiro.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">Nenhum item adicionado.</td></tr>`;
+        totalSpan.textContent = '0.00';
+        submitButton.disabled = true;
+        return;
+    }
+
+    let valorTotalNF = 0;
+    tbody.innerHTML = carrinhoFinanceiro.map((item, index) => {
+        valorTotalNF += item.valor_total;
+        return `
+            <tr class="text-sm">
+                <td>${item.descricao_item}</td>
+                <td class="text-center">${item.quantidade}</td>
+                <td class="text-right">R$ ${item.valor_unitario.toFixed(2)}</td>
+                <td class="text-right">R$ ${item.valor_total.toFixed(2)}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-danger btn-small remover-nf-item" data-index="${index}">
+                        <i data-feather="trash-2" class="h-4 w-4" style="pointer-events: none;"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    totalSpan.textContent = valorTotalNF.toFixed(2);
+    submitButton.disabled = false;
+    if (typeof feather !== 'undefined') feather.replace();
+}
+
+/**
+ * Remove item do carrinho financeiro
+ */
+function removerItemFinanceiro(index) {
+    carrinhoFinanceiro.splice(index, 1);
+    renderCarrinhoFinanceiro();
+    simularImpactoOrcamentoNF(); // Re-simula
+}
+
+/**
+ * Mostra a simulação do orçamento ao selecionar a linha
+ */
+async function simularImpactoOrcamentoNF() {
+    const linhaId = document.getElementById('nfLinhaOrcamentariaSelect').value;
+    const simulacaoDiv = document.getElementById('nfSimulacaoOrcamento');
+    const valorTotalNF = parseFloat(document.getElementById('carrinhoNfValorTotal').textContent) || 0;
+    
+    if (!linhaId) {
+        simulacaoDiv.style.display = 'none';
+        return;
+    }
+    
+    simulacaoDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Simulando...</div>';
+    simulacaoDiv.style.display = 'block';
+
+    try {
+        const hoje = new Date();
+        const anoAtual = hoje.getFullYear();
+        const mesAtual = hoje.getMonth() + 1; // 1-12
+
+        // 1. Busca Orçado
+        const orcamento = await supabaseRequest(
+            `orcamentos_mensais?filial_id=eq.${selectedFilial.id}&linha_id=eq.${linhaId}&ano=eq.${anoAtual}&select=mes_${mesAtual}`
+        );
+        const orcadoMes = (orcamento && orcamento[0]) ? orcamento[0][`mes_${mesAtual}`] : 0;
+
+        // 2. Calcula Realizado (agora com a função atualizada)
+        const realizadoMes = await calcularRealizadoLinha(linhaId, selectedFilial.id, anoAtual, mesAtual);
+
+        // 3. Calcula Saldos
+        const saldoAtual = orcadoMes - realizadoMes;
+        const saldoPosAprovacao = saldoAtual - valorTotalNF;
+        
+        const linhaInfo = (await getLinhasOrcamentariasCache()).find(l => l.id == linhaId);
+
+        simulacaoDiv.innerHTML = `
+            <h5 class="font-semibold text-blue-800 mb-2">Simulação (Mês ${mesAtual}/${anoAtual}) - Linha: ${linhaInfo.codigo}</h5>
+            <p><strong>Orçado Mês:</strong> R$ ${orcadoMes.toFixed(2)}</p>
+            <p><strong>Realizado Atual (Baixas + NFs):</strong> R$ ${realizadoMes.toFixed(2)}</p>
+            <p class="font-bold text-blue-700"><strong>Saldo Atual:</strong> R$ ${saldoAtual.toFixed(2)}</p>
+            <hr class="my-2">
+            <p><strong>Impacto desta NF:</strong> - R$ ${valorTotalNF.toFixed(2)}</p>
+            <p class="font-bold ${saldoPosAprovacao < 0 ? 'text-red-600' : 'text-green-600'}">
+                <strong>Saldo Pós-Lançamento:</strong> R$ ${saldoPosAprovacao.toFixed(2)}
+                ${saldoPosAprovacao < 0 ? ' (Orçamento Estourado!)' : ''}
+            </p>
+        `;
+
+    } catch (error) {
+        console.error("Erro ao simular orçamento NF:", error);
+        simulacaoDiv.innerHTML = `<div class="alert alert-error">Erro ao simular: ${error.message}</div>`;
+    }
+}
+
+/**
+ * Salva o lançamento financeiro (NF)
+ */
+async function handleLancamentoNfSubmit() {
+    const alertContainer = document.getElementById('lancamentoNfAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
+    
+    // 1. Validar dados
+    const numeroNf = document.getElementById('nfNumero').value;
+    const dataNfInput = document.getElementById('nfData').value;
+    const anexoFile = document.getElementById('nfAnexo').files[0];
+    const linhaId = document.getElementById('nfLinhaOrcamentariaSelect').value;
+    const valorTotalNF = parseFloat(document.getElementById('carrinhoNfValorTotal').textContent);
+    
+    if (!numeroNf || !dataNfInput || !anexoFile || !linhaId || !carrinhoFinanceiro.length) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Todos os campos são obrigatórios: Nº NF, Data, Anexo, Itens e Linha Orçamentária.</div>';
+        return;
+    }
+    
+    const dataNf = new Date(dataNfInput).toISOString();
+
+    try {
+        // 2. Criar o cabeçalho da Despesa (sem o anexo ainda)
+        const despesaHeader = {
+            usuario_id: currentUser.id,
+            filial_id: selectedFilial.id,
+            linha_orcamentaria_id: parseInt(linhaId),
+            numero_nf: numeroNf,
+            data_nf: dataNf,
+            valor_total_nf: valorTotalNF,
+            obs: 'Lançado via sistema.'
+        };
+        const responseHeader = await supabaseRequest('despesas_externas', 'POST', despesaHeader);
+        if (!responseHeader || !responseHeader[0]?.id) throw new Error('Falha ao criar o cabeçalho da despesa.');
+        
+        const despesaId = responseHeader[0].id;
+        
+        // 3. Fazer o Upload do anexo (reutilizando a API)
+        alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Enviando anexo...</div>';
+        let anexoUrl = '';
+        let anexoNome = anexoFile.name;
+        
+        try {
+            // Usamos o 'despesaId' como 'solicitacaoId' na API (hack)
+            const apiUrl = `/api/upload?fileName=${encodeURIComponent(anexoNome)}&solicitacaoId=${despesaId}&fileType=nf_externa`;
+            const responseUpload = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': anexoFile.type || 'application/octet-stream' },
+                body: anexoFile,
+            });
+            if (!responseUpload.ok) throw new Error('Falha no upload do anexo.');
+            const resultUpload = await responseUpload.json();
+            anexoUrl = resultUpload.publicUrl;
+        } catch (uploadError) {
+            console.warn("Upload falhou, continuando sem anexo:", uploadError);
+            showNotification('Falha no upload do anexo, mas a despesa foi salva sem ele.', 'warning');
+        }
+
+        // 4. Atualizar o cabeçalho com a URL do anexo
+        if (anexoUrl) {
+            await supabaseRequest(`despesas_externas?id=eq.${despesaId}`, 'PATCH', {
+                anexo_nf_url: anexoUrl,
+                nome_anexo_nf: anexoNome
+            });
+        }
+        
+        // 5. Inserir os Itens
+        alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando itens...</div>';
+        const itensParaInserir = carrinhoFinanceiro.map(item => ({
+            despesa_id: despesaId,
+            ...item // descricao_item, quantidade, valor_unitario, valor_total
+        }));
+        await supabaseRequest('despesas_externas_itens', 'POST', itensParaInserir);
+        
+        // 6. Sucesso
+        showNotification('Despesa externa (NF) lançada com sucesso!', 'success');
+        loadLancamentosFinanceiros(); // Recarrega a view
+        
+    } catch (error) {
+        console.error("Erro ao salvar lançamento NF:", error);
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
+    }
+}
+
+/**
+ * Abre o modal de detalhes da despesa
+ */
+async function abrirDetalhesDespesaModal(despesaId) {
+    const modal = document.getElementById('detalhesDespesaModal');
+    const content = document.getElementById('detalhesDespesaContent');
+    content.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
+    
+    // Busca a despesa no cache
+    const despesa = lancamentosCache.find(d => d.id === despesaId);
+    if (!despesa) {
+        content.innerHTML = '<div class="alert alert-error">Erro: Despesa não encontrada no cache.</div>';
+        return;
+    }
+    
+    document.getElementById('detalhesDespesaNfNum').textContent = despesa.numero_nf;
+    modal.style.display = 'flex';
+    
+    try {
+        // Busca os itens desta despesa
+        const itens = await supabaseRequest(`despesas_externas_itens?despesa_id=eq.${despesaId}&select=*&order=id.asc`);
+        
+        const dataLanc = new Date(despesa.created_at).toLocaleString('pt-BR');
+        const dataNf = despesa.data_nf ? new Date(despesa.data_nf).toLocaleDateString('pt-BR') : 'N/A';
+        const linhaDesc = despesa.linhas_orcamentarias ? `${despesa.linhas_orcamentarias.codigo} - ${despesa.linhas_orcamentarias.descricao}` : 'N/A';
+        const anexoLink = despesa.anexo_nf_url
+            ? `<a href="${despesa.anexo_nf_url}" target="_blank" class="btn btn-primary btn-small">Ver Anexo (NF)</a>`
+            : '<p>Nenhum anexo.</p>';
+
+        let headerHtml = `
+            <p><strong>Nº NF:</strong> ${despesa.numero_nf}</p>
+            <p><strong>Data NF:</strong> ${dataNf}</p>
+            <p><strong>Data Lançamento:</strong> ${dataLanc}</p>
+            <p><strong>Linha Orçamentária:</strong> ${linhaDesc}</p>
+            <p><strong>Valor Total:</strong> R$ ${despesa.valor_total_nf.toFixed(2)}</p>
+            <div class="mt-2">${anexoLink}</div>
+            <hr class="my-4">
+            <h4 class="text-lg font-semibold mb-2">Itens da Despesa</h4>
+        `;
+        
+        let itensHtml = (itens || []).map(item => {
+            return `
+                <div class="bg-gray-50 p-3 rounded border mb-2 grid grid-cols-4 gap-2">
+                    <p class="col-span-2"><strong>Item:</strong> ${item.descricao_item}</p>
+                    <p><strong>Qtd:</strong> ${item.quantidade}</p>
+                    <p class="text-right"><strong>Total:</strong> R$ ${item.valor_total.toFixed(2)}</p>
+                </div>
+            `;
+        }).join('');
+        
+        content.innerHTML = headerHtml + (itensHtml || '<p>Nenhum item.</p>');
+        if (typeof feather !== 'undefined') feather.replace();
+
+    } catch (error) {
+        content.innerHTML = `<div class="alert alert-error">Erro ao buscar itens: ${error.message}</div>`;
+    }
 }
