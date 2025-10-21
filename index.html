@@ -917,16 +917,14 @@
                     <input type="checkbox" id="tipoBaixaAtivo" class="h-5 w-5" checked>
                     <label for="tipoBaixaAtivo" class="ml-2 font-normal">Tipo Ativo</label>
                 </div>
-                <div id="detalhesDespesaModal" class="modal-overlay">
-    <div class="modal-content" style="max-width: 700px;">
-        <div class="flex justify-between items-center mb-4">
-             <h3 class="text-xl font-semibold">Detalhes da Despesa (NF #<span id="detalhesDespesaNfNum"></span>)</h3>
-             <button class="btn btn-danger btn-small" onclick="closeModal('detalhesDespesaModal')">Fechar</button>
+                <div id="tipoBaixaAlert" class="mt-4"></div>
+                <div class="flex gap-4 mt-6">
+                    <button type="submit" class="btn btn-success flex-1">Salvar Tipo de Baixa</button>
+                    <button type="button" class="btn btn-danger flex-1" onclick="closeModal('tipoBaixaModal')">Cancelar</button>
+                </div>
+            </form>
         </div>
-        <div id="detalhesDespesaContent" class="space-y-3 text-sm">
-            </div>
     </div>
-</div>
                 <div id="tipoBaixaAlert" class="mt-4"></div>
                 <div class="flex gap-4 mt-6">
                     <button type="submit" class="btn btn-success flex-1">Salvar Tipo de Baixa</button>
