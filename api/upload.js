@@ -31,7 +31,7 @@ export default async (req, res) => {
          return res.status(400).json({ error: 'ID da solicitação não especificado.' });
     }
 
-    const folder = fileType === 'foto_retirada' ? 'fotos_retirada' : 'anexos_baixa';
+   const folder = fileType === 'foto_retirada' ? 'fotos_retirada' : (fileType === 'nf_externa' ? 'nfs_externas' : 'anexos_baixa');
     const filePath = `${folder}/${solicitacaoId}/${Date.now()}_${fileName}`;
 
     try {
