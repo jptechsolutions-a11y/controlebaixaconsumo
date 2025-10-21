@@ -7,6 +7,7 @@ let cgoCache = []; // NOVO: Cache de CGOs ativos
 let todosCgoCache = []; // NOVO: Cache de TODOS os CGOs (para admin)
 let carrinhoItens = []; // NOVO: Array para o "carrinho" da nova solicitação
 let tiposBaixaCache = []
+let todasTiposBaixaCache = []; // NOVO: Cache de TODOS os tipos (admin)
 // --- Inicialização (SUBSTITUIR esta parte dentro do DOMContentLoaded) ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
@@ -37,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('filialForm')?.addEventListener('submit', handleFilialFormSubmit);
     document.getElementById('cgoForm')?.addEventListener('submit', handleCgoFormSubmit);
     document.getElementById('produtoForm')?.addEventListener('submit', handleProdutoFormSubmit);
+    document.getElementById('tipoBaixaForm')?.addEventListener('submit', handleTipoBaixaFormSubmit);
     document.getElementById('linhaForm')?.addEventListener('submit', handleLinhaFormSubmit); // AJUSTADO
 
     // Consulta CGO
@@ -225,6 +227,7 @@ function showView(viewId, element = null) {
             case 'gerenciarFiliaisView': if(typeof loadGerenciarFiliais === 'function') loadGerenciarFiliais(); break;
             case 'gerenciarProdutosView': if(typeof loadGerenciarProdutos === 'function') loadGerenciarProdutos(); break;
             case 'gerenciarCgoView': if(typeof loadGerenciarCgo === 'function') loadGerenciarCgo(); break;
+            case 'gerenciarTiposBaixaView': if(typeof loadGerenciarTiposBaixa === 'function') loadGerenciarTiposBaixa(); break;
             case 'gerenciarLinhasView': if(typeof loadGerenciarLinhas === 'function') loadGerenciarLinhas(); break; // Corrigido
             case 'gerenciarOrcamentosView': if(typeof prepararGerenciarOrcamentos === 'function') prepararGerenciarOrcamentos(); break; // Corrigido
         }
@@ -238,12 +241,14 @@ function showView(viewId, element = null) {
     if (typeof AOS !== 'undefined') AOS.refresh();
 }
 
-// --- SUBSTITUA a função logout ---
+// SUBSTITUA A FUNÇÃO ANTIGA
 function logout() {
     currentUser = null; selectedFilial = null;
     todasFiliaisCache = []; cgoCache = []; todosCgoCache = []; carrinhoItens = [];
     // Limpa caches de orçamento
     linhasOrcamentariasCache = []; todasLinhasOrcamentariasCache = []; orcamentosCache = {};
+    // NOVO: Limpa caches de tipo de baixa
+    tiposBaixaCache = []; todasTiposBaixaCache = []; 
     document.getElementById('mainSystem').style.display = 'none';
     document.getElementById('loginContainer').style.display = 'flex';
     document.getElementById('helpCgoButton').style.display = 'none';
@@ -252,7 +257,6 @@ function logout() {
     document.getElementById('filialSelectGroup').style.display = 'none';
     showNotification('Você foi desconectado.', 'info');
 }
-
 
 function limparCarrinho() {
     carrinhoItens = [];
@@ -757,6 +761,7 @@ function closeModal(modalId) {
     if (modalId === 'filialModal' && document.getElementById('filialForm')) { document.getElementById('filialForm').reset(); document.getElementById('filialId').value = ''; }
     if (modalId === 'cgoModal' && document.getElementById('cgoForm')) { document.getElementById('cgoForm').reset(); document.getElementById('cgoId').value = ''; }
     if (modalId === 'produtoModal' && document.getElementById('produtoForm')) { document.getElementById('produtoForm').reset(); document.getElementById('produtoIdAdmin').value = ''; }
+    if (modalId === 'tipoBaixaModal' && document.getElementById('tipoBaixaForm')) { document.getElementById('tipoBaixaForm').reset(); document.getElementById('tipoBaixaId').value = ''; }
     if (modalId === 'linhaModal' && document.getElementById('linhaForm')) { document.getElementById('linhaForm').reset(); document.getElementById('linhaId').value = ''; }
     if (modalId === 'consultaCgoModal' && document.getElementById('cgoSearchInput')) { document.getElementById('cgoSearchInput').value = ''; if(typeof filtrarCgoConsulta === 'function') filtrarCgoConsulta(); }
 }
@@ -1254,6 +1259,15 @@ function showNotification(message, type = 'info', timeout = 4000) {
 // =======================================================
 // === FUNÇÕES DE GERENCIAMENTO (ADMIN) ===
 // =======================================================
+/**
+ * NOVO Helper: Cache de TODOS os Tipos de Baixa (para admin)
+ */
+async function getAllTiposBaixaCache(forceRefresh = false) {
+    if (typeof todasTiposBaixaCache === 'undefined' || todasTiposBaixaCache.length === 0 || forceRefresh) {
+        todasTiposBaixaCache = await supabaseRequest('tipos_baixa?select=id,nome,descricao,ativo&order=nome.asc') || [];
+    }
+    return todasTiposBaixaCache;
+}
 
 async function getFiliaisCache(forceRefresh = false) { if (typeof todasFiliaisCache === 'undefined' || todasFiliaisCache.length === 0 || forceRefresh) { todasFiliaisCache = await supabaseRequest('filiais?select=id,nome,descricao&order=nome.asc') || []; } return todasFiliaisCache; }
 async function getCgoCache(forceRefresh = false) {
@@ -1422,6 +1436,109 @@ async function handleUsuarioFormSubmit(event) {
     }
 }
 
+// =======================================================
+// === NOVO: FUNÇÕES DE GERENCIAMENTO DE TIPOS DE BAIXA ===
+// =======================================================
+
+async function loadGerenciarTiposBaixa() {
+    const tbody = document.getElementById('tiposBaixaTableBody');
+    tbody.innerHTML = `<tr><td colspan="4" class="loading"><div class="spinner"></div>Carregando tipos...</td></tr>`;
+    try {
+        const tipos = await getAllTiposBaixaCache(true); // Força refresh
+        renderTiposBaixaTable(tbody, tipos || []);
+    } catch (error) {
+        console.error("Erro ao carregar Tipos de Baixa:", error);
+        tbody.innerHTML = `<tr><td colspan="4" class="alert alert-error">Erro ao carregar: ${error.message}</td></tr>`;
+    }
+}
+
+function renderTiposBaixaTable(tbody, tipos) {
+    if (!tipos || tipos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">Nenhum tipo encontrado.</td></tr>`; return;
+    }
+    tbody.innerHTML = tipos.map(t => {
+        const statusClass = t.ativo ? 'text-green-600' : 'text-red-600';
+        const statusText = t.ativo ? 'Ativo' : 'Inativo';
+        const toggleButton = t.ativo
+            ? `<button class="btn btn-warning btn-small ml-1" onclick="toggleTipoBaixaStatus(${t.id}, false)">Desativar</button>`
+            : `<button class="btn btn-success btn-small ml-1" onclick="toggleTipoBaixaStatus(${t.id}, true)">Ativar</button>`;
+        return `
+            <tr class="text-sm">
+                <td><strong>${t.nome}</strong></td> <td>${t.descricao || '-'}</td>
+                <td><span class="font-semibold ${statusClass}">${statusText}</span></td>
+                <td> <button class="btn btn-primary btn-small" onclick="abrirTipoBaixaModal(${t.id})">Editar</button> ${toggleButton} </td>
+            </tr>`;
+    }).join('');
+}
+
+async function abrirTipoBaixaModal(id = null) {
+    const modal = document.getElementById('tipoBaixaModal');
+    const form = document.getElementById('tipoBaixaForm');
+    const alertContainer = document.getElementById('tipoBaixaAlert');
+    const title = document.getElementById('tipoBaixaModalTitle');
+    alertContainer.innerHTML = ''; form.reset(); document.getElementById('tipoBaixaId').value = id || '';
+
+    if (id) {
+        title.textContent = `Editar Tipo de Baixa #${id}`;
+        try {
+            const tipos = await getAllTiposBaixaCache();
+            const tipo = tipos.find(t => t.id === id);
+            if (!tipo) throw new Error("Tipo de Baixa não encontrado.");
+            document.getElementById('tipoBaixaNome').value = tipo.nome;
+            document.getElementById('tipoBaixaDescricao').value = tipo.descricao || '';
+            document.getElementById('tipoBaixaAtivo').checked = tipo.ativo;
+        } catch(error) { alertContainer.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`; return; }
+    } else {
+        title.textContent = 'Novo Tipo de Baixa';
+        document.getElementById('tipoBaixaAtivo').checked = true;
+    }
+    modal.style.display = 'flex';
+}
+
+async function handleTipoBaixaFormSubmit(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('tipoBaixaAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
+    const id = document.getElementById('tipoBaixaId').value;
+    const nome = document.getElementById('tipoBaixaNome').value.trim();
+    const descricao = document.getElementById('tipoBaixaDescricao').value.trim();
+    const ativo = document.getElementById('tipoBaixaAtivo').checked;
+    const isEdit = !!id;
+
+    if (!nome) { alertContainer.innerHTML = '<div class="alert alert-error">O Nome é obrigatório.</div>'; return; }
+
+    const tipoData = { nome, descricao: descricao || null, ativo };
+    try {
+        if (isEdit) {
+            await supabaseRequest(`tipos_baixa?id=eq.${id}`, 'PATCH', tipoData);
+        } else {
+            await supabaseRequest('tipos_baixa', 'POST', tipoData);
+        }
+        tiposBaixaCache = []; todasTiposBaixaCache = []; // Limpa caches
+        showNotification(`Tipo de Baixa ${isEdit ? 'atualizado' : 'criado'}!`, 'success');
+        closeModal('tipoBaixaModal');
+        loadGerenciarTiposBaixa();
+    } catch (error) {
+        console.error("Erro ao salvar Tipo de Baixa:", error);
+        let errorMsg = error.message;
+        if (errorMsg.includes('duplicate key value') && errorMsg.includes('tipos_baixa_nome_key')) { errorMsg = "Já existe um tipo com este nome."; }
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro: ${errorMsg}</div>`;
+    }
+}
+
+async function toggleTipoBaixaStatus(id, newStatus) {
+    const action = newStatus ? 'ativar' : 'desativar';
+    if (!confirm(`Tem certeza que deseja ${action} o Tipo de Baixa #${id}?`)) return;
+    try {
+        await supabaseRequest(`tipos_baixa?id=eq.${id}`, 'PATCH', { ativo: newStatus });
+        tiposBaixaCache = []; todasTiposBaixaCache = []; // Limpa caches
+        showNotification(`Tipo de Baixa #${id} ${action}do!`, 'success');
+        loadGerenciarTiposBaixa();
+    } catch (error) {
+        console.error(`Erro ao ${action} Tipo:`, error);
+        showNotification(`Erro ao ${action} Tipo: ${error.message}`, 'error');
+     }
+}
 
 // --- Gerenciamento de Filiais (sem alteração) ---
 async function loadGerenciarFiliais() {
@@ -1784,43 +1901,120 @@ function renderCgoTable(tbody, cgos) {
     }).join('');
 }
 
+// SUBSTITUA A FUNÇÃO ANTIGA
 async function abrirCgoModal(id = null) {
-    const modal = document.getElementById('cgoModal'); const form = document.getElementById('cgoForm'); const alertC = document.getElementById('cgoAlert'); const title = document.getElementById('cgoModalTitle'); const linhaSelect = document.getElementById('cgoLinhaOrcamentaria');
-    alertC.innerHTML = ''; form.reset(); document.getElementById('cgoId').value = id || '';
-    linhaSelect.innerHTML = '<option value="">Carregando...</option>'; linhaSelect.disabled = true;
+    const modal = document.getElementById('cgoModal'); 
+    const form = document.getElementById('cgoForm'); 
+    const alertC = document.getElementById('cgoAlert'); 
+    const title = document.getElementById('cgoModalTitle'); 
+    const linhaSelect = document.getElementById('cgoLinhaOrcamentaria');
+    // NOVO: Select de Tipo de Baixa
+    const tipoBaixaSelect = document.getElementById('cgoTipoBaixaSelect');
+
+    alertC.innerHTML = ''; 
+    form.reset(); 
+    document.getElementById('cgoId').value = id || '';
+    
+    linhaSelect.innerHTML = '<option value="">Carregando...</option>'; 
+    linhaSelect.disabled = true;
+    // NOVO: Popula Tipos de Baixa
+    tipoBaixaSelect.innerHTML = '<option value="">Carregando...</option>';
+    tipoBaixaSelect.disabled = true;
+
     try {
-        // Garante que a função getLinhasOrcamentariasCache existe antes de chamar
+        // Carrega Linhas (Lógica antiga)
         if (typeof getLinhasOrcamentariasCache !== 'function') throw new Error("Função getLinhasOrcamentariasCache não definida.");
         const linhas = await getLinhasOrcamentariasCache(true);
         linhaSelect.innerHTML = '<option value="">Nenhuma</option>';
         if (linhas && linhas.length > 0) { linhas.forEach(l => { linhaSelect.innerHTML += `<option value="${l.id}">${l.codigo} - ${l.descricao}</option>`; }); }
         linhaSelect.disabled = false;
-    } catch (e) { alertC.innerHTML = `<div class="alert alert-error">Erro Linhas: ${e.message}</div>`; return; }
+
+        // NOVO: Carrega Tipos de Baixa (Ativos)
+        if (typeof getTiposBaixaCache !== 'function') throw new Error("FunÇÃO getTiposBaixaCache não definida.");
+        const tipos = await getTiposBaixaCache(true);
+        tipoBaixaSelect.innerHTML = '<option value="">Nenhum (Tipo Geral)</option>';
+        if (tipos && tipos.length > 0) { tipos.forEach(t => { tipoBaixaSelect.innerHTML += `<option value="${t.id}">${t.nome}</option>`; }); }
+        tipoBaixaSelect.disabled = false;
+
+    } catch (e) { 
+        alertC.innerHTML = `<div class="alert alert-error">Erro Dep: ${e.message}</div>`; 
+        return; 
+    }
+
     if (id) {
         title.textContent = `Editar CGO #${id}`; document.getElementById('cgoCodigo').disabled = true;
         try {
             if (typeof getAllCgoCache !== 'function') throw new Error("Função getAllCgoCache não definida.");
             const cgos = await getAllCgoCache(); const cgo = cgos.find(c => c.id === id); if (!cgo) throw new Error("CGO não encontrado.");
-            document.getElementById('cgoCodigo').value = cgo.codigo_cgo; document.getElementById('cgoDescricao').value = cgo.descricao_cgo; document.getElementById('cgoObs').value = cgo.obs || ''; document.getElementById('cgoAtivo').checked = cgo.ativo; linhaSelect.value = cgo.linha_orcamentaria_id || '';
-        } catch(error) { alertC.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`; return; }
-    } else { title.textContent = 'Novo CGO'; document.getElementById('cgoCodigo').disabled = false; document.getElementById('cgoAtivo').checked = true; }
+            
+            document.getElementById('cgoCodigo').value = cgo.codigo_cgo; 
+            document.getElementById('cgoDescricao').value = cgo.descricao_cgo; 
+            document.getElementById('cgoObs').value = cgo.obs || ''; 
+            document.getElementById('cgoAtivo').checked = cgo.ativo; 
+            linhaSelect.value = cgo.linha_orcamentaria_id || '';
+            tipoBaixaSelect.value = cgo.tipo_baixa_id || ''; // NOVO: Seta o valor
+            
+        } catch(error) { 
+            alertC.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`; 
+            return; 
+        }
+    } else { 
+        title.textContent = 'Novo CGO'; 
+        document.getElementById('cgoCodigo').disabled = false; 
+        document.getElementById('cgoAtivo').checked = true; 
+    }
     modal.style.display = 'flex';
 }
 
+// SUBSTITUA A FUNÇÃO ANTIGA
 async function handleCgoFormSubmit(event) {
-    event.preventDefault(); const alertC = document.getElementById('cgoAlert'); alertC.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>'; const id = document.getElementById('cgoId').value; const codigo_cgo = document.getElementById('cgoCodigo').value.trim(); const desc = document.getElementById('cgoDescricao').value.trim(); const obs = document.getElementById('cgoObs').value.trim(); const ativo = document.getElementById('cgoAtivo').checked; const linha_id = document.getElementById('cgoLinhaOrcamentaria').value ? parseInt(document.getElementById('cgoLinhaOrcamentaria').value) : null; const isEdit = !!id;
-    if (!codigo_cgo || !desc) { alertC.innerHTML = '<div class="alert alert-error">Código e Descrição obrigatórios.</div>'; return; }
-    const cgoData = { codigo_cgo, descricao_cgo: desc, obs: obs || null, ativo, linha_orcamentaria_id: linha_id };
+    event.preventDefault(); 
+    const alertC = document.getElementById('cgoAlert'); 
+    alertC.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>'; 
+    const id = document.getElementById('cgoId').value; 
+    const codigo_cgo = document.getElementById('cgoCodigo').value.trim(); 
+    const desc = document.getElementById('cgoDescricao').value.trim(); 
+    const obs = document.getElementById('cgoObs').value.trim(); 
+    const ativo = document.getElementById('cgoAtivo').checked; 
+    const linha_id = document.getElementById('cgoLinhaOrcamentaria').value ? parseInt(document.getElementById('cgoLinhaOrcamentaria').value) : null;
+    // NOVO: Pega o valor do Tipo de Baixa
+    const tipo_baixa_id = document.getElementById('cgoTipoBaixaSelect').value ? parseInt(document.getElementById('cgoTipoBaixaSelect').value) : null;
+    
+    const isEdit = !!id;
+    
+    if (!codigo_cgo || !desc) { 
+        alertC.innerHTML = '<div class="alert alert-error">Código e Descrição obrigatórios.</div>'; 
+        return; 
+    }
+    
+    const cgoData = { 
+        codigo_cgo, 
+        descricao_cgo: desc, 
+        obs: obs || null, 
+        ativo, 
+        linha_orcamentaria_id: linha_id,
+        tipo_baixa_id: tipo_baixa_id // NOVO: Adiciona ao payload
+    };
+    
     try {
-        if (isEdit) { delete cgoData.codigo_cgo; await supabaseRequest(`cgo?id=eq.${id}`, 'PATCH', cgoData); }
-        else { await supabaseRequest('cgo', 'POST', cgoData); }
+        if (isEdit) { 
+            delete cgoData.codigo_cgo; 
+            await supabaseRequest(`cgo?id=eq.${id}`, 'PATCH', cgoData); 
+        } else { 
+            await supabaseRequest('cgo', 'POST', cgoData); 
+        }
+        
         cgoCache = []; todosCgoCache = []; // Limpa caches
-        showNotification(`CGO ${isEdit ? 'atualizado' : 'criado'}!`, 'success'); closeModal('cgoModal');
-        // Garante que a função existe antes de chamar
+        showNotification(`CGO ${isEdit ? 'atualizado' : 'criado'}!`, 'success'); 
+        closeModal('cgoModal');
+        
         if (typeof loadGerenciarCgo === 'function') loadGerenciarCgo();
-    } catch (error) { let msg = error.message; if (msg.includes('duplicate key') && msg.includes('cgo_codigo_cgo_key')) { msg = "Código já existe."; } alertC.innerHTML = `<div class="alert alert-error">Erro: ${msg}</div>`; }
+    } catch (error) { 
+        let msg = error.message; 
+        if (msg.includes('duplicate key') && msg.includes('cgo_codigo_cgo_key')) { msg = "Código já existe."; } 
+        alertC.innerHTML = `<div class="alert alert-error">Erro: ${msg}</div>`; 
+    }
 }
-
 async function toggleCgoStatus(id, newStatus) {
     const action = newStatus ? 'ativar' : 'desativar';
     if (!confirm(`Tem certeza que deseja ${action} o CGO #${id}?`)) {
@@ -1838,10 +2032,7 @@ async function toggleCgoStatus(id, newStatus) {
     }
 }
 
-// SUBSTITUA a função 'abrirRetiradaModal' antiga por esta:
-/**
- * NOVO: Abre modal de Retirada para um PEDIDO (em lote)
- */
+
 async function abrirRetiradaLoteModal(solicitacaoId) { 
     const modal = document.getElementById('retiradaModal');
     document.getElementById('retiradaPedidoIdDisplay').textContent = solicitacaoId;
