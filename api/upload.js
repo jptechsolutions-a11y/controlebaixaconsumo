@@ -4,18 +4,17 @@ import { createClient } from '@supabase/supabase-js';
 // Pega as credenciais das Variáveis de Ambiente
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Ainda precisamos do cliente para a função .getPublicUrl()
+const supabase = createClient(supabaseUrl, supabaseServiceKey); 
 
 const BUCKET_NAME = 'arquivos-baixas';
-
-// --- FUNÇÃO streamToBuffer FOI REMOVIDA ---
-// Não precisamos mais dela, pois vamos fazer streaming direto.
 
 export default async (req, res) => {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Método não permitido.' });
     }
 
+    // A lógica de nomes de arquivo e pastas continua a mesma
     const fileName = req.query.fileName || `arquivo_${Date.now()}`;
     const contentType = req.headers['content-type'] || 'application/octet-stream';
     const solicitacaoId = req.query.solicitacaoId;
@@ -28,43 +27,61 @@ export default async (req, res) => {
     const folder = fileType === 'foto_retirada' ? 'fotos_retirada' : (fileType === 'nf_externa' ? 'nfs_externas' : 'anexos_baixa');
     const filePath = `${folder}/${solicitacaoId}/${Date.now()}_${fileName}`;
 
+    // ---- INÍCIO DA NOVA LÓGICA DE UPLOAD ----
+    // Vamos usar o 'fetch' nativo em vez de 'supabase.storage.upload()' 
+    // para contornar o erro 'duplex'
+    
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/${BUCKET_NAME}/${filePath}`;
+    
     try {
-         console.log(`[Upload API v3 - Streaming] Recebendo arquivo: ${filePath}, Tipo: ${contentType}`);
+        console.log(`[Upload API v4 - Manual Fetch] Tentando POST para: ${uploadUrl}`);
+        
+        // Faz o POST direto para a REST API do Supabase Storage
+        const response = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${supabaseServiceKey}`, // Chave de serviço
+                'Content-Type': contentType,
+                'x-upsert': 'false' // Equivalente ao upsert: false
+            },
+            body: req, // Passa o stream 'req' (o arquivo) diretamente
+            
+            // --- A CORREÇÃO MÁGICA ---
+            // Isso informa ao 'undici' (motor de rede do Vercel)
+            // que estamos enviando um stream "half duplex"
+            // @ts-ignore
+            duplex: 'half' 
+            // --- FIM DA CORREÇÃO ---
+        });
 
-        // --- MUDANÇA PRINCIPAL: Fazer upload do stream 'req' DIRETAMENTE ---
-        // Em vez de usar um buffer, passamos o próprio objeto 'req'
-        const { data, error: uploadError } = await supabase.storage
-            .from(BUCKET_NAME)
-            .upload(filePath, req, { // <<<=== AQUI ESTÁ A MUDANÇA
-                contentType: contentType,
-                upsert: false
-                // NOTA: O Supabase pode precisar do 'Content-Length'
-                // mas a Vercel geralmente repassa os headers necessários.
-            });
-        // --- FIM DA MUDANÇA ---
-
-        if (uploadError) {
-            console.error('[Upload API v3] Erro no Supabase Storage Upload:', uploadError);
-            // Tenta fornecer mais detalhes do erro original, se disponível
-            const details = uploadError.originalError?.message || uploadError.message;
-            throw new Error(`Falha no upload para o Supabase: ${details}`);
+        if (!response.ok) {
+            // Se o upload falhar, tenta ler o erro
+            const errorBody = await response.json();
+            console.error('[Upload API v4] Erro do Supabase Storage (Manual Fetch):', errorBody);
+            throw new Error(errorBody.message || 'Falha ao fazer upload para o storage.');
         }
+        
+        console.log('[Upload API v4] Upload manual concluído.');
 
+        // ---- FIM DA NOVA LÓGICA ----
+
+        // Se o upload deu certo (status 200), agora usamos o cliente
+        // Supabase apenas para obter a URL pública
         const { data: urlData } = supabase.storage
             .from(BUCKET_NAME)
             .getPublicUrl(filePath);
 
         if (!urlData || !urlData.publicUrl) {
-             console.error('[Upload API v3] Erro ao obter URL pública para:', filePath);
+             console.error('[Upload API v4] Erro ao obter URL pública para:', filePath);
              throw new Error('Falha ao obter a URL pública do arquivo após upload.');
         }
 
-        console.log(`[Upload API v3] Upload concluído! URL: ${urlData.publicUrl}`);
+        console.log(`[Upload API v4] Upload concluído! URL: ${urlData.publicUrl}`);
 
         return res.status(200).json({ publicUrl: urlData.publicUrl });
 
     } catch (error) {
-        console.error('[Upload API v3] Erro geral:', error);
+        console.error('[Upload API v4] Erro geral:', error);
         return res.status(500).json({ error: 'Falha interna no upload', details: error.message });
     }
 };
