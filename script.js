@@ -9,7 +9,7 @@ let carrinhoItens = []; // NOVO: Array para o "carrinho" da nova solicitação
 let tiposBaixaCache = []
 let todasTiposBaixaCache = []; // NOVO: Cache de TODOS os tipos (admin)
 let lancamentosCache = []; // NOVO: Cache de despesas externas
-
+let carrinhoFinanceiro = [];
 // --- Inicialização (SUBSTITUIR esta parte dentro do DOMContentLoaded) ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
