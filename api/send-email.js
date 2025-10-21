@@ -8,9 +8,12 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 const EMAIL_FROM = process.env.EMAIL_FROM;
 const APP_URL = process.env.APP_URL || 'https://seu-app.vercel.app';
-const APP_LINK_HTML = `<p>Acesse o sistema clicando aqui: <a href="${APP_URL}">Acessar Controle de Baixas</a></p>`;
 
-// --- NOVAS FUNÇÕES HELPER DE FETCH ---
+// Links para HTML e Texto Puro
+const APP_LINK_HTML = `<p>Acesse o sistema clicando aqui: <a href="${APP_URL}">Acessar Controle de Baixas</a></p>`;
+const APP_LINK_TEXT = `Acesse o sistema em: ${APP_URL}`;
+
+// --- NOVAS FUNÇÕES HELPER DE FETCH (Sem alteração) ---
 
 /**
  * Função helper para buscar MÚLTIPLOS registros do Supabase.
@@ -71,27 +74,43 @@ async function fetchSupabaseRecord(endpoint) {
 
 
 /**
- * Helper para formatar uma lista de itens em HTML
+ * Helper para formatar uma lista de itens em HTML e TEXTO
+ * AGORA RETORNA UM OBJETO: { html: "...", text: "..." }
  */
 function formatarListaItens(itens) {
-    if (!itens || itens.length === 0) return '<p>Nenhum item encontrado.</p>';
+    if (!itens || itens.length === 0) {
+        return {
+            html: '<p>Nenhum item encontrado.</p>',
+            text: 'Nenhum item encontrado.'
+        };
+    }
     
     const totalPedido = itens.reduce((acc, item) => acc + (item.valor_total_solicitado || 0), 0);
     
-    let itensHtml = '<ul>';
+    let html = '<ul>';
+    let text = '';
+    
     itens.forEach(item => {
         const produtoDesc = item.produtos ? `${item.produtos.codigo} - ${item.produtos.descricao}` : 'Produto desconhecido';
-        itensHtml += `
+        
+        html += `
             <li>
                 <strong>${produtoDesc}</strong><br>
                 Qtd: ${item.quantidade_solicitada} | 
                 Valor: R$ ${item.valor_total_solicitado.toFixed(2)}
             </li>
         `;
+        
+        // Versão em texto puro
+        text += `* ${produtoDesc}\n  Qtd: ${item.quantidade_solicitada} | Valor: R$ ${item.valor_total_solicitado.toFixed(2)}\n`;
     });
-    itensHtml += '</ul>';
-    itensHtml += `<p><strong>Valor Total do Pedido: R$ ${totalPedido.toFixed(2)}</strong></p>`;
-    return itensHtml;
+    
+    html += '</ul>';
+    html += `<p><strong>Valor Total do Pedido: R$ ${totalPedido.toFixed(2)}</strong></p>`;
+    
+    text += `\nValor Total do Pedido: R$ ${totalPedido.toFixed(2)}`;
+    
+    return { html, text };
 }
 
 /**
@@ -113,6 +132,7 @@ export default async (req, res) => {
 
         let subject = '';
         let htmlBody = '';
+        let textBody = ''; // NOVO: Variável para o texto puro
         let toEmails = [];
 
         // --- LÓGICA PARA A TABELA DE PEDIDOS (solicitacoes_baixa) ---
@@ -134,14 +154,20 @@ export default async (req, res) => {
                     toEmails = gestoresData.map(g => g.usuarios.email).filter(Boolean);
                 }
 
+                // Pega ambas as versões HTML e Texto
+                const { html: itensHtml, text: itensText } = formatarListaItens(itens);
+
                 if (toEmails.length > 0) {
                     subject = `Nova Solicitação de Baixa (#${id}) - ${itens.length} Iten(s)`;
+                    
                     htmlBody = `
                         <p>Olá Gestor,</p>
                         <p>Uma nova solicitação de baixa com ${itens.length} iten(s) foi criada por <strong>${solicitanteNome}</strong> e aguarda sua aprovação.</p>
                         <h3>Itens do Pedido:</h3>
-                        ${formatarListaItens(itens)}
+                        ${itensHtml}
                         ${APP_LINK_HTML}`;
+                    
+                    textBody = `Olá Gestor,\n\nUma nova solicitação de baixa com ${itens.length} iten(s) foi criada por ${solicitanteNome} e aguarda sua aprovação.\n\nItens do Pedido:\n${itensText}\n\n${APP_LINK_TEXT}`;
                     
                     // Adiciona o solicitante na cópia
                     if (solicitante?.email) toEmails.push(solicitante.email);
@@ -167,15 +193,19 @@ export default async (req, res) => {
                 const solicitanteNome = solicitante?.nome ?? 'Solicitante';
                 const aprovadorNome = itens[0]?.usuarios_aprovador?.nome ?? 'Gestor';
                 const motivo = itens[0]?.motivo_negacao || 'N/A';
-                const itensHtml = formatarListaItens(itens);
+                
+                // Pega ambas as versões HTML e Texto
+                const { html: itensHtml, text: itensText } = formatarListaItens(itens);
 
                 if (status === 'aprovada') {
                     subject = `Pedido Aprovado (#${id})`;
                     htmlBody = `<p>Olá ${solicitanteNome},</p><p>Seu pedido #${id} foi <strong>APROVADO</strong> por ${aprovadorNome}.</p><p>A equipe de Prevenção já foi notificada para executar a baixa dos itens.</p>${itensHtml}${APP_LINK_HTML}`;
+                    textBody = `Olá ${solicitanteNome},\n\nSeu pedido #${id} foi APROVADO por ${aprovadorNome}.\nA equipe de Prevenção já foi notificada para executar a baixa dos itens.\n\n${itensText}\n\n${APP_LINK_TEXT}`;
                 } 
                 else if (status === 'negada') {
                     subject = `Pedido Negado (#${id})`;
                     htmlBody = `<p>Olá ${solicitanteNome},</p><p>Seu pedido #${id} foi <strong>NEGADO</strong> por ${aprovadorNome}.</p><p>Motivo: ${motivo}</p>${itensHtml}${APP_LINK_HTML}`;
+                    textBody = `Olá ${solicitanteNome},\n\nSeu pedido #${id} foi NEGADO por ${aprovadorNome}.\nMotivo: ${motivo}\n\n${itensText}\n\n${APP_LINK_TEXT}`;
                 }
             }
         }
@@ -212,6 +242,7 @@ export default async (req, res) => {
                 // Evento: Item pronto para retirada
                 if (status === 'aguardando_retirada') {
                     subject = `Item Pronto para Retirada (Pedido #${solicitacao_id}, Item #${id})`;
+                    
                     htmlBody = `
                         <p>Olá ${solicitanteNome},</p>
                         <p>O item <strong>${produtoDesc}</strong> (Pedido #${solicitacao_id}) foi <strong>EXECUTADO</strong> por ${executorNome} e está pronto para retirada.</p>
@@ -224,6 +255,8 @@ export default async (req, res) => {
                         <p>Por favor, acesse o sistema para confirmar a retirada no modal de "Detalhes" do pedido ou na lista principal.</p>
                         ${APP_LINK_HTML}`;
                     
+                    textBody = `Olá ${solicitanteNome},\n\nO item "${produtoDesc}" (Pedido #${solicitacao_id}) foi EXECUTADO por ${executorNome} e está pronto para retirada.\n\n* Qtd. Executada: ${item.quantidade_executada}\n* Valor Total Executado: R$ ${item.valor_total_executado.toFixed(2)}\n* Justificativa: ${item.justificativa_execucao}\n* CGO: ${item.codigo_movimentacao}\n\nPor favor, acesse o sistema para confirmar a retirada.\n\n${APP_LINK_TEXT}`;
+                    
                     if (item.usuarios_aprovador?.email) toEmails.push(item.usuarios_aprovador.email);
                 } 
                 
@@ -233,18 +266,23 @@ export default async (req, res) => {
                     
                     // Busca anexos do PEDIDO PAI (pois o upload.js salva na pasta do pedido)
                     const anexos = await fetchSupabaseQuery(`anexos_baixa?solicitacao_id=eq.${solicitacao_id}`);
+                    
+                    // Versão HTML dos anexos
                     let anexosHtml = 'Nenhum anexo encontrado para este pedido.';
                     if (anexos && anexos.length > 0) {
                         anexosHtml = '<ul>' + anexos.map(anexo => `<li><a href="${anexo.url_arquivo}">${anexo.nome_arquivo || 'Ver Anexo'}</a></li>`).join('') + '</ul>';
                     }
+                    // Versão TEXTO dos anexos
+                    let anexosText = 'Nenhum anexo encontrado para este pedido.';
+                    if (anexos && anexos.length > 0) {
+                        anexosText = anexos.map(anexo => `* ${anexo.nome_arquivo || 'Ver Anexo'}: ${anexo.url_arquivo}`).join('\n');
+                    }
                     
-                    // **** AJUSTE PARA MÚLTIPLAS FOTOS ****
-                    // Agora lemos o array 'fotos_retirada_urls' e fazemos um loop
+                    // Versão HTML das fotos
                     let fotosHtml = '<p>Não foram anexadas fotos da retirada.</p>';
                     if (item.fotos_retirada_urls && item.fotos_retirada_urls.length > 0) {
                         fotosHtml = '<p><strong>Fotos/Anexos da Retirada:</strong></p>';
                         item.fotos_retirada_urls.forEach(url => {
-                            // Verifica se é imagem para exibir, senão põe link
                             if (/\.(jpe?g|png|gif|webp)$/i.test(url)) {
                                 fotosHtml += `<a href="${url}" style="margin-right: 10px; display: inline-block; border: 1px solid #ccc; border-radius: 8px; padding: 5px;"><img src="${url}" alt="Foto da Retirada" style="max-width: 300px; height: auto;" /></a>`;
                             } else {
@@ -252,8 +290,12 @@ export default async (req, res) => {
                             }
                         });
                     }
-                    // **** FIM DO AJUSTE ****
-
+                    // Versão TEXTO das fotos
+                    let fotosText = 'Não foram anexadas fotos da retirada.';
+                     if (item.fotos_retirada_urls && item.fotos_retirada_urls.length > 0) {
+                        fotosText = 'Fotos/Anexos da Retirada:\n' + item.fotos_retirada_urls.map(url => `* Ver anexo: ${url}`).join('\n');
+                     }
+                    
                     htmlBody = `
                         <h1>Laudo de Item Finalizado - (Pedido #${solicitacao_id}, Item #${id})</h1>
                         <p>A baixa para o item <strong>${produtoDesc}</strong> foi concluída.</p>
@@ -277,6 +319,27 @@ export default async (req, res) => {
                         ${APP_LINK_HTML}
                     `;
                     
+                    textBody = `
+Laudo de Item Finalizado - (Pedido #${solicitacao_id}, Item #${id})
+A baixa para o item "${produtoDesc}" foi concluída.
+------------------------------------------------
+Detalhes da Execução (Prevenção)
+* Executor: ${executorNome}
+* Data: ${new Date(item.data_execucao).toLocaleString('pt-BR')}
+* Qtd. Executada: ${item.quantidade_executada}
+* Valor Total Executado: R$ ${item.valor_total_executado.toFixed(2)}
+* Justificativa: ${item.justificativa_execucao}
+* Anexos do Pedido (Execução):\n${anexosText}
+
+Detalhes da Retirada (Operação)
+* Retirado por: ${retiradaNome}
+* Data: ${new Date(item.data_retirada).toLocaleString('pt-BR')}
+
+${fotosText}
+------------------------------------------------
+${APP_LINK_TEXT}
+                    `;
+                    
                     // Envia o laudo para todos os envolvidos no item
                     if (item.usuarios_aprovador?.email) toEmails.push(item.usuarios_aprovador.email);
                     if (item.usuarios_executor?.email) toEmails.push(item.usuarios_executor.email);
@@ -286,7 +349,7 @@ export default async (req, res) => {
         }
         
         
-        if (toEmails.length > 0) {
+        if (toEmails.length > 0 && subject && (htmlBody || textBody)) {
             const uniqueEmails = [...new Set(toEmails.filter(Boolean))]; 
             
             if (uniqueEmails.length > 0) {
@@ -297,6 +360,7 @@ export default async (req, res) => {
                     to: uniqueEmails,
                     subject: subject,
                     html: `<div style="font-family: Arial, sans-serif; line-height: 1.6;">${htmlBody}</div>`,
+                    text: textBody, // AQUI ESTÁ A CORREÇÃO
                 });
                 return res.status(200).json({ message: 'E-mail enviado com sucesso.' });
             }
