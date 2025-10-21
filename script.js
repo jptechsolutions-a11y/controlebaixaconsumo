@@ -1901,7 +1901,7 @@ function renderCgoTable(tbody, cgos) {
     }).join('');
 }
 
-// SUBSTITUA A FUNÇÃO ANTIGA
+// SUBSTITUA A FUNÇÃO 'abrirCgoModal' PELA ESTA:
 async function abrirCgoModal(id = null) {
     const modal = document.getElementById('cgoModal'); 
     const form = document.getElementById('cgoForm'); 
@@ -1966,7 +1966,7 @@ async function abrirCgoModal(id = null) {
     modal.style.display = 'flex';
 }
 
-// SUBSTITUA A FUNÇÃO ANTIGA
+// SUBSTITUA A FUNÇÃO 'handleCgoFormSubmit' PELA ESTA:
 async function handleCgoFormSubmit(event) {
     event.preventDefault(); 
     const alertC = document.getElementById('cgoAlert'); 
@@ -1977,7 +1977,8 @@ async function handleCgoFormSubmit(event) {
     const obs = document.getElementById('cgoObs').value.trim(); 
     const ativo = document.getElementById('cgoAtivo').checked; 
     const linha_id = document.getElementById('cgoLinhaOrcamentaria').value ? parseInt(document.getElementById('cgoLinhaOrcamentaria').value) : null;
-    // NOVO: Pega o valor do Tipo de Baixa
+    
+    // LINHA FALTANTE: Pega o valor do Tipo de Baixa
     const tipo_baixa_id = document.getElementById('cgoTipoBaixaSelect').value ? parseInt(document.getElementById('cgoTipoBaixaSelect').value) : null;
     
     const isEdit = !!id;
@@ -1993,7 +1994,7 @@ async function handleCgoFormSubmit(event) {
         obs: obs || null, 
         ativo, 
         linha_orcamentaria_id: linha_id,
-        tipo_baixa_id: tipo_baixa_id // NOVO: Adiciona ao payload
+        tipo_baixa_id: tipo_baixa_id // CAMPO FALTANTE: Adiciona ao payload
     };
     
     try {
@@ -2015,6 +2016,7 @@ async function handleCgoFormSubmit(event) {
         alertC.innerHTML = `<div class="alert alert-error">Erro: ${msg}</div>`; 
     }
 }
+
 async function toggleCgoStatus(id, newStatus) {
     const action = newStatus ? 'ativar' : 'desativar';
     if (!confirm(`Tem certeza que deseja ${action} o CGO #${id}?`)) {
