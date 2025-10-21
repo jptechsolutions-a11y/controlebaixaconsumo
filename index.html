@@ -925,7 +925,18 @@
         </div>
     </div>
                
-
+<div id="detalhesDespesaModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="flex justify-between items-center mb-4">
+                 <h3 class="text-xl font-semibold">Detalhes da Despesa NF #<span id="detalhesDespesaNfNum"></span></h3>
+                 <button class="btn btn-danger btn-small" onclick="closeModal('detalhesDespesaModal')">Fechar</button>
+            </div>
+            
+            <div id="detalhesDespesaContent" class="space-y-3 text-sm">
+                </div>
+        </div>
+    </div>
+    
     <div id="consultaCgoModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 700px; max-height: 80vh; display: flex; flex-direction: column;">
             <div class="flex justify-between items-center mb-4">
