@@ -8,8 +8,6 @@ let todosCgoCache = []; // NOVO: Cache de TODOS os CGOs (para admin)
 let carrinhoItens = []; // NOVO: Array para o "carrinho" da nova solicitação
 let tiposBaixaCache = []
 let todasTiposBaixaCache = []; // NOVO: Cache de TODOS os tipos (admin)
-let todasTiposBaixaCache = []; // Cache de TODOS os tipos (admin)
-let carrinhoFinanceiro = []; // NOVO: Carrinho para NFs
 let lancamentosCache = []; // NOVO: Cache de despesas externas
 let carrinhoItens = [];
 // --- Inicialização (SUBSTITUIR esta parte dentro do DOMContentLoaded) ---
