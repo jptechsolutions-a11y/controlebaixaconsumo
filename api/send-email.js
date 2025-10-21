@@ -7,7 +7,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM;
 
-// --- NOVO: Configurações de Template ---
+// --- Configurações de Template ---
 const APP_URL = process.env.APP_URL || 'https://seu-app.vercel.app';
 // Certifique-se que o logo 'teste.png' esteja acessível publicamente nesta URL
 const LOGO_URL = `${APP_URL}/teste.png`; 
@@ -15,7 +15,7 @@ const APP_NAME = "Controle de Baixas de Consumo";
 const FOOTER_TEXT = `© ${new Date().getFullYear()} JP Tech Solutions. Todos os direitos reservados.`;
 
 // =================================================================
-// --- NOVO: TEMPLATE HTML/TEXTO PROFISSIONAL ---
+// --- TEMPLATE HTML/TEXTO PROFISSIONAL ---
 // =================================================================
 
 /**
@@ -140,7 +140,7 @@ async function fetchSupabaseRecord(endpoint) {
 }
 
 /**
- * AJUSTADO: Helper para formatar uma lista de itens em HTML e TEXTO
+ * Helper para formatar uma lista de itens em HTML e TEXTO
  * Retorna um objeto com os fragmentos: { htmlList, textList, totalHtml, totalText }
  */
 function formatarListaItens(itens) {
@@ -223,7 +223,8 @@ export default async (req, res) => {
                 
                 // 3. Definir Destinatários (Gestores + Solicitante em cópia)
                 if (gestoresData && gestoresData.length > 0) {
-                    toEmails = gestoresData.map(g => g.usuarios.email).filter(Boolean);
+                    // *** CORREÇÃO APLICADA AQUI ***
+                    toEmails = gestoresData.map(g => g.usuarios?.email).filter(Boolean);
                 }
                 if (solicitante?.email) toEmails.push(solicitante.email);
 
@@ -274,7 +275,8 @@ export default async (req, res) => {
                     // AJUSTE: Notificar a Prevenção
                     const prevencaoData = await fetchSupabaseQuery(`usuario_filiais?filial_id=eq.${filial_id}&select=usuarios(email,role)&usuarios.role=eq.prevencao`);
                     if (prevencaoData && prevencaoData.length > 0) {
-                        toEmails.push(...prevencaoData.map(p => p.usuarios.email).filter(Boolean));
+                        // *** CORREÇÃO APLICADA AQUI ***
+                        toEmails.push(...prevencaoData.map(p => p.usuarios?.email).filter(Boolean));
                     }
                     
                     subject = `Pedido Aprovado (#${id}) - Pronto para Execução`;
