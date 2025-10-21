@@ -119,6 +119,11 @@
                     <span>Gerenciar CGOs</span>
                 </a>
                 
+                <a href="#gerenciarTiposBaixa" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarTiposBaixaView', this)" data-role="admin">
+                    <i data-feather="tag" class="h-5 w-5 mr-3"></i>
+                    <span>Gerenciar Tipos de Baixa</span>
+                </a>
+                
                 <a href="#gerenciarLinhas" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarLinhasView', this)" data-role="admin">
                     <i data-feather="align-left" class="h-5 w-5 mr-3"></i>
                     <span>Linhas Orçamentárias</span>
@@ -145,28 +150,17 @@
                 <div id="novaSolicitacaoView" class="view-content">
                     <h1 class="text-3xl font-bold text-gray-800 mb-6">Nova Solicitação de Baixa</h1>
                     
-                  <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-    <h3 class="text-xl font-semibold mb-4">Passo 1: Intenção da Baixa</h3>
-    <div class="form-group">
-        <label for="cgoPrevistoSelect" class="font-semibold">Selecione o Tipo de Baixa (CGO Previsto):</label>
-        <select id="cgoPrevistoSelect" class="w-full">
-            <option value="">Carregando CGOs...</option>
-        </select>
-        <small class="text-gray-500">Isso definirá o orçamento e validará os itens permitidos.</small>
-    </div>
-    <div id="cgoPrevistoAlert" class="mt-4"></div>
-</div>
-<div class="bg-white p-6 rounded-lg shadow-md mb-6">
-    <h3 class="text-xl font-semibold mb-4">Passo 1: Intenção da Baixa</h3>
-    <div class="form-group">
-        <label for="tipoBaixaSelect" class="font-semibold">Selecione o Tipo de Baixa:</label>
-        <select id="tipoBaixaSelect" class="w-full">
-            <option value="">Carregando tipos de baixa...</option>
-        </select>
-        <small class="text-gray-500">Isso definirá os produtos e CGOs permitidos para esta solicitação.</small>
-    </div>
-    <div id="tipoBaixaAlert" class="mt-4"></div>
-</div>
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <h3 class="text-xl font-semibold mb-4">Passo 1: Intenção da Baixa</h3>
+                        <div class="form-group">
+                            <label for="tipoBaixaSelect" class="font-semibold">Selecione o Tipo de Baixa:</label>
+                            <select id="tipoBaixaSelect" class="w-full">
+                                <option value="">Carregando tipos de baixa...</option>
+                            </select>
+                            <small class="text-gray-500">Isso definirá os produtos e CGOs permitidos para esta solicitação.</small>
+                        </div>
+                        <div id="tipoBaixaAlert" class="mt-4"></div>
+                    </div>
 
                     <div id="solicitacaoPasso2" style="display: none;">
                         <div class="bg-white p-6 rounded-lg shadow-md mb-6">
@@ -234,6 +228,7 @@
                         </div>
                     </div>
                 </div>
+                
                 <div id="minhasSolicitacoesView" class="view-content">
                     <h1 class="text-3xl font-bold text-gray-800 mb-6">Minhas Solicitações</h1>
                     <div class="table-container bg-white rounded-lg shadow-md">
@@ -254,7 +249,6 @@
                         </table>
                     </div>
                 </div>
-
                 <div id="aprovarSolicitacoesView" class="view-content">
                     <h1 class="text-3xl font-bold text-gray-800 mb-6">Aprovar Solicitações Pendentes</h1>
                     <div class="table-container bg-white rounded-lg shadow-md">
@@ -275,7 +269,6 @@
                         </table>
                     </div>
                 </div>
-
                 <div id="executarSolicitacoesView" class="view-content">
                     <h1 class="text-3xl font-bold text-gray-800 mb-6">Executar Baixas Aprovadas</h1>
                     <div class="table-container bg-white rounded-lg shadow-md">
@@ -296,7 +289,6 @@
                         </table>
                     </div>
                 </div>
-
                 <div id="historicoBaixasView" class="view-content">
                     <h1 class="text-3xl font-bold text-gray-800 mb-6">Histórico Geral de Baixas</h1>
                     <div class="table-container bg-white rounded-lg shadow-md">
@@ -345,7 +337,6 @@
                         </table>
                     </div>
                 </div>
-
                 <div id="gerenciarFiliaisView" class="view-content">
                     <div class="flex justify-between items-center mb-6">
                         <h1 class="text-3xl font-bold text-gray-800">Gerenciar Filiais</h1>
@@ -369,7 +360,6 @@
                         </table>
                     </div>
                 </div>
-
                 <div id="gerenciarProdutosView" class="view-content">
                     <div class="flex justify-between items-center mb-6">
                         <h1 class="text-3xl font-bold text-gray-800">Gerenciar Produtos</h1>
@@ -393,8 +383,6 @@
                         </table>
                     </div>
                 </div>
-
-
                 <div id="gerenciarCgoView" class="view-content">
                     <div class="flex justify-between items-center mb-6">
                         <h1 class="text-3xl font-bold text-gray-800">Gerenciar CGOs</h1>
@@ -419,7 +407,31 @@
                         </table>
                     </div>
                 </div>
-
+                
+                <div id="gerenciarTiposBaixaView" class="view-content">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Gerenciar Tipos de Baixa</h1>
+                        <button class="btn btn-success" onclick="abrirTipoBaixaModal(null)">
+                            <i data-feather="plus" class="h-4 w-4 inline-block -mt-1 mr-1"></i>
+                            Novo Tipo de Baixa
+                        </button>
+                    </div>
+                    <div class="table-container bg-white rounded-lg shadow-md">
+                        <table class="w-full">
+                            <thead>
+                                <tr>
+                                    <th>Nome (Ex: QUEBRA)</th>
+                                    <th>Descrição</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tiposBaixaTableBody">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+                
                 <div id="gerenciarLinhasView" class="view-content">
                     <div class="flex justify-between items-center mb-6">
                         <h1 class="text-3xl font-bold text-gray-800">Linhas Orçamentárias</h1>
@@ -443,7 +455,6 @@
                         </table>
                     </div>
                 </div>
-
                 <div id="gerenciarOrcamentosView" class="view-content">
                     <h1 class="text-3xl font-bold text-gray-800 mb-6">Gerenciar Orçamentos</h1>
                     
@@ -515,23 +526,21 @@
                 </div>
         </div>
     </div>
-
     <div id="executarModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 800px; max-height: 90vh; display: flex; flex-direction: column;">
             <h3 class="text-xl font-semibold mb-4">Executar Baixa - Solicitação #<span id="executarId"></span></h3>
             
             <form id="executarForm" class="flex-1 flex flex-col min-h-0">
                 <input type="hidden" id="executarSolicitacaoId">
-<input type="hidden" id="executarTipoBaixaId"> 
+                <input type="hidden" id="executarTipoBaixaId"> 
 
-<p class="mb-3 text-gray-700">
-    <strong>Intenção de Baixa (Tipo):</strong> 
-    <span id="executarIntencaoBaixa" class="font-semibold text-blue-700">Carregando...</span>
-</p>
+                <p class="mb-3 text-gray-700">
+                    <strong>Intenção de Baixa (Tipo):</strong> 
+                    <span id="executarIntencaoBaixa" class="font-semibold text-blue-700">Carregando...</span>
+                </p>
 
-<div class="form-group mb-4 flex-1 overflow-y-auto">
-    <label class="block mb-2 font-semibold">Itens Aprovados para Execução:</label>
-
+                <div class="form-group mb-4 flex-1 overflow-y-auto">
+                    <label class="block mb-2 font-semibold">Itens Aprovados para Execução:</label>
                     <div id="executarItensList" class="space-y-3 pr-2">
                         <div class="loading"><div class="spinner"></div>Carregando itens...</div>
                     </div>
@@ -551,7 +560,6 @@
                             <input type="text" id="justificativaExecucao" required class="w-full">
                         </div>
                     </div>
-
                     <div class="form-group mb-4">
                          <label for="anexosExecucao">Anexos (Opcional):</label>
                          <input type="file" id="anexosExecucao" multiple class="w-full text-sm">
@@ -567,7 +575,6 @@
             </form>
         </div>
     </div>
-
     <div id="retiradaModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 800px; max-height: 90vh; display: flex; flex-direction: column;">
             <h3 class="text-xl font-semibold mb-4">Confirmar Retirada - Pedido #<span id="retiradaPedidoIdDisplay"></span></h3>
@@ -596,7 +603,6 @@
             </form>
         </div>
     </div>
-
 
     <div id="usuarioModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 600px;">
@@ -653,7 +659,6 @@
             </form>
         </div>
     </div>
-
     <div id="filialModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 500px;">
             <h3 class="text-xl font-semibold mb-4" id="filialModalTitle">Nova Filial</h3>
@@ -692,6 +697,13 @@
                 </div>
                 
                 <div class="form-group mb-4">
+                    <label for="cgoTipoBaixaSelect">Tipo de Baixa (Grupo):</label>
+                    <select id="cgoTipoBaixaSelect" class="w-full">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group mb-4">
                     <label for="cgoLinhaOrcamentaria">Linha Orçamentária (para débito):</label>
                     <select id="cgoLinhaOrcamentaria" class="w-full">
                         <option value="">Nenhuma (Não debita do orçamento)</option>
@@ -715,7 +727,7 @@
             </form>
         </div>
     </div>
-
+    
     <div id="produtoModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 600px;">
             <h3 class="text-xl font-semibold mb-4" id="produtoModalTitle">Novo Produto</h3>
@@ -772,7 +784,33 @@
             </form>
         </div>
     </div>
-
+    
+    <div id="tipoBaixaModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3 class="text-xl font-semibold mb-4" id="tipoBaixaModalTitle">Novo Tipo de Baixa</h3>
+            <form id="tipoBaixaForm">
+                <input type="hidden" id="tipoBaixaId">
+                <div class="form-group mb-4">
+                    <label for="tipoBaixaNome">Nome (Ex: QUEBRA, CONSUMO INTERNO):</label>
+                    <input type="text" id="tipoBaixaNome" required class="w-full">
+                </div>
+                <div class="form-group mb-4">
+                    <label for="tipoBaixaDescricao">Descrição (Opcional):</label>
+                    <input type="text" id="tipoBaixaDescricao" class="w-full">
+                </div>
+                <div class="form-group flex items-center pt-2">
+                    <input type="checkbox" id="tipoBaixaAtivo" class="h-5 w-5" checked>
+                    <label for="tipoBaixaAtivo" class="ml-2 font-normal">Tipo Ativo</label>
+                </div>
+                
+                <div id="tipoBaixaAlert" class="mt-4"></div>
+                <div class="flex gap-4 mt-6">
+                    <button type="submit" class="btn btn-success flex-1">Salvar Tipo de Baixa</button>
+                    <button type="button" class="btn btn-danger flex-1" onclick="closeModal('tipoBaixaModal')">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div id="consultaCgoModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 700px; max-height: 80vh; display: flex; flex-direction: column;">
