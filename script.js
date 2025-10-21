@@ -3060,3 +3060,34 @@ async function abrirDetalhesDespesaModal(despesaId) {
         content.innerHTML = `<div class="alert alert-error">Erro ao buscar itens: ${error.message}</div>`;
     }
 }
+
+
+function limparCarrinho() {
+    carrinhoItens = []; // Limpa o array global
+    
+    // Reseta o formulário de adicionar item
+    const addItemForm = document.getElementById('addItemForm');
+    if (addItemForm) {
+        addItemForm.reset();
+        document.getElementById('produtoId').value = '';
+        document.getElementById('produtoDescricao').value = '';
+        document.getElementById('valorTotalSolicitado').value = '';
+        // Limpa classes de erro que podem ter ficado
+        document.getElementById('produtoCodigo').classList.remove('input-error');
+        document.getElementById('produtoDescricao').classList.remove('input-error');
+    }
+    
+    // Limpa os alertas
+    const addItemAlert = document.getElementById('addItemAlert');
+    const novaSolicitacaoAlert = document.getElementById('novaSolicitacaoAlert');
+    if (addItemAlert) addItemAlert.innerHTML = '';
+    if (novaSolicitacaoAlert) novaSolicitacaoAlert.innerHTML = '';
+    
+    // Re-renderiza o carrinho (que agora está vazio)
+    if (typeof renderCarrinho === 'function') {
+        renderCarrinho();
+    } else {
+        console.error("limparCarrinho: A função renderCarrinho() não foi encontrada.");
+    }
+}
+
