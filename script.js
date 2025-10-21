@@ -1281,7 +1281,14 @@ async function getCgoCache(forceRefresh = false) {
     }
     return cgoCache;
 }
-async function getAllCgoCache(forceRefresh = false) { if (typeof todosCgoCache === 'undefined' || todosCgoCache.length === 0 || forceRefresh) { todosCgoCache = await supabaseRequest('cgo?select=id,codigo_cgo,descricao_cgo,obs,ativo,linha_orcamentaria_id&order=codigo_cgo.asc') || []; } return todosCgoCache; }
+// SUBSTITUA A FUNÇÃO ANTIGA (Linha ~782)
+async function getAllCgoCache(forceRefresh = false) { 
+    if (typeof todosCgoCache === 'undefined' || todosCgoCache.length === 0 || forceRefresh) { 
+        // ADICIONADO: tipo_baixa_id no select
+        todosCgoCache = await supabaseRequest('cgo?select=id,codigo_cgo,descricao_cgo,obs,ativo,linha_orcamentaria_id,tipo_baixa_id&order=codigo_cgo.asc') || []; 
+    } 
+    return todosCgoCache; 
+}
 
 // --- Gerenciamento de Usuários (sem alteração) ---
 async function loadGerenciarUsuarios() {
@@ -1901,14 +1908,13 @@ function renderCgoTable(tbody, cgos) {
     }).join('');
 }
 
-// SUBSTITUA A FUNÇÃO 'abrirCgoModal' PELA ESTA:
+// SUBSTITUA A FUNÇÃO ANTIGA (Linha ~1011)
 async function abrirCgoModal(id = null) {
     const modal = document.getElementById('cgoModal'); 
     const form = document.getElementById('cgoForm'); 
     const alertC = document.getElementById('cgoAlert'); 
     const title = document.getElementById('cgoModalTitle'); 
     const linhaSelect = document.getElementById('cgoLinhaOrcamentaria');
-    // NOVO: Select de Tipo de Baixa
     const tipoBaixaSelect = document.getElementById('cgoTipoBaixaSelect');
 
     alertC.innerHTML = ''; 
@@ -1917,7 +1923,6 @@ async function abrirCgoModal(id = null) {
     
     linhaSelect.innerHTML = '<option value="">Carregando...</option>'; 
     linhaSelect.disabled = true;
-    // NOVO: Popula Tipos de Baixa
     tipoBaixaSelect.innerHTML = '<option value="">Carregando...</option>';
     tipoBaixaSelect.disabled = true;
 
@@ -1929,11 +1934,18 @@ async function abrirCgoModal(id = null) {
         if (linhas && linhas.length > 0) { linhas.forEach(l => { linhaSelect.innerHTML += `<option value="${l.id}">${l.codigo} - ${l.descricao}</option>`; }); }
         linhaSelect.disabled = false;
 
-        // NOVO: Carrega Tipos de Baixa (Ativos)
-        if (typeof getTiposBaixaCache !== 'function') throw new Error("FunÇÃO getTiposBaixaCache não definida.");
-        const tipos = await getTiposBaixaCache(true);
+        // MUDANÇA: Carrega TODOS os Tipos de Baixa (ativos e inativos)
+        if (typeof getAllTiposBaixaCache !== 'function') throw new Error("Função getAllTiposBaixaCache não definida.");
+        const tipos = await getAllTiposBaixaCache(true); // <-- MUDANÇA DE getTiposBaixaCache PARA getAllTiposBaixaCache
+        
         tipoBaixaSelect.innerHTML = '<option value="">Nenhum (Tipo Geral)</option>';
-        if (tipos && tipos.length > 0) { tipos.forEach(t => { tipoBaixaSelect.innerHTML += `<option value="${t.id}">${t.nome}</option>`; }); }
+        if (tipos && tipos.length > 0) { 
+            tipos.forEach(t => { 
+                // Adiciona (Inativo) se não estiver ativo
+                const statusLabel = t.ativo ? '' : ' (Inativo)';
+                tipoBaixaSelect.innerHTML += `<option value="${t.id}">${t.nome}${statusLabel}</option>`; 
+            }); 
+        }
         tipoBaixaSelect.disabled = false;
 
     } catch (e) { 
@@ -1945,14 +1957,17 @@ async function abrirCgoModal(id = null) {
         title.textContent = `Editar CGO #${id}`; document.getElementById('cgoCodigo').disabled = true;
         try {
             if (typeof getAllCgoCache !== 'function') throw new Error("Função getAllCgoCache não definida.");
-            const cgos = await getAllCgoCache(); const cgo = cgos.find(c => c.id === id); if (!cgo) throw new Error("CGO não encontrado.");
+            const cgos = await getAllCgoCache(); // Esta chamada agora trará o tipo_baixa_id (Fix 1)
+            const cgo = cgos.find(c => c.id === id); if (!cgo) throw new Error("CGO não encontrado.");
             
             document.getElementById('cgoCodigo').value = cgo.codigo_cgo; 
             document.getElementById('cgoDescricao').value = cgo.descricao_cgo; 
             document.getElementById('cgoObs').value = cgo.obs || ''; 
             document.getElementById('cgoAtivo').checked = cgo.ativo; 
             linhaSelect.value = cgo.linha_orcamentaria_id || '';
-            tipoBaixaSelect.value = cgo.tipo_baixa_id || ''; // NOVO: Seta o valor
+            
+            // Esta linha agora vai funcionar
+            tipoBaixaSelect.value = cgo.tipo_baixa_id || ''; 
             
         } catch(error) { 
             alertC.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`; 
