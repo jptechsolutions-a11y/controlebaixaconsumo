@@ -128,10 +128,17 @@
                     <i data-feather="align-left" class="h-5 w-5 mr-3"></i>
                     <span>Linhas Orçamentárias</span>
                 </a>
-                <a href="#gerenciarOrcamentos" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarOrcamentosView', this)" data-role="admin">
+               <a href="#gerenciarOrcamentos" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarOrcamentosView', this)" data-role="admin">
                     <i data-feather="dollar-sign" class="h-5 w-5 mr-3"></i>
                     <span>Gerenciar Orçamentos</span>
                 </a>
+
+                <a href="#lancamentosFinanceiros" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('lancamentosFinanceirosView', this)" data-role="gestor,admin">
+                    <i data-feather="file-text" class="h-5 w-5 mr-3"></i>
+                    <span>Lançar Despesa (NF)</span>
+                </a>
+
+                <div id="logoutLink" class="p-3 rounded-lg mt-auto flex items-center text-red-400 cursor-pointer hover:bg-gray-700" onclick="logout()">
                 <div id="logoutLink" class="p-3 rounded-lg mt-auto flex items-center text-red-400 cursor-pointer hover:bg-gray-700" onclick="logout()">
                     <i data-feather="log-out" class="h-5 w-5 mr-3"></i>
                     <span>Sair</span>
@@ -506,6 +513,114 @@
                         </table>
                     </div>
                 </div>
+                <div id="lancamentosFinanceirosView" class="view-content">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">Lançar Despesa Externa (NF)</h1>
+
+    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+        <h3 class="text-xl font-semibold mb-4">Passo 1: Dados da Nota Fiscal</h3>
+        <form id="lancamentoNfForm" class="form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+            <div class="form-group">
+                <label for="nfNumero">Número da NF:</label>
+                <input type="text" id="nfNumero" required class="w-full">
+            </div>
+            <div class="form-group">
+                <label for="nfData">Data da NF:</label>
+                <input type="date" id="nfData" required class="w-full">
+            </div>
+            <div class="form-group">
+                <label for="nfAnexo">Anexo da NF (PDF/Imagem):</label>
+                <input type="file" id="nfAnexo" required class="w-full text-sm" accept="image/*,application/pdf">
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+        <h3 class="text-xl font-semibold mb-4">Passo 2: Itens da Nota</h3>
+        <form id="addItemNfForm" class="form-grid" style="grid-template-columns: 2fr 1fr 1fr; align-items: flex-end;">
+            <div class="form-group">
+                <label for="nfItemDescricao">Descrição do Item/Serviço:</label>
+                <input type="text" id="nfItemDescricao" required class="w-full">
+            </div>
+            <div class="form-group">
+                <label for="nfItemQtd">Quantidade:</label>
+                <input type="number" id="nfItemQtd" min="0.01" step="0.01" required class="w-full" value="1">
+            </div>
+            <div class="form-group">
+                <label for="nfItemValorUnit">Valor Unitário (R$):</label>
+                <input type="number" id="nfItemValorUnit" step="0.01" min="0" required class="w-full">
+            </div>
+            <div class="form-group" style="grid-column: 3 / 4; text-align: left;">
+                <button type="submit" class="btn btn-primary w-full">
+                    <i data-feather="plus" class="h-4 w-4 inline-block -mt-1"></i> Adicionar Item
+                </button>
+            </div>
+        </form>
+        <div id="addItemNfAlert" class="mt-4"></div>
+
+        <div class="table-container mt-4">
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th>Descrição</th>
+                        <th>Qtd.</th>
+                        <th>Valor Unit.</th>
+                        <th>Valor Total</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="carrinhoNfItensBody">
+                    <tr><td colspan="5" class="text-center py-4 text-gray-500">Nenhum item adicionado.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-6 text-right">
+            <h3 class="text-2xl font-bold">Valor Total da NF: R$ <span id="carrinhoNfValorTotal">0.00</span></h3>
+        </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+        <h3 class="text-xl font-semibold mb-4">Passo 3: Impacto Orçamentário</h3>
+        <div class="form-group mb-4">
+            <label for="nfLinhaOrcamentariaSelect" class="font-semibold">Selecione a Linha Orçamentária para debitar:</label>
+            <select id="nfLinhaOrcamentariaSelect" class="w-full">
+                <option value="">Carregando linhas...</option>
+            </select>
+        </div>
+        
+        <div id="nfSimulacaoOrcamento" class="p-4 bg-blue-50 border border-blue-200 rounded-lg" style="display: none;">
+            </div>
+
+        <div id="lancamentoNfAlert" class="mt-4"></div>
+        <button id="submitLancamentoNfButton" class="btn btn-success w-full mt-6" disabled>
+            <i data-feather="save" class="h-4 w-4 inline-block -mt-1"></i>
+            Salvar Lançamento de Despesa
+        </button>
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold mb-4">Histórico de Despesas Externas (NF)</h3>
+        <div class="table-container">
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Data Lanç.</th>
+                        <th>Data NF</th>
+                        <th>Nº NF</th>
+                        <th>Linha Orçamentária</th>
+                        <th>Valor Total</th>
+                        <th>Anexo</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="lancamentosNfTableBody">
+                    <tr><td colspan="8" class="loading"><div class="spinner"></div>Carregando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+                
 
 
             </div>
@@ -802,7 +917,16 @@
                     <input type="checkbox" id="tipoBaixaAtivo" class="h-5 w-5" checked>
                     <label for="tipoBaixaAtivo" class="ml-2 font-normal">Tipo Ativo</label>
                 </div>
-                
+                <div id="detalhesDespesaModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="flex justify-between items-center mb-4">
+             <h3 class="text-xl font-semibold">Detalhes da Despesa (NF #<span id="detalhesDespesaNfNum"></span>)</h3>
+             <button class="btn btn-danger btn-small" onclick="closeModal('detalhesDespesaModal')">Fechar</button>
+        </div>
+        <div id="detalhesDespesaContent" class="space-y-3 text-sm">
+            </div>
+    </div>
+</div>
                 <div id="tipoBaixaAlert" class="mt-4"></div>
                 <div class="flex gap-4 mt-6">
                     <button type="submit" class="btn btn-success flex-1">Salvar Tipo de Baixa</button>
