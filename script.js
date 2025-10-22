@@ -3452,14 +3452,13 @@ function restoreGraficosViewStructure(filialId, ano, linhas, comparativoAnualDat
     return;
 }
 
-/**
- * NOVO: Função principal para carregar os dados e renderizar todos os gráficos.
- */
 async function loadGraficosData() {
     const filialSelect = document.getElementById('graficoFilialSelect');
     const anoSelect = document.getElementById('graficoAnoSelect');
     const filialId = filialSelect.value;
     const ano = anoSelect.value;
+    
+    // CORREÇÃO do erro de referência: A variável 'container' será obtida APÓS a restauração.
     const container = document.getElementById('graficosContainer');
     
     if (!filialId || !ano) {
@@ -3473,8 +3472,12 @@ async function loadGraficosData() {
     });
     chartInstances = {};
 
-    // Mostrar estado de carregamento
-    container.innerHTML = '<div class="loading"><div class="spinner"></div>Calculando métricas e gerando gráficos...</div>';
+    // 1. Mostrar estado de carregamento
+    // CORREÇÃO: Usa innerHTML da div 'graficosView' e não do container interno, para evitar perda de referência.
+    document.getElementById('graficosView').innerHTML = `
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Análises e Indicadores</h1>
+        <div class="loading"><div class="spinner"></div>Calculando métricas e gerando gráficos...</div>
+    `;
     
     try {
         const anoAnterior = parseInt(ano) - 1;
@@ -3482,7 +3485,7 @@ async function loadGraficosData() {
         const linhas = fetchedData.linhasAtivas;
         const allLinesData = fetchedData.linesData;
 
-        // --- 1. PREPARAR DADOS PARA O COMPARATIVO ANUAL (GLOBAL) ---
+        // --- 2. PREPARAR DADOS PARA O COMPARATIVO ANUAL (GLOBAL) ---
         let orcadoAnteriorTotal = Array(12).fill(0);
         let orcadoAtualTotal = Array(12).fill(0);
         let realizadoAnteriorTotal = Array(12).fill(0);
@@ -3506,19 +3509,22 @@ async function loadGraficosData() {
             realizadoAtual: realizadoAtualTotal,
         };
 
-        // --- 2. RECRIAR A ESTRUTURA HTML (E FILTROS) ---
+        // --- 3. RECRIAR A ESTRUTURA HTML (E FILTROS) ---
+        // Aqui chamamos a função para recriar o DOM COMPLETO com os dados de resumo
+        // e ele já repopula os filtros!
         restoreGraficosViewStructure(filialId, ano, linhas, comparativoAnualData);
         
-        // --- 3. RENDERIZAR GRÁFICOS ---
+        // --- 4. RENDERIZAR GRÁFICOS ---
         
         // A) COMPARATIVO ANUAL GLOBAL
-        renderChartComparativoAnual('comparativoAnualChart', comparativoAnualData, ano, anoAnterior);
+        // CORREÇÃO DO ERRO 'ano is not defined': Garantindo que 'ano' e 'anoAnterior' sejam passados.
+        // O renderChartComparativoAnual já recebe 'ano' e 'anoAnterior' no escopo
+        renderChartComparativoAnual('comparativoAnualChart', comparativoAnualData, parseInt(ano), anoAnterior);
 
         // B) GRÁFICOS INDIVIDUAIS POR LINHA
         linhas.forEach(linha => {
             const linhaDataAtual = allLinesData[linha.id][ano];
             
-            // Cálculo de Desvio Anual para o subtítulo do gráfico
             const orcadoAnual = linhaDataAtual.orcado.reduce((a, b) => a + b, 0);
             const realizadoAnual = linhaDataAtual.realizado.reduce((a, b) => a + b, 0);
             const desvioPercentual = orcadoAnual > 0 ? ((orcadoAnual - realizadoAnual) / orcadoAnual) * 100 : 0;
@@ -3530,27 +3536,47 @@ async function loadGraficosData() {
                     { label: 'Realizado (Baixas + NF + Manual)', data: linhaDataAtual.realizado }
                 ]
             };
-            // O ID do canvas é dinâmico: `linhaChart-${linha.id}`
             renderChartOrçadoRealizado(`linhaChart-${linha.id}`, dadosGraficoLinha, linha.codigo, linha.descricao, desvioPercentual);
         });
         
         showNotification(`Gráficos individuais e comparativos carregados para o ano de ${ano}.`, 'success', 3000);
         
-        // --- IDEIAS ADICIONAIS: TOP 10 ITENS QUE IMPACTAM O CUSTO (ESQUELETO) ---
-        // Você pode adicionar a lógica para esse gráfico aqui, buscando e consolidando:
-        /*
-        const topItensData = await fetchTopItens(filialId, ano); 
-        renderChartTopItens('topItensImpactoChart', topItensData); 
-        */
+        // --- Implementar Esqueletos para Outros Gráficos (Opcional) ---
+        // A função restoreGraficosViewStructure removeu os containers, então
+        // a renderização deve ser feita após a restauração.
 
     } catch (error) {
         console.error("Erro ao carregar dados dos gráficos:", error);
-        container.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
-        prepararGraficosView(filialId, ano); // Restaura os filtros mesmo em caso de erro
+        
+        // Restaurar a estrutura da view, mesmo em caso de erro.
+        document.getElementById('graficosView').innerHTML = `
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">Análises e Indicadores</h1>
+            <div id="graficosContainer" class="space-y-8">
+                 <div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>
+                 <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                    <h3 class="text-xl font-semibold mb-4">Filtros</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="form-group">
+                            <label for="graficoFilialSelect" class="font-semibold">Filial:</label>
+                            <select id="graficoFilialSelect" class="w-full"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="graficoAnoSelect" class="font-semibold">Ano:</label>
+                            <select id="graficoAnoSelect" class="w-full"></select>
+                        </div>
+                        <div class="form-group pt-6">
+                            <button id="gerarGraficosBtn" class="btn btn-primary w-full">Gerar Gráficos</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Re-popula os filtros e re-adiciona o listener de click (importante!)
+        prepararGraficosView(filialId, ano); 
         document.getElementById('gerarGraficosBtn').addEventListener('click', loadGraficosData);
     }
 }
-
 /**
  * NOVO: Prepara os filtros para a view de gráficos.
  */
@@ -3580,13 +3606,33 @@ async function prepararGraficosView(selectedFilialId = null, selectedAno = null)
 }
 
 
-// NOVO: Função para buscar os Top Itens (Esqueleto)
-/*
-async function fetchTopItens(filialId, ano) {
-    // Implemente a lógica aqui:
-    // 1. Buscar todos os solicitacao_itens finalizados/executados da filial/ano.
-    // 2. Juntar por produto_id, somando valor_total_executado e quantidade_executada.
-    // 3. Ordenar e retornar o TOP 10.
-    return []; 
+async function prepararLancamentoManualRealizadoView() {
+    const filialSelect = document.getElementById('manualFilialSelect');
+    const anoSelect = document.getElementById('manualAnoSelect');
+    const linhaSelect = document.getElementById('manualLinhaSelect');
+    
+    document.getElementById('lancamentoManualFormContainer').style.display = 'none';
+
+    // 1. Popula Filiais
+    filialSelect.innerHTML = '<option value="">Carregando...</option>';
+    try {
+        // CORREÇÃO: Garante que a filial selecionada está ativa
+        const filiais = await getFiliaisCache(true);
+        filialSelect.innerHTML = '<option value="">-- Selecione a Filial --</option>' + filiais.map(f => `<option value="${f.id}" ${f.id === selectedFilial.id ? 'selected' : ''}>${f.nome} - ${f.descricao}</option>`).join('');
+    } catch (e) { filialSelect.innerHTML = '<option value="">Erro ao carregar</option>'; }
+
+    // 2. Popula Linhas Orçamentárias (TODAS)
+    linhaSelect.innerHTML = '<option value="">Carregando...</option>';
+    try {
+        const linhas = await getAllLinhasOrcamentariasCache(true);
+        linhaSelect.innerHTML = '<option value="">-- Selecione a Linha --</option>' + linhas.map(l => `<option value="${l.id}">${l.codigo} - ${l.descricao} ${l.ativo ? '' : '(Inativa)'}</option>`).join('');
+    } catch (e) { linhaSelect.innerHTML = '<option value="">Erro ao carregar</option>'; }
+    
+    // 3. Popula Anos (Anos anteriores)
+    const anoAtual = new Date().getFullYear();
+    anoSelect.innerHTML = '';
+    for (let i = anoAtual - 5; i <= anoAtual; i++) {
+        anoSelect.innerHTML += `<option value="${i}" ${i === anoAtual ? 'selected' : ''}>${i}</option>`;
+    }
+    
 }
-*/
