@@ -1302,3 +1302,34 @@ input[type="file"]::file-selector-button:hover {
     border-color: red !important;
     background-color: #fee2e2 !important; /* Cor de fundo vermelha clara */
 }
+
+/* ... (todo o código CSS existente) ... */
+
+/* Adicionar ao final do style.css */
+.input-error {
+    border-color: red !important;
+    background-color: #fee2e2 !important; /* Cor de fundo vermelha clara */
+}
+
+/* NOVO: Estilos para o gráfico */
+.relative[style*="height"] canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Estilo para a Projeção (opcional) */
+#desvioOrcamentarioLinhas {
+    font-size: 0.9rem;
+    color: #374151;
+}
+
+/* Base para a nova tela de administração */
+#lancamentoManualFormContainer .form-group input,
+#lancamentoManualFormContainer .form-group select {
+    text-align: right; /* Alinha o texto do input de valor à direita */
+}
+
+/* Garante que o input file não tenha alinhamento forçado */
+input[type="file"] {
+    text-align: left; 
+}
