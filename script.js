@@ -3161,7 +3161,6 @@ async function loadGraficosData() {
     const filialId = document.getElementById('graficoFilialSelect').value;
     const ano = document.getElementById('graficoAnoSelect').value;
     const container = document.getElementById('graficosContainer');
-    const desvioDiv = document.getElementById('desvioOrcamentarioLinhas');
     
     if (!filialId || !ano) {
          showNotification('Selecione a Filial e o Ano para gerar os gráficos.', 'error');
@@ -3174,38 +3173,17 @@ async function loadGraficosData() {
     });
     chartInstances = {};
 
+    // 1. Mostrar estado de carregamento
     container.innerHTML = '<div class="loading"><div class="spinner"></div>Calculando métricas e gerando gráficos...</div>';
     
     try {
-        // --- ETAPA 1: Busca e Processa Dados ---
+        // --- ETAPA 2: Busca e Processa Dados ---
         const dadosMensais = await fetchOrcadoRealizadoMensal(filialId, ano);
 
-        // --- ETAPA 2: Preparação dos Dados para o Gráfico de Linhas Orçamentárias ---
+        // --- ETAPA 3: Agregação dos Dados para o Gráfico Principal (TOTAL) ---
         let labels = meses;
         let orcadoData = [];
         let realizadoData = [];
-        let desvioTotal = 0;
-        let linhasProcessadas = 0;
-        
-        // Loop por linha e soma os valores anuais (para o desvio total)
-        for (const id in dadosMensais) {
-            const linha = dadosMensais[id];
-            linhasProcessadas++;
-            
-            // Soma todos os orçados e realizados anuais para o desvio percentual total
-            const orcadoAnual = linha.orcado.reduce((a, b) => a + b, 0);
-            const realizadoAnual = linha.realizado.reduce((a, b) => a + b, 0);
-            
-            // Se houver mais de uma linha, não faz sentido somar os desvios, mas sim os totais
-            const desvioValorAnual = orcadoAnual - realizadoAnual;
-            desvioTotal += desvioValorAnual; 
-            
-            // Por enquanto, vamos manter o foco na visualização de todas as linhas juntas (se for poucas)
-            // Para muitas linhas, o ideal seria um gráfico por linha ou um filtro adicional.
-        }
-        
-        // Para a demonstração, vamos renderizar o Orçado/Realizado do **TOTAL** das linhas ativas
-        // Se você tiver muitas linhas, considere adicionar um filtro "Linha Específica" no HTML.
         
         // Simplesmente some os valores mensais de todas as linhas
         for (let i = 0; i < 12; i++) {
@@ -3219,12 +3197,16 @@ async function loadGraficosData() {
             realizadoData.push(totalRealizadoMes);
         }
         
-        // Calcula o Desvio % Anual Total (do total orçado e total realizado de todas as linhas)
+        // Cálculo do Desvio Geral para o texto de resumo
         const totalOrcadoGeral = orcadoData.reduce((a, b) => a + b, 0);
         const totalRealizadoGeral = realizadoData.reduce((a, b) => a + b, 0);
         const desvioPercentualGeral = totalOrcadoGeral > 0 ? ((totalOrcadoGeral - totalRealizadoGeral) / totalOrcadoGeral) * 100 : 0;
         
-        // --- ETAPA 3: Renderiza o Gráfico Orçado vs Realizado ---
+        // --- ETAPA 4: Restaurar a Estrutura HTML ---
+        // Aqui chamamos a função para recriar o DOM COMPLETO com os dados de resumo
+        restoreGraficosViewStructure(filialId, ano, dadosMensais, desvioPercentualGeral, totalOrcadoGeral, totalRealizadoGeral);
+        
+        // --- ETAPA 5: Renderiza o Gráfico Orçado vs Realizado (Total) ---
         
         const dadosGraficoLinhas = {
             labels: labels,
@@ -3232,7 +3214,7 @@ async function loadGraficosData() {
                 {
                     label: 'Orçado',
                     data: orcadoData,
-                    backgroundColor: 'rgba(0, 119, 182, 0.7)', // Cor Azul (Accent)
+                    backgroundColor: 'rgba(0, 119, 182, 0.7)',
                     borderColor: 'rgba(0, 119, 182, 1)',
                     borderWidth: 1,
                     type: 'bar'
@@ -3240,7 +3222,7 @@ async function loadGraficosData() {
                 {
                     label: 'Realizado (Baixas + NF + Manual)',
                     data: realizadoData,
-                    backgroundColor: 'rgba(0, 212, 170, 0.7)', // Cor Verde (Primary)
+                    backgroundColor: 'rgba(0, 212, 170, 0.7)',
                     borderColor: 'rgba(0, 212, 170, 1)',
                     borderWidth: 1,
                     type: 'bar'
@@ -3248,26 +3230,13 @@ async function loadGraficosData() {
             ]
         };
         
-        // Remove o texto de loading e restaura a estrutura
-        container.innerHTML = document.getElementById('graficosView').innerHTML;
-        
-        // Renderiza o gráfico
+        // Agora o Canvas existe no DOM, então a renderização não falhará
         renderChartLinhas('orcamentoRealizadoLinhasChart', dadosGraficoLinhas);
 
-        // Atualiza o Desvio Geral
-        desvioDiv.innerHTML = `
-            <p class="${desvioPercentualGeral > 0 ? 'text-green-600' : 'text-red-600'} font-bold">
-                Desvio Orçamentário Anual (Total das Linhas Ativas): 
-                ${desvioPercentualGeral.toFixed(2)}% 
-                (${desvioPercentualGeral > 0 ? 'SAVING' : 'DESVIO'})
-            </p>
-            <p class="text-sm text-gray-700">Orçado Total: R$ ${totalOrcadoGeral.toFixed(2)} | Realizado Total: R$ ${totalRealizadoGeral.toFixed(2)}</p>
-            <p class="text-sm text-gray-700">Para ver os dados detalhados por linha, implemente a lógica na função <code>loadGraficosData</code>.</p>
-        `;
+        // Mensagem de sucesso 
+        showNotification(`Gráficos carregados para a Filial ${filialId} no ano de ${ano}.`, 'success', 3000);
         
-        // Mensagem de sucesso (mantida como feedback)
-        showNotification(`Gráficos carregados para o ano de ${ano}.`, 'success', 3000);
-        
+        // [CONTINUE DAQUI] Implementar os demais gráficos!
 
     } catch (error) {
         console.error("Erro ao carregar dados dos gráficos:", error);
@@ -3426,7 +3395,14 @@ async function handleLancamentoManualRealizadoSubmit(event) {
 }
 
 function renderChartLinhas(canvasId, data) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    // CORREÇÃO: Garante que o elemento existe antes de tentar obter o contexto
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        console.error(`Canvas com ID ${canvasId} não encontrado no DOM.`);
+        return null;
+    }
+    
+    const ctx = canvas.getContext('2d');
     
     // Destrói a instância anterior se ela existir
     if (chartInstances[canvasId]) {
@@ -3480,7 +3456,6 @@ function renderChartLinhas(canvasId, data) {
 }
 
 
-// NOVO: Função auxiliar para consolidar os dados Orçado vs Realizado por Linha/Mês
 async function fetchOrcadoRealizadoMensal(filialId, ano) {
     const todasLinhas = await getAllLinhasOrcamentariasCache(false);
     const linhasAtivas = todasLinhas.filter(l => l.ativo);
@@ -3488,11 +3463,19 @@ async function fetchOrcadoRealizadoMensal(filialId, ano) {
     let dadosConsolidados = {}; // { linhaId: { codigo, descricao, orcado: [12 valores], realizado: [12 valores], desvio: [12 valores] } }
 
     for (const linha of linhasAtivas) {
+        // CORREÇÃO: Garante que o retorno do Realizado é um número antes de somar
+        const realizedData = await Promise.all(
+            meses.map(async (_, mesIndex) => {
+                const mes = mesIndex + 1;
+                return calcularRealizadoLinha(linha.id, filialId, parseInt(ano), mes);
+            })
+        );
+
         dadosConsolidados[linha.id] = {
             codigo: linha.codigo,
             descricao: linha.descricao,
             orcado: [],
-            realizado: [],
+            realizado: realizedData, // Já é um array de 12 valores numéricos
             desvio: [],
         };
         
@@ -3503,18 +3486,101 @@ async function fetchOrcadoRealizadoMensal(filialId, ano) {
             );
             const orcadoMes = (orcamento && orcamento[0]) ? parseFloat(orcamento[0][`mes_${mes}`]) || 0 : 0;
             
-            // 2. Calcular Realizado (Usando a função já atualizada)
-            const realizadoMes = await calcularRealizadoLinha(linha.id, filialId, parseInt(ano), mes);
+            // 2. O Realizado já foi buscado e está em realizedData[mes-1]
+            const realizadoMes = realizedData[mes - 1];
             
             // 3. Calcular Desvio e Salvar
             const desvioValor = orcadoMes - realizadoMes;
             const desvioPercentual = orcadoMes > 0 ? (desvioValor / orcadoMes) * 100 : 0;
             
             dadosConsolidados[linha.id].orcado.push(orcadoMes);
-            dadosConsolidados[linha.id].realizado.push(realizadoMes);
             dadosConsolidados[linha.id].desvio.push(desvioPercentual.toFixed(2));
         }
     }
     
     return dadosConsolidados;
+}
+
+function restoreGraficosViewStructure(filialId, ano, dadosMensais, desvioPercentualGeral, totalOrcadoGeral, totalRealizadoGeral) {
+    const view = document.getElementById('graficosView');
+    // Para simplificar, vou recriar a estrutura de forma dinâmica para evitar o bug de innerHTML
+    
+    view.innerHTML = `
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Análises e Indicadores</h1>
+        <div id="graficosContainer" class="space-y-8">
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold mb-4">Filtros</h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="form-group">
+                        <label for="graficoFilialSelect" class="font-semibold">Filial:</label>
+                        <select id="graficoFilialSelect" class="w-full"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="graficoAnoSelect" class="font-semibold">Ano:</label>
+                        <select id="graficoAnoSelect" class="w-full"></select>
+                    </div>
+                    <div class="form-group pt-6">
+                        <button id="gerarGraficosBtn" class="btn btn-primary w-full">Gerar Gráficos</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold mb-4">Orçado vs Realizado (Linhas Orçamentárias)</h3>
+                    <p class="text-sm text-gray-500 mb-2">Comparativo Orçado vs Realizado por Linha (Mês a Mês). Use o Desvio % para Savings.</p>
+                    <div class="relative h-96">
+                        <canvas id="orcamentoRealizadoLinhasChart"></canvas>
+                    </div>
+                    <div id="desvioOrcamentarioLinhas" class="mt-4">
+                        <p class="${desvioPercentualGeral > 0 ? 'text-green-600' : 'text-red-600'} font-bold">
+                            Desvio Orçamentário Anual (Total das Linhas Ativas): 
+                            ${desvioPercentualGeral.toFixed(2)}% 
+                            (${desvioPercentualGeral > 0 ? 'SAVING' : 'DESVIO'})
+                        </p>
+                        <p class="text-sm text-gray-700">Orçado Total: R$ ${totalOrcadoGeral.toFixed(2)} | Realizado Total: R$ ${totalRealizadoGeral.toFixed(2)}</p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold mb-4">Orçado vs Realizado (CGOs Mais Usados)</h3>
+                    <p class="text-sm text-gray-500 mb-2">Comparativo Orçado vs Realizado por CGO (Mês Atual).</p>
+                    <div class="relative h-96">
+                        <canvas id="orcamentoRealizadoCGOsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold mb-4">Top 10 Itens que Mais Impactam o Custo</h3>
+                <p class="text-sm text-gray-500 mb-2">Itens classificados por Valor e Quantidade total de baixas.</p>
+                <div class="relative h-96">
+                    <canvas id="topItensImpactoChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold mb-4">Projeção de Gastos (Mês Atual)</h3>
+                    <p class="text-sm text-gray-500 mb-2">Valor Realizado até hoje vs Projeção de Fechamento (Linhas).</p>
+                    <div class="relative h-96">
+                        <canvas id="projecaoGastosMensalChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold mb-4">Comparativo Anual (Realizado)</h3>
+                    <p class="text-sm text-gray-500 mb-2">Visualização do Realizado nos últimos anos (Crescimento/Redução).</p>
+                    <div class="relative h-96">
+                        <canvas id="comparativoAnualChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Rebind the filters and button
+    prepararGraficosView(); // Isso popula os dropdowns novamente
+    document.getElementById('gerarGraficosBtn').addEventListener('click', loadGraficosData);
+    
+    // O retorno da função não será mais usado, pois o DOM já foi recriado
+    return;
 }
