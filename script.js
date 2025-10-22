@@ -3157,14 +3157,11 @@ async function prepararGraficosView() {
     }
 }
 
-/**
- * NOVO: Função principal para carregar os dados e renderizar todos os gráficos.
- * Implementação do esqueleto de coleta de dados e renderização.
- */
 async function loadGraficosData() {
     const filialId = document.getElementById('graficoFilialSelect').value;
     const ano = document.getElementById('graficoAnoSelect').value;
     const container = document.getElementById('graficosContainer');
+    const desvioDiv = document.getElementById('desvioOrcamentarioLinhas');
     
     if (!filialId || !ano) {
          showNotification('Selecione a Filial e o Ano para gerar os gráficos.', 'error');
@@ -3180,39 +3177,104 @@ async function loadGraficosData() {
     container.innerHTML = '<div class="loading"><div class="spinner"></div>Calculando métricas e gerando gráficos...</div>';
     
     try {
-        // --- ETAPA 1: Busca e Processa Dados (Esqueleto) ---
-        // Aqui você faria as chamadas para APIs de métricas e processaria os dados.
-        // Ex: const dadosLinhas = await fetchOrcadoRealizadoMensal(filialId, ano);
+        // --- ETAPA 1: Busca e Processa Dados ---
+        const dadosMensais = await fetchOrcadoRealizadoMensal(filialId, ano);
+
+        // --- ETAPA 2: Preparação dos Dados para o Gráfico de Linhas Orçamentárias ---
+        let labels = meses;
+        let orcadoData = [];
+        let realizadoData = [];
+        let desvioTotal = 0;
+        let linhasProcessadas = 0;
         
-        // --- ETAPA 2: Renderiza Gráficos (Esqueleto) ---
-        // É necessário que as funções de renderização (ex: renderChartLinhas) e os dados estejam prontos.
-        // Como o Chart.js é uma biblioteca externa, apenas o placeholder será inserido.
+        // Loop por linha e soma os valores anuais (para o desvio total)
+        for (const id in dadosMensais) {
+            const linha = dadosMensais[id];
+            linhasProcessadas++;
+            
+            // Soma todos os orçados e realizados anuais para o desvio percentual total
+            const orcadoAnual = linha.orcado.reduce((a, b) => a + b, 0);
+            const realizadoAnual = linha.realizado.reduce((a, b) => a + b, 0);
+            
+            // Se houver mais de uma linha, não faz sentido somar os desvios, mas sim os totais
+            const desvioValorAnual = orcadoAnual - realizadoAnual;
+            desvioTotal += desvioValorAnual; 
+            
+            // Por enquanto, vamos manter o foco na visualização de todas as linhas juntas (se for poucas)
+            // Para muitas linhas, o ideal seria um gráfico por linha ou um filtro adicional.
+        }
         
-        // Exemplo:
-        // const dadosLinhasExemplo = { labels: meses, datasets: [...] };
-        // chartInstances.linhas = renderChartLinhas(document.getElementById('orcamentoRealizadoLinhasChart'), dadosLinhasExemplo);
+        // Para a demonstração, vamos renderizar o Orçado/Realizado do **TOTAL** das linhas ativas
+        // Se você tiver muitas linhas, considere adicionar um filtro "Linha Específica" no HTML.
         
-        // Coloca o conteúdo original da view de volta após o carregamento
-        container.innerHTML = `
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <h3 class="text-xl font-semibold mb-4">Filtros</h3>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    </div>
-            </div>
-            <div class="alert alert-success">Gráficos gerados com sucesso para a Filial ${filialId} no ano de ${ano}. (A lógica de renderização e cálculo deve ser implementada aqui).</div>
+        // Simplesmente some os valores mensais de todas as linhas
+        for (let i = 0; i < 12; i++) {
+            let totalOrcadoMes = 0;
+            let totalRealizadoMes = 0;
+            for (const id in dadosMensais) {
+                totalOrcadoMes += dadosMensais[id].orcado[i];
+                totalRealizadoMes += dadosMensais[id].realizado[i];
+            }
+            orcadoData.push(totalOrcadoMes);
+            realizadoData.push(totalRealizadoMes);
+        }
+        
+        // Calcula o Desvio % Anual Total (do total orçado e total realizado de todas as linhas)
+        const totalOrcadoGeral = orcadoData.reduce((a, b) => a + b, 0);
+        const totalRealizadoGeral = realizadoData.reduce((a, b) => a + b, 0);
+        const desvioPercentualGeral = totalOrcadoGeral > 0 ? ((totalOrcadoGeral - totalRealizadoGeral) / totalOrcadoGeral) * 100 : 0;
+        
+        // --- ETAPA 3: Renderiza o Gráfico Orçado vs Realizado ---
+        
+        const dadosGraficoLinhas = {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Orçado',
+                    data: orcadoData,
+                    backgroundColor: 'rgba(0, 119, 182, 0.7)', // Cor Azul (Accent)
+                    borderColor: 'rgba(0, 119, 182, 1)',
+                    borderWidth: 1,
+                    type: 'bar'
+                },
+                {
+                    label: 'Realizado (Baixas + NF + Manual)',
+                    data: realizadoData,
+                    backgroundColor: 'rgba(0, 212, 170, 0.7)', // Cor Verde (Primary)
+                    borderColor: 'rgba(0, 212, 170, 1)',
+                    borderWidth: 1,
+                    type: 'bar'
+                }
+            ]
+        };
+        
+        // Remove o texto de loading e restaura a estrutura
+        container.innerHTML = document.getElementById('graficosView').innerHTML;
+        
+        // Renderiza o gráfico
+        renderChartLinhas('orcamentoRealizadoLinhasChart', dadosGraficoLinhas);
+
+        // Atualiza o Desvio Geral
+        desvioDiv.innerHTML = `
+            <p class="${desvioPercentualGeral > 0 ? 'text-green-600' : 'text-red-600'} font-bold">
+                Desvio Orçamentário Anual (Total das Linhas Ativas): 
+                ${desvioPercentualGeral.toFixed(2)}% 
+                (${desvioPercentualGeral > 0 ? 'SAVING' : 'DESVIO'})
+            </p>
+            <p class="text-sm text-gray-700">Orçado Total: R$ ${totalOrcadoGeral.toFixed(2)} | Realizado Total: R$ ${totalRealizadoGeral.toFixed(2)}</p>
+            <p class="text-sm text-gray-700">Para ver os dados detalhados por linha, implemente a lógica na função <code>loadGraficosData</code>.</p>
         `;
         
-        showNotification('Gráficos carregados. Implemente as funções de renderização de gráficos.', 'success', 4000);
+        // Mensagem de sucesso (mantida como feedback)
+        showNotification(`Gráficos carregados para o ano de ${ano}.`, 'success', 3000);
         
+
     } catch (error) {
         console.error("Erro ao carregar dados dos gráficos:", error);
         container.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
     }
 }
 
-/**
- * NOVO: Prepara os filtros e o formulário para a view de lançamento manual.
- */
 async function prepararLancamentoManualRealizadoView() {
     const filialSelect = document.getElementById('manualFilialSelect');
     const anoSelect = document.getElementById('manualAnoSelect');
@@ -3361,4 +3423,98 @@ async function handleLancamentoManualRealizadoSubmit(event) {
         console.error("Erro ao salvar realizado manual:", error);
         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
     }
+}
+
+function renderChartLinhas(canvasId, data) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    
+    // Destrói a instância anterior se ela existir
+    if (chartInstances[canvasId]) {
+        chartInstances[canvasId].destroy();
+    }
+    
+    chartInstances[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.labels, // Meses
+            datasets: data.datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    stacked: false,
+                    title: { display: true, text: 'Mês' }
+                },
+                y: {
+                    stacked: false,
+                    beginAtZero: true,
+                    title: { display: true, text: 'Valor (R$)' },
+                    ticks: {
+                        callback: function(value) {
+                            return 'R$ ' + value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: { position: 'top' },
+                title: { display: false },
+                tooltip: {
+                     callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) { label += ': '; }
+                            if (context.parsed.y !== null) {
+                                label += 'R$ ' + context.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    return chartInstances[canvasId];
+}
+
+
+// NOVO: Função auxiliar para consolidar os dados Orçado vs Realizado por Linha/Mês
+async function fetchOrcadoRealizadoMensal(filialId, ano) {
+    const todasLinhas = await getAllLinhasOrcamentariasCache(false);
+    const linhasAtivas = todasLinhas.filter(l => l.ativo);
+    
+    let dadosConsolidados = {}; // { linhaId: { codigo, descricao, orcado: [12 valores], realizado: [12 valores], desvio: [12 valores] } }
+
+    for (const linha of linhasAtivas) {
+        dadosConsolidados[linha.id] = {
+            codigo: linha.codigo,
+            descricao: linha.descricao,
+            orcado: [],
+            realizado: [],
+            desvio: [],
+        };
+        
+        for (let mes = 1; mes <= 12; mes++) {
+            // 1. Buscar Orçado
+            const orcamento = await supabaseRequest(
+                `orcamentos_mensais?filial_id=eq.${filialId}&linha_id=eq.${linha.id}&ano=eq.${ano}&select=mes_${mes}`
+            );
+            const orcadoMes = (orcamento && orcamento[0]) ? parseFloat(orcamento[0][`mes_${mes}`]) || 0 : 0;
+            
+            // 2. Calcular Realizado (Usando a função já atualizada)
+            const realizadoMes = await calcularRealizadoLinha(linha.id, filialId, parseInt(ano), mes);
+            
+            // 3. Calcular Desvio e Salvar
+            const desvioValor = orcadoMes - realizadoMes;
+            const desvioPercentual = orcadoMes > 0 ? (desvioValor / orcadoMes) * 100 : 0;
+            
+            dadosConsolidados[linha.id].orcado.push(orcadoMes);
+            dadosConsolidados[linha.id].realizado.push(realizadoMes);
+            dadosConsolidados[linha.id].desvio.push(desvioPercentual.toFixed(2));
+        }
+    }
+    
+    return dadosConsolidados;
 }
