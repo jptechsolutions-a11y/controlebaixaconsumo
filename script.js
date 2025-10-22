@@ -10,12 +10,13 @@ let tiposBaixaCache = []
 let todasTiposBaixaCache = []; // NOVO: Cache de TODOS os tipos (admin)
 let lancamentosCache = []; // NOVO: Cache de despesas externas
 let carrinhoFinanceiro = [];
-// NOVO:
 let meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-let orcamentosCache = {}; // Cache para orçamentos (já existia a variável)
+let orcamentosCache = {}; // Cache para orçamentos
 let realizadoManualCache = []; 
-// NOVO: Cache para as instâncias dos gráficos
-let chartInstances = {};
+let linhasOrcamentariasCache = []; 
+let todasLinhasOrcamentariasCache = [];
+let chartInstances = {}; // Cache para as instâncias dos gráficos
+
 // --- Inicialização (SUBSTITUIR esta parte dentro do DOMContentLoaded) ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
@@ -2580,7 +2581,7 @@ async function mostrarSimulacaoOrcamento(tipoBaixaId, filialId, itensSolicitados
             const orcamento = await supabaseRequest(
                 `orcamentos_mensais?filial_id=eq.${filialId}&linha_id=eq.${linhaId}&ano=eq.${anoAtual}&select=mes_${mesAtual}`
             );
-            const orcadoMes = (orcamento && orcamento[0]) ? orcamento[0][`mes_${mesAtual}`] : 0;
+            const orcadoMes = (orcamento && orcamento[0]) ? parseFloat(orcamento[0][`mes_${mesAtual}`]) || 0 : 0;
 
             // Calcula o Realizado
             const realizadoMes = await calcularRealizadoLinha(linhaId, filialId, anoAtual, mesAtual);
@@ -2929,7 +2930,7 @@ async function simularImpactoOrcamentoNF() {
         const orcamento = await supabaseRequest(
             `orcamentos_mensais?filial_id=eq.${selectedFilial.id}&linha_id=eq.${linhaId}&ano=eq.${anoAtual}&select=mes_${mesAtual}`
         );
-        const orcadoMes = (orcamento && orcamento[0]) ? orcamento[0][`mes_${mesAtual}`] : 0;
+        const orcadoMes = (orcamento && orcamento[0]) ? parseFloat(orcamento[0][`mes_${mesAtual}`]) || 0 : 0;
 
         // 2. Calcula Realizado (agora com a função atualizada)
         const realizadoMes = await calcularRealizadoLinha(linhaId, selectedFilial.id, anoAtual, mesAtual);
@@ -3135,267 +3136,8 @@ function limparCarrinho() {
 // === NOVAS FUNÇÕES: GRÁFICOS E LANÇAMENTO MANUAL ===
 // =======================================================
 
-/**
- * NOVO: Prepara os filtros para a view de gráficos.
- */
-async function prepararGraficosView() {
-    const filialSelect = document.getElementById('graficoFilialSelect');
-    const anoSelect = document.getElementById('graficoAnoSelect');
-    
-    // Popula filiais (usa o cache já existente)
-    filialSelect.innerHTML = '<option value="">Carregando filiais...</option>';
-    try {
-        const filiais = await getFiliaisCache(true);
-        filialSelect.innerHTML = filiais.map(f => `<option value="${f.id}" ${f.id === selectedFilial.id ? 'selected' : ''}>${f.nome} - ${f.descricao}</option>`).join('');
-    } catch (e) { filialSelect.innerHTML = '<option value="">Erro ao carregar</option>'; }
-
-    // Popula anos
-    const anoAtual = new Date().getFullYear();
-    anoSelect.innerHTML = '';
-    for (let i = anoAtual - 2; i <= anoAtual + 1; i++) {
-        anoSelect.innerHTML += `<option value="${i}" ${i === anoAtual ? 'selected' : ''}>${i}</option>`;
-    }
-}
-
-async function loadGraficosData() {
-    const filialId = document.getElementById('graficoFilialSelect').value;
-    const ano = document.getElementById('graficoAnoSelect').value;
-    const container = document.getElementById('graficosContainer');
-    
-    if (!filialId || !ano) {
-         showNotification('Selecione a Filial e o Ano para gerar os gráficos.', 'error');
-         return;
-    }
-    
-    // Destrói instâncias de gráficos antigas (boa prática)
-    Object.values(chartInstances).forEach(chart => {
-        if (chart && typeof chart.destroy === 'function') chart.destroy();
-    });
-    chartInstances = {};
-
-    // 1. Mostrar estado de carregamento
-    container.innerHTML = '<div class="loading"><div class="spinner"></div>Calculando métricas e gerando gráficos...</div>';
-    
-    try {
-        // --- ETAPA 2: Busca e Processa Dados ---
-        const dadosMensais = await fetchOrcadoRealizadoMensal(filialId, ano);
-
-        // --- ETAPA 3: Agregação dos Dados para o Gráfico Principal (TOTAL) ---
-        let labels = meses;
-        let orcadoData = [];
-        let realizadoData = [];
-        
-        // Simplesmente some os valores mensais de todas as linhas
-        for (let i = 0; i < 12; i++) {
-            let totalOrcadoMes = 0;
-            let totalRealizadoMes = 0;
-            for (const id in dadosMensais) {
-                totalOrcadoMes += dadosMensais[id].orcado[i];
-                totalRealizadoMes += dadosMensais[id].realizado[i];
-            }
-            orcadoData.push(totalOrcadoMes);
-            realizadoData.push(totalRealizadoMes);
-        }
-        
-        // Cálculo do Desvio Geral para o texto de resumo
-        const totalOrcadoGeral = orcadoData.reduce((a, b) => a + b, 0);
-        const totalRealizadoGeral = realizadoData.reduce((a, b) => a + b, 0);
-        const desvioPercentualGeral = totalOrcadoGeral > 0 ? ((totalOrcadoGeral - totalRealizadoGeral) / totalOrcadoGeral) * 100 : 0;
-        
-        // --- ETAPA 4: Restaurar a Estrutura HTML ---
-        // Aqui chamamos a função para recriar o DOM COMPLETO com os dados de resumo
-        restoreGraficosViewStructure(filialId, ano, dadosMensais, desvioPercentualGeral, totalOrcadoGeral, totalRealizadoGeral);
-        
-        // --- ETAPA 5: Renderiza o Gráfico Orçado vs Realizado (Total) ---
-        
-        const dadosGraficoLinhas = {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Orçado',
-                    data: orcadoData,
-                    backgroundColor: 'rgba(0, 119, 182, 0.7)',
-                    borderColor: 'rgba(0, 119, 182, 1)',
-                    borderWidth: 1,
-                    type: 'bar'
-                },
-                {
-                    label: 'Realizado (Baixas + NF + Manual)',
-                    data: realizadoData,
-                    backgroundColor: 'rgba(0, 212, 170, 0.7)',
-                    borderColor: 'rgba(0, 212, 170, 1)',
-                    borderWidth: 1,
-                    type: 'bar'
-                }
-            ]
-        };
-        
-        // Agora o Canvas existe no DOM, então a renderização não falhará
-        renderChartLinhas('orcamentoRealizadoLinhasChart', dadosGraficoLinhas);
-
-        // Mensagem de sucesso 
-        showNotification(`Gráficos carregados para a Filial ${filialId} no ano de ${ano}.`, 'success', 3000);
-        
-        // [CONTINUE DAQUI] Implementar os demais gráficos!
-
-    } catch (error) {
-        console.error("Erro ao carregar dados dos gráficos:", error);
-        container.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
-    }
-}
-
-async function prepararLancamentoManualRealizadoView() {
-    const filialSelect = document.getElementById('manualFilialSelect');
-    const anoSelect = document.getElementById('manualAnoSelect');
-    const linhaSelect = document.getElementById('manualLinhaSelect');
-    
-    document.getElementById('lancamentoManualFormContainer').style.display = 'none';
-
-    // 1. Popula Filiais
-    filialSelect.innerHTML = '<option value="">Carregando...</option>';
-    try {
-        const filiais = await getFiliaisCache(true);
-        filialSelect.innerHTML = '<option value="">-- Selecione a Filial --</option>' + filiais.map(f => `<option value="${f.id}">${f.nome} - ${f.descricao}</option>`).join('');
-    } catch (e) { filialSelect.innerHTML = '<option value="">Erro ao carregar</option>'; }
-
-    // 2. Popula Linhas Orçamentárias (TODAS)
-    linhaSelect.innerHTML = '<option value="">Carregando...</option>';
-    try {
-        const linhas = await getAllLinhasOrcamentariasCache(true);
-        linhaSelect.innerHTML = '<option value="">-- Selecione a Linha --</option>' + linhas.map(l => `<option value="${l.id}">${l.codigo} - ${l.descricao} ${l.ativo ? '' : '(Inativa)'}</option>`).join('');
-    } catch (e) { linhaSelect.innerHTML = '<option value="">Erro ao carregar</option>'; }
-    
-    // 3. Popula Anos (Anos anteriores)
-    const anoAtual = new Date().getFullYear();
-    anoSelect.innerHTML = '';
-    for (let i = anoAtual - 5; i <= anoAtual; i++) {
-        anoSelect.innerHTML += `<option value="${i}" ${i === anoAtual ? 'selected' : ''}>${i}</option>`;
-    }
-}
-
-/**
- * NOVO: Busca os valores manuais existentes e popula os inputs do formulário.
- */
-async function loadRealizadoManualForm() {
-    const filialId = document.getElementById('manualFilialSelect').value;
-    const ano = document.getElementById('manualAnoSelect').value;
-    const linhaId = document.getElementById('manualLinhaSelect').value;
-    const container = document.getElementById('lancamentoManualFormContainer');
-    const grid = document.getElementById('realizadoManualInputsGrid');
-    const alertContainer = document.getElementById('lancamentoManualAlert');
-    
-    alertContainer.innerHTML = '';
-    container.style.display = 'none';
-
-    if (!filialId || !ano || !linhaId) {
-        alertContainer.innerHTML = '<div class="alert alert-error">Selecione a Filial, o Ano e a Linha Orçamentária.</div>';
-        return;
-    }
-
-    grid.innerHTML = '<div class="loading col-span-4"><div class="spinner"></div>Buscando valores existentes...</div>';
-
-    document.getElementById('manualFormLinhaId').value = linhaId;
-    document.getElementById('manualFormFilialId').value = filialId;
-    document.getElementById('manualFormAno').value = ano;
-
-    try {
-        // Busca os valores salvos para a Linha/Filial/Ano (SUPOSIÇÃO DE NOVA TABELA)
-        const response = await supabaseRequest(
-            `realizado_manual_historico?filial_id=eq.${filialId}&linha_orcamentaria_id=eq.${linhaId}&ano=eq.${ano}&select=mes,valor_realizado`
-        );
-        
-        const realizadoMap = new Map((response || []).map(r => [r.mes, parseFloat(r.valor_realizado) || 0]));
-        
-        grid.innerHTML = '';
-        meses.forEach((nomeMes, index) => {
-            const mes = index + 1;
-            const valor = realizadoMap.get(mes) || 0;
-            grid.innerHTML += `
-                <div class="form-group">
-                    <label for="mes_${mes}" class="font-semibold">${nomeMes} (R$):</label>
-                    <input type="number" id="mes_${mes}" step="0.01" min="0" value="${valor.toFixed(2)}" class="w-full text-right">
-                </div>
-            `;
-        });
-        
-        container.style.display = 'block';
-        if (typeof feather !== 'undefined') feather.replace(); // Renderiza ícones se houver
-
-    } catch (error) {
-        console.error("Erro ao buscar realizado manual:", error);
-        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao buscar: ${error.message}</div>`;
-    }
-}
-
-/**
- * NOVO: Trata a submissão do formulário de lançamento manual (fazendo UPSERT).
- */
-async function handleLancamentoManualRealizadoSubmit(event) {
-    event.preventDefault();
-    const alertContainer = document.getElementById('lancamentoManualAlert');
-    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando valores...</div>';
-
-    const linhaId = document.getElementById('manualFormLinhaId').value;
-    const filialId = document.getElementById('manualFormFilialId').value;
-    const ano = document.getElementById('manualFormAno').value;
-    
-    if (!linhaId || !filialId || !ano) {
-         alertContainer.innerHTML = '<div class="alert alert-error">Erro nos IDs de referência. Tente buscar os valores novamente.</div>';
-         return;
-    }
-
-    let valoresParaUpsert = [];
-    let hasError = false;
-
-    meses.forEach((_, index) => {
-        const mes = index + 1;
-        const input = document.getElementById(`mes_${mes}`);
-        const valor = parseFloat(input.value);
-        
-        if (isNaN(valor) || valor < 0) {
-            input.classList.add('input-error');
-            hasError = true;
-        } else {
-            input.classList.remove('input-error');
-            valoresParaUpsert.push({
-                filial_id: parseInt(filialId),
-                linha_orcamentaria_id: parseInt(linhaId),
-                ano: parseInt(ano),
-                mes: mes,
-                valor_realizado: valor.toFixed(2)
-            });
-        }
-    });
-
-    if (hasError) {
-        alertContainer.innerHTML = '<div class="alert alert-error">Valores inválidos encontrados. Corrija os campos em vermelho.</div>';
-        return;
-    }
-
-    try {
-        // SUPOSIÇÃO: Endpoint para a tabela 'realizado_manual_historico'
-        // Chave de conflito é a composição: linha_orcamentaria_id, filial_id, ano, mes
-        await supabaseRequest(
-            `realizado_manual_historico?on_conflict=linha_orcamentaria_id,filial_id,ano,mes`,
-            'POST',
-            valoresParaUpsert,
-            { 'Prefer': 'resolution=merge-duplicates' } // Header essencial para UPSERT em lote
-        );
-
-        alertContainer.innerHTML = '';
-        showNotification('Valores de Realizado Manual salvos com sucesso!', 'success');
-        
-        // Recarrega o formulário para ver os valores atualizados
-        loadRealizadoManualForm();
-
-    } catch (error) {
-        console.error("Erro ao salvar realizado manual:", error);
-        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
-    }
-}
-
-function renderChartLinhas(canvasId, data) {
-    // CORREÇÃO: Garante que o elemento existe antes de tentar obter o contexto
+// NOVO: Renderiza o gráfico de Orçado vs Realizado (Linha e Coluna)
+function renderChartOrçadoRealizado(canvasId, data, lineCode, lineDesc, desvioPercentual) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) {
         console.error(`Canvas com ID ${canvasId} não encontrado no DOM.`);
@@ -3404,36 +3146,38 @@ function renderChartLinhas(canvasId, data) {
     
     const ctx = canvas.getContext('2d');
     
-    // Destrói a instância anterior se ela existir
     if (chartInstances[canvasId]) {
         chartInstances[canvasId].destroy();
     }
     
+    // Mapeia os dados, garantindo que o primeiro dataset seja Orçado (Linha) e o segundo Realizado (Barra)
+    const datasets = [
+        {
+            label: 'Orçado',
+            data: data.datasets[0].data,
+            backgroundColor: 'rgba(0, 119, 182, 1)', 
+            borderColor: 'rgba(0, 119, 182, 1)',
+            borderWidth: 2,
+            type: 'line', // <--- Orçado em LINHA
+            fill: false, 
+            tension: 0.2, 
+            pointRadius: 5, 
+        },
+        {
+            label: 'Realizado (Baixas + NF + Manual)',
+            data: data.datasets[1].data,
+            backgroundColor: 'rgba(0, 212, 170, 0.7)', // Cor Verde (Primary)
+            borderColor: 'rgba(0, 212, 170, 1)',
+            borderWidth: 1,
+            type: 'bar' // <--- Realizado em BARRA
+        }
+    ];
+
     chartInstances[canvasId] = new Chart(ctx, {
-        type: 'bar', // Tipo principal: Bar (para o Realizado)
+        type: 'bar', // Tipo base do gráfico
         data: {
             labels: data.labels, // Meses
-            datasets: [
-                {
-                    label: 'Orçado',
-                    data: data.datasets[0].data, // Pega os dados do Orçado
-                    backgroundColor: 'rgba(0, 119, 182, 1)', 
-                    borderColor: 'rgba(0, 119, 182, 1)',
-                    borderWidth: 2,
-                    type: 'line', // <--- MUDANÇA AQUI: Define o Orçado como LINHA
-                    fill: false, // Não preenche a área abaixo da linha
-                    tension: 0.2, // Deixa a linha levemente curva
-                    pointRadius: 5, // Deixa os pontos de dados visíveis
-                },
-                {
-                    label: 'Realizado (Baixas + NF + Manual)',
-                    data: data.datasets[1].data, // Pega os dados do Realizado
-                    backgroundColor: 'rgba(0, 212, 170, 0.7)', // Cor Verde (Primary)
-                    borderColor: 'rgba(0, 212, 170, 1)',
-                    borderWidth: 1,
-                    type: 'bar' // <--- MUDANÇA AQUI: Mantém o Realizado como BARRA
-                }
-            ]
+            datasets: datasets
         },
         options: {
             responsive: true,
@@ -3456,7 +3200,17 @@ function renderChartLinhas(canvasId, data) {
             },
             plugins: {
                 legend: { position: 'top' },
-                title: { display: false },
+                title: { 
+                    display: true, 
+                    text: `${lineCode} - ${lineDesc}`,
+                    font: { size: 16 }
+                },
+                subtitle: { 
+                    display: true,
+                    text: `Desvio Anual: ${desvioPercentual.toFixed(2)}%`,
+                    color: desvioPercentual > 0 ? '#10B981' : '#D62828', // Verde ou Vermelho
+                    font: { size: 14, weight: 'bold' }
+                },
                 tooltip: {
                      callbacks: {
                         label: function(context) {
@@ -3475,132 +3229,364 @@ function renderChartLinhas(canvasId, data) {
     return chartInstances[canvasId];
 }
 
+// NOVO: Renderiza o gráfico Comparativo Anual (Global)
+function renderChartComparativoAnual(canvasId, data, anoAtual, anoAnterior) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
 
-async function fetchOrcadoRealizadoMensal(filialId, ano) {
+    const desvioOrcadoTotal = data.orcadoAtual.reduce((a, b) => a + b, 0) - data.orcadoAnterior.reduce((a, b) => a + b, 0);
+    const desvioRealizadoTotal = data.realizadoAtual.reduce((a, b) => a + b, 0) - data.realizadoAnterior.reduce((a, b) => a + b, 0);
+    
+    // Calcula o percentual de Realizado A vs A-1 (para o título/subtítulo)
+    const realizadoAnteriorTotal = data.realizadoAnterior.reduce((a, b) => a + b, 0);
+    const realizadoAtualTotal = data.realizadoAtual.reduce((a, b) => a + b, 0);
+    const crescimentoRealizado = realizadoAnteriorTotal > 0 ? ((realizadoAtualTotal - realizadoAnteriorTotal) / realizadoAnteriorTotal) * 100 : 0;
+    
+    const dataSets = [
+        // Orçado (Planejado)
+        {
+            label: `Orçado ${anoAnterior}`,
+            data: data.orcadoAnterior,
+            backgroundColor: 'rgba(0, 119, 182, 0.4)', // Azul claro
+            borderColor: 'rgba(0, 119, 182, 1)',
+            borderWidth: 1,
+            stack: 'Orçado'
+        },
+        {
+            label: `Orçado ${anoAtual}`,
+            data: data.orcadoAtual,
+            backgroundColor: 'rgba(0, 119, 182, 0.9)', // Azul escuro
+            borderColor: 'rgba(0, 119, 182, 1)',
+            borderWidth: 1,
+            stack: 'Orçado'
+        },
+        // Realizado
+        {
+            label: `Realizado ${anoAnterior}`,
+            data: data.realizadoAnterior,
+            backgroundColor: 'rgba(0, 212, 170, 0.4)', // Verde claro
+            borderColor: 'rgba(0, 212, 170, 1)',
+            borderWidth: 1,
+            stack: 'Realizado'
+        },
+        {
+            label: `Realizado ${anoAtual}`,
+            data: data.realizadoAtual,
+            backgroundColor: 'rgba(0, 212, 170, 0.9)', // Verde escuro
+            borderColor: 'rgba(0, 212, 170, 1)',
+            borderWidth: 1,
+            stack: 'Realizado'
+        }
+    ];
+
+    chartInstances[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: meses, datasets: dataSets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { stacked: true }, // Empilha Orçado A/A-1 e Realizado A/A-1
+                y: { 
+                    beginAtZero: true, 
+                    title: { display: true, text: 'Valor (R$)' },
+                    ticks: {
+                        callback: function(value) {
+                            return 'R$ ' + value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                        }
+                    }
+                }
+            },
+            plugins: {
+                title: { 
+                    display: true, 
+                    text: `Comparativo Orçado/Realizado Anual Global`,
+                    font: { size: 18, weight: 'bold' }
+                },
+                subtitle: {
+                    display: true,
+                    text: `Crescimento Realizado A/A-1: ${crescimentoRealizado.toFixed(2)}%`,
+                    color: crescimentoRealizado > 0 ? '#D62828' : '#10B981', // Vermelho (aumento de custo) ou Verde (redução)
+                    font: { size: 14, weight: 'bold' }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) { label += ': '; }
+                            if (context.parsed.y !== null) {
+                                label += 'R$ ' + context.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    // Adiciona o resumo do desvio na div auxiliar, se houver uma.
+    const resumoDiv = document.getElementById('resumoComparativoAnual');
+    if (resumoDiv) {
+        resumoDiv.innerHTML = `
+            <p class="text-sm font-semibold mt-2">
+                Desvio Orçado Total (${ano} vs ${anoAnterior}): R$ ${desvioOrcadoTotal.toFixed(2)}
+            </p>
+            <p class="${crescimentoRealizado > 0 ? 'text-red-600' : 'text-green-600'} font-bold">
+                Desvio Realizado Total (${ano} vs ${anoAnterior}): R$ ${desvioRealizadoTotal.toFixed(2)}
+            </p>
+        `;
+    }
+}
+
+
+// NOVO: Função para buscar todos os dados necessários, incluindo o ano anterior
+async function fetchAllDataForCharts(filialId, ano) {
+    const anoAnterior = parseInt(ano) - 1;
+    const anos = [parseInt(ano), anoAnterior];
     const todasLinhas = await getAllLinhasOrcamentariasCache(false);
     const linhasAtivas = todasLinhas.filter(l => l.ativo);
-    
-    let dadosConsolidados = {}; // { linhaId: { codigo, descricao, orcado: [12 valores], realizado: [12 valores], desvio: [12 valores] } }
+
+    let dataByLineAndYear = {}; // { linhaId: { ano: { orcado: [], realizado: [] } } }
 
     for (const linha of linhasAtivas) {
-        // CORREÇÃO: Garante que o retorno do Realizado é um número antes de somar
-        const realizedData = await Promise.all(
-            meses.map(async (_, mesIndex) => {
-                const mes = mesIndex + 1;
-                return calcularRealizadoLinha(linha.id, filialId, parseInt(ano), mes);
-            })
-        );
+        dataByLineAndYear[linha.id] = {};
 
-        dadosConsolidados[linha.id] = {
-            codigo: linha.codigo,
-            descricao: linha.descricao,
-            orcado: [],
-            realizado: realizedData, // Já é um array de 12 valores numéricos
-            desvio: [],
-        };
-        
-        for (let mes = 1; mes <= 12; mes++) {
-            // 1. Buscar Orçado
-            const orcamento = await supabaseRequest(
-                `orcamentos_mensais?filial_id=eq.${filialId}&linha_id=eq.${linha.id}&ano=eq.${ano}&select=mes_${mes}`
+        for (const currentAno of anos) {
+            dataByLineAndYear[linha.id][currentAno] = { orcado: [], realizado: [] };
+
+            const realizedData = await Promise.all(
+                meses.map(async (_, mesIndex) => {
+                    const mes = mesIndex + 1;
+                    return calcularRealizadoLinha(linha.id, filialId, currentAno, mes);
+                })
             );
-            const orcadoMes = (orcamento && orcamento[0]) ? parseFloat(orcamento[0][`mes_${mes}`]) || 0 : 0;
-            
-            // 2. O Realizado já foi buscado e está em realizedData[mes-1]
-            const realizadoMes = realizedData[mes - 1];
-            
-            // 3. Calcular Desvio e Salvar
-            const desvioValor = orcadoMes - realizadoMes;
-            const desvioPercentual = orcadoMes > 0 ? (desvioValor / orcadoMes) * 100 : 0;
-            
-            dadosConsolidados[linha.id].orcado.push(orcadoMes);
-            dadosConsolidados[linha.id].desvio.push(desvioPercentual.toFixed(2));
+
+            for (let mes = 1; mes <= 12; mes++) {
+                // 1. Buscar Orçado
+                const orcamento = await supabaseRequest(
+                    `orcamentos_mensais?filial_id=eq.${filialId}&linha_id=eq.${linha.id}&ano=eq.${currentAno}&select=mes_${mes}`
+                );
+                const orcadoMes = (orcamento && orcamento[0]) ? parseFloat(orcamento[0][`mes_${mes}`]) || 0 : 0;
+                
+                // 2. Realizado já está em realizedData[mes-1]
+                const realizadoMes = realizedData[mes - 1];
+                
+                dataByLineAndYear[linha.id][currentAno].orcado.push(orcadoMes);
+                dataByLineAndYear[linha.id][currentAno].realizado.push(realizadoMes);
+            }
         }
     }
     
-    return dadosConsolidados;
+    return {
+        linesData: dataByLineAndYear,
+        linhasAtivas: linhasAtivas // Para iterar e obter detalhes
+    };
 }
 
-function restoreGraficosViewStructure(filialId, ano, dadosMensais, desvioPercentualGeral, totalOrcadoGeral, totalRealizadoGeral) {
+
+// NOVO: Função para restaurar a estrutura HTML com os gráficos individuais
+function restoreGraficosViewStructure(filialId, ano, linhas, comparativoAnualData) {
     const view = document.getElementById('graficosView');
-    // Para simplificar, vou recriar a estrutura de forma dinâmica para evitar o bug de innerHTML
+    const filialInfo = todasFiliaisCache.find(f => f.id == filialId);
     
-    view.innerHTML = `
+    // Filtros HTML (mantidos estáticos no index.html para re-renderização)
+    
+    // Conteúdo Principal
+    let htmlContent = `
         <h1 class="text-3xl font-bold text-gray-800 mb-6">Análises e Indicadores</h1>
-        <div id="graficosContainer" class="space-y-8">
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <h3 class="text-xl font-semibold mb-4">Filtros</h3>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div class="form-group">
-                        <label for="graficoFilialSelect" class="font-semibold">Filial:</label>
-                        <select id="graficoFilialSelect" class="w-full"></select>
-                    </div>
-                    <div class="form-group">
-                        <label for="graficoAnoSelect" class="font-semibold">Ano:</label>
-                        <select id="graficoAnoSelect" class="w-full"></select>
-                    </div>
-                    <div class="form-group pt-6">
-                        <button id="gerarGraficosBtn" class="btn btn-primary w-full">Gerar Gráficos</button>
-                    </div>
+        
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h3 class="text-xl font-semibold mb-4">Filtros</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="form-group">
+                    <label for="graficoFilialSelect" class="font-semibold">Filial:</label>
+                    <select id="graficoFilialSelect" class="w-full"></select>
+                </div>
+                <div class="form-group">
+                    <label for="graficoAnoSelect" class="font-semibold">Ano:</label>
+                    <select id="graficoAnoSelect" class="w-full"></select>
+                </div>
+                <div class="form-group pt-6">
+                    <button id="gerarGraficosBtn" class="btn btn-primary w-full">Gerar Gráficos</button>
                 </div>
             </div>
-            
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="bg-white p-6 rounded-lg shadow-md">
-                    <h3 class="text-xl font-semibold mb-4">Orçado vs Realizado (Linhas Orçamentárias)</h3>
-                    <p class="text-sm text-gray-500 mb-2">Comparativo Orçado vs Realizado por Linha (Mês a Mês). Use o Desvio % para Savings.</p>
-                    <div class="relative h-96">
-                        <canvas id="orcamentoRealizadoLinhasChart"></canvas>
-                    </div>
-                    <div id="desvioOrcamentarioLinhas" class="mt-4">
-                        <p class="${desvioPercentualGeral > 0 ? 'text-green-600' : 'text-red-600'} font-bold">
-                            Desvio Orçamentário Anual (Total das Linhas Ativas): 
-                            ${desvioPercentualGeral.toFixed(2)}% 
-                            (${desvioPercentualGeral > 0 ? 'SAVING' : 'DESVIO'})
-                        </p>
-                        <p class="text-sm text-gray-700">Orçado Total: R$ ${totalOrcadoGeral.toFixed(2)} | Realizado Total: R$ ${totalRealizadoGeral.toFixed(2)}</p>
-                    </div>
-                </div>
-                <div class="bg-white p-6 rounded-lg shadow-md">
-                    <h3 class="text-xl font-semibold mb-4">Orçado vs Realizado (CGOs Mais Usados)</h3>
-                    <p class="text-sm text-gray-500 mb-2">Comparativo Orçado vs Realizado por CGO (Mês Atual).</p>
-                    <div class="relative h-96">
-                        <canvas id="orcamentoRealizadoCGOsChart"></canvas>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <h3 class="text-xl font-semibold mb-4">Top 10 Itens que Mais Impactam o Custo</h3>
-                <p class="text-sm text-gray-500 mb-2">Itens classificados por Valor e Quantidade total de baixas.</p>
-                <div class="relative h-96">
-                    <canvas id="topItensImpactoChart"></canvas>
-                </div>
-            </div>
-            
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="bg-white p-6 rounded-lg shadow-md">
-                    <h3 class="text-xl font-semibold mb-4">Projeção de Gastos (Mês Atual)</h3>
-                    <p class="text-sm text-gray-500 mb-2">Valor Realizado até hoje vs Projeção de Fechamento (Linhas).</p>
-                    <div class="relative h-96">
-                        <canvas id="projecaoGastosMensalChart"></canvas>
-                    </div>
-                </div>
-                <div class="bg-white p-6 rounded-lg shadow-md">
-                    <h3 class="text-xl font-semibold mb-4">Comparativo Anual (Realizado)</h3>
-                    <p class="text-sm text-gray-500 mb-2">Visualização do Realizado nos últimos anos (Crescimento/Redução).</p>
-                    <div class="relative h-96">
-                        <canvas id="comparativoAnualChart"></canvas>
-                    </div>
-                </div>
-            </div>
+            <div class="alert alert-info mt-4">Dados consolidados para ${filialInfo.nome} no ano de ${ano}.</div>
         </div>
+
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">1. Comparativo Anual Global (${ano - 1} vs ${ano})</h3>
+            <p class="text-sm text-gray-500 mb-2">Visão macro do Orçado e Realizado total das linhas ativas.</p>
+            <div class="relative h-96">
+                <canvas id="comparativoAnualChart"></canvas>
+            </div>
+            <div id="resumoComparativoAnual" class="mt-4"></div>
+        </div>
+
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">2. Análise Detalhada por Linha Orçamentária</h2>
+        <div id="linhasChartsContainer" class="space-y-8">
     `;
     
-    // Rebind the filters and button
-    prepararGraficosView(); // Isso popula os dropdowns novamente
+    // Adiciona os containers individuais (vazios por enquanto)
+    linhas.forEach(linha => {
+        htmlContent += `
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold mb-4">${linha.codigo} - ${linha.descricao}</h3>
+                <p class="text-sm text-gray-500 mb-2">Orçado vs Realizado Mensal.</p>
+                <div class="relative h-96">
+                    <canvas id="linhaChart-${linha.id}"></canvas>
+                </div>
+            </div>
+        `;
+    });
+
+    htmlContent += `</div></div>`; // Fecha linhasChartsContainer e graficosContainer (recriado)
+    
+    view.innerHTML = htmlContent;
+    
+    // Rebind the filters and button listeners
+    prepararGraficosView(filialId, ano); // Popula os dropdowns e seleciona o filtro atual
     document.getElementById('gerarGraficosBtn').addEventListener('click', loadGraficosData);
     
-    // O retorno da função não será mais usado, pois o DOM já foi recriado
     return;
 }
+
+/**
+ * NOVO: Função principal para carregar os dados e renderizar todos os gráficos.
+ */
+async function loadGraficosData() {
+    const filialSelect = document.getElementById('graficoFilialSelect');
+    const anoSelect = document.getElementById('graficoAnoSelect');
+    const filialId = filialSelect.value;
+    const ano = anoSelect.value;
+    const container = document.getElementById('graficosContainer');
+    
+    if (!filialId || !ano) {
+         showNotification('Selecione a Filial e o Ano para gerar os gráficos.', 'error');
+         return;
+    }
+    
+    // Destrói instâncias de gráficos antigas (boa prática)
+    Object.values(chartInstances).forEach(chart => {
+        if (chart && typeof chart.destroy === 'function') chart.destroy();
+    });
+    chartInstances = {};
+
+    // Mostrar estado de carregamento
+    container.innerHTML = '<div class="loading"><div class="spinner"></div>Calculando métricas e gerando gráficos...</div>';
+    
+    try {
+        const anoAnterior = parseInt(ano) - 1;
+        const fetchedData = await fetchAllDataForCharts(filialId, ano);
+        const linhas = fetchedData.linhasAtivas;
+        const allLinesData = fetchedData.linesData;
+
+        // --- 1. PREPARAR DADOS PARA O COMPARATIVO ANUAL (GLOBAL) ---
+        let orcadoAnteriorTotal = Array(12).fill(0);
+        let orcadoAtualTotal = Array(12).fill(0);
+        let realizadoAnteriorTotal = Array(12).fill(0);
+        let realizadoAtualTotal = Array(12).fill(0);
+
+        for (const lineId in allLinesData) {
+            if (allLinesData[lineId][anoAnterior]) {
+                allLinesData[lineId][anoAnterior].orcado.forEach((val, i) => orcadoAnteriorTotal[i] += val);
+                allLinesData[lineId][anoAnterior].realizado.forEach((val, i) => realizadoAnteriorTotal[i] += val);
+            }
+            if (allLinesData[lineId][ano]) {
+                allLinesData[lineId][ano].orcado.forEach((val, i) => orcadoAtualTotal[i] += val);
+                allLinesData[lineId][ano].realizado.forEach((val, i) => realizadoAtualTotal[i] += val);
+            }
+        }
+
+        const comparativoAnualData = {
+            orcadoAnterior: orcadoAnteriorTotal,
+            orcadoAtual: orcadoAtualTotal,
+            realizadoAnterior: realizadoAnteriorTotal,
+            realizadoAtual: realizadoAtualTotal,
+        };
+
+        // --- 2. RECRIAR A ESTRUTURA HTML (E FILTROS) ---
+        restoreGraficosViewStructure(filialId, ano, linhas, comparativoAnualData);
+        
+        // --- 3. RENDERIZAR GRÁFICOS ---
+        
+        // A) COMPARATIVO ANUAL GLOBAL
+        renderChartComparativoAnual('comparativoAnualChart', comparativoAnualData, ano, anoAnterior);
+
+        // B) GRÁFICOS INDIVIDUAIS POR LINHA
+        linhas.forEach(linha => {
+            const linhaDataAtual = allLinesData[linha.id][ano];
+            
+            // Cálculo de Desvio Anual para o subtítulo do gráfico
+            const orcadoAnual = linhaDataAtual.orcado.reduce((a, b) => a + b, 0);
+            const realizadoAnual = linhaDataAtual.realizado.reduce((a, b) => a + b, 0);
+            const desvioPercentual = orcadoAnual > 0 ? ((orcadoAnual - realizadoAnual) / orcadoAnual) * 100 : 0;
+
+            const dadosGraficoLinha = {
+                labels: meses,
+                datasets: [
+                    { label: 'Orçado', data: linhaDataAtual.orcado },
+                    { label: 'Realizado (Baixas + NF + Manual)', data: linhaDataAtual.realizado }
+                ]
+            };
+            // O ID do canvas é dinâmico: `linhaChart-${linha.id}`
+            renderChartOrçadoRealizado(`linhaChart-${linha.id}`, dadosGraficoLinha, linha.codigo, linha.descricao, desvioPercentual);
+        });
+        
+        showNotification(`Gráficos individuais e comparativos carregados para o ano de ${ano}.`, 'success', 3000);
+        
+        // --- IDEIAS ADICIONAIS: TOP 10 ITENS QUE IMPACTAM O CUSTO (ESQUELETO) ---
+        // Você pode adicionar a lógica para esse gráfico aqui, buscando e consolidando:
+        /*
+        const topItensData = await fetchTopItens(filialId, ano); 
+        renderChartTopItens('topItensImpactoChart', topItensData); 
+        */
+
+    } catch (error) {
+        console.error("Erro ao carregar dados dos gráficos:", error);
+        container.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
+        prepararGraficosView(filialId, ano); // Restaura os filtros mesmo em caso de erro
+        document.getElementById('gerarGraficosBtn').addEventListener('click', loadGraficosData);
+    }
+}
+
+/**
+ * NOVO: Prepara os filtros para a view de gráficos.
+ */
+async function prepararGraficosView(selectedFilialId = null, selectedAno = null) {
+    const filialSelect = document.getElementById('graficoFilialSelect');
+    const anoSelect = document.getElementById('graficoAnoSelect');
+    
+    // Popula filiais (usa o cache já existente)
+    filialSelect.innerHTML = '<option value="">Carregando filiais...</option>';
+    try {
+        const filiais = await getFiliaisCache(true);
+        filialSelect.innerHTML = filiais.map(f => `<option value="${f.id}" ${f.id == (selectedFilialId || selectedFilial.id) ? 'selected' : ''}>${f.nome} - ${f.descricao}</option>`).join('');
+    } catch (e) { filialSelect.innerHTML = '<option value="">Erro ao carregar</option>'; }
+
+    // Popula anos
+    const anoAtual = new Date().getFullYear();
+    anoSelect.innerHTML = '';
+    for (let i = anoAtual - 2; i <= anoAtual + 1; i++) {
+        anoSelect.innerHTML += `<option value="${i}" ${i == (selectedAno || anoAtual) ? 'selected' : ''}>${i}</option>`;
+    }
+    
+    // Rebind o listener do botão, caso a estrutura tenha sido recriada
+    document.getElementById('gerarGraficosBtn').removeEventListener('click', loadGraficosData);
+    document.getElementById('gerarGraficosBtn').addEventListener('click', loadGraficosData);
+    
+    if (typeof feather !== 'undefined') feather.replace();
+}
+
+
+// NOVO: Função para buscar os Top Itens (Esqueleto)
+/*
+async function fetchTopItens(filialId, ano) {
+    // Implemente a lógica aqui:
+    // 1. Buscar todos os solicitacao_itens finalizados/executados da filial/ano.
+    // 2. Juntar por produto_id, somando valor_total_executado e quantidade_executada.
+    // 3. Ordenar e retornar o TOP 10.
+    return []; 
+}
+*/
