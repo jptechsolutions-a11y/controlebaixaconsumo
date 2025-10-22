@@ -3,6 +3,8 @@
 // As credenciais são lidas das Variáveis de Ambiente do Vercel
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+// NOVO: Adiciona a chave de serviço
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 export default async (req, res) => {
     // Extrai o 'endpoint' e 'upsert' dos query parameters da URL da requisição Vercel
@@ -12,10 +14,18 @@ export default async (req, res) => {
         return res.status(400).json({ error: 'Endpoint Supabase não especificado.' });
     }
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-        // Esta verificação agora checa se as variáveis de ambiente foram configuradas
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_KEY) {
         return res.status(500).json({ error: 'Configuração do Supabase ausente nas variáveis de ambiente.' });
     }
+    
+    // NOVO: Define qual chave usar. Usa Service Key apenas para rotas que exigem ADMIN
+    let useServiceKey = false;
+    if (endpoint.includes('realizado_manual_historico') || endpoint.includes('orcamentos_mensais')) {
+        useServiceKey = true;
+    }
+    
+    const keyToUse = useServiceKey ? SUPABASE_SERVICE_KEY : SUPABASE_ANON_KEY;
+    const authHeader = `Bearer ${keyToUse}`;
 
     // Monta a URL base do Supabase
     const supabaseBaseUrl = `${SUPABASE_URL}/rest/v1/${endpoint}`;
@@ -23,7 +33,7 @@ export default async (req, res) => {
     // Reconstrói os query parameters originais, removendo os que são do proxy
     const searchParams = new URLSearchParams(req.url.split('?')[1]);
     searchParams.delete('endpoint');
-    searchParams.delete('upsert'); // Remove o parâmetro upsert dos parâmetros Supabase
+    searchParams.delete('upsert'); 
 
     // Monta a URL final para o Supabase
     const fullSupabaseUrl = `${supabaseBaseUrl}?${searchParams.toString()}`;
@@ -32,18 +42,16 @@ export default async (req, res) => {
     const options = {
         method: req.method, // Repassa o método original (GET, POST, PATCH, DELETE)
         headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'apikey': keyToUse, // Usa a chave correta aqui também
+            'Authorization': authHeader, // Usa o cabeçalho correto
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            // Repassa o header 'Prefer' se existir, senão usa o padrão
             'Prefer': req.headers.prefer || 'return=representation'
         },
     };
 
     // Adiciona o corpo da requisição se for POST, PATCH ou PUT
     if (req.body && ['POST', 'PATCH', 'PUT'].includes(req.method)) {
-         // Vercel já faz o parse do corpo, então podemos usá-lo diretamente
         options.body = JSON.stringify(req.body);
     }
 
@@ -53,39 +61,32 @@ export default async (req, res) => {
     }
 
     try {
-        // Log para debug (opcional, pode remover em produção)
-        console.log(`[Proxy] Forwarding ${req.method} request to: ${fullSupabaseUrl}`);
-        if(options.body) console.log(`[Proxy] Body: ${options.body.substring(0, 100)}...`); // Loga o início do corpo
+        console.log(`[Proxy] Forwarding ${req.method} request to: ${fullSupabaseUrl} (Service Key: ${useServiceKey})`); // Log de debug
+        if(options.body) console.log(`[Proxy] Body: ${options.body.substring(0, 100)}...`); 
 
         // Faz a requisição para o Supabase
         const response = await fetch(fullSupabaseUrl, options);
 
-        // Lê o corpo da resposta como texto primeiro para evitar erros de parse
         const responseBodyText = await response.text();
-
-        // Define o header Content-Type da resposta do proxy
         res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
 
         // Verifica se a resposta do Supabase foi bem-sucedida
         if (!response.ok) {
             console.error('[Proxy] Supabase Error:', response.status, responseBodyText);
-            // Tenta fazer o parse do erro, se falhar, retorna o texto puro
             let errorJson;
             try { errorJson = JSON.parse(responseBodyText); }
             catch (e) { return res.status(response.status).send(responseBodyText || 'Erro desconhecido do Supabase'); }
             return res.status(response.status).json(errorJson);
         }
 
-        // Se a resposta foi OK:
+        // Retorna a resposta
         if (responseBodyText) {
-            // Tenta fazer o parse como JSON, se falhar, retorna o texto puro
             try {
                 res.status(response.status).json(JSON.parse(responseBodyText));
             } catch (e) {
                 res.status(response.status).send(responseBodyText);
             }
         } else {
-            // Se não houver corpo (ex: DELETE bem-sucedido, status 204)
             res.status(response.status).end();
         }
 
