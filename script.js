@@ -10,6 +10,12 @@ let tiposBaixaCache = []
 let todasTiposBaixaCache = []; // NOVO: Cache de TODOS os tipos (admin)
 let lancamentosCache = []; // NOVO: Cache de despesas externas
 let carrinhoFinanceiro = [];
+// NOVO:
+let meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+let orcamentosCache = {}; // Cache para orçamentos (já existia a variável)
+let realizadoManualCache = []; 
+// NOVO: Cache para as instâncias dos gráficos
+let chartInstances = {};
 // --- Inicialização (SUBSTITUIR esta parte dentro do DOMContentLoaded) ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
@@ -58,6 +64,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Gerenciar Orçamentos (AJUSTADO)
     document.getElementById('buscarOrcamentosBtn')?.addEventListener('click', loadGerenciarOrcamentos);
+    
+    // NOVO: Event listeners para Gráficos
+    document.getElementById('gerarGraficosBtn')?.addEventListener('click', loadGraficosData);
+
+    // NOVO: Event listeners para Lançamento Manual
+    document.getElementById('buscarRealizadoManualBtn')?.addEventListener('click', loadRealizadoManualForm);
+    document.getElementById('lancamentoManualForm')?.addEventListener('submit', handleLancamentoManualRealizadoSubmit);
 
     // Adiciona listener para salvar orçamento via delegation (AJUSTADO)
     const orcamentosTableBody = document.getElementById('orcamentosTableBody');
@@ -241,7 +254,10 @@ function showView(viewId, element = null) {
             case 'gerenciarTiposBaixaView': if(typeof loadGerenciarTiposBaixa === 'function') loadGerenciarTiposBaixa(); break;
             case 'gerenciarLinhasView': if(typeof loadGerenciarLinhas === 'function') loadGerenciarLinhas(); break; // Corrigido
             case 'gerenciarOrcamentosView': if(typeof prepararGerenciarOrcamentos === 'function') prepararGerenciarOrcamentos(); break; // Corrigido
-            case 'lancamentosFinanceirosView': if(typeof loadLancamentosFinanceiros === 'function') loadLancamentosFinanceiros(); break;    
+            case 'lancamentosFinanceirosView': if(typeof loadLancamentosFinanceiros === 'function') loadLancamentosFinanceiros(); break;
+            // NOVOS CASOS
+            case 'graficosView': if(typeof prepararGraficosView === 'function') prepararGraficosView(); break;
+            case 'lancamentoManualRealizadoView': if(typeof prepararLancamentoManualRealizadoView === 'function') prepararLancamentoManualRealizadoView(); break;
         }
     } catch(e) {
         console.error(`Erro ao carregar dados para a view ${viewId}:`, e);
@@ -255,8 +271,9 @@ function showView(viewId, element = null) {
 function logout() {
     currentUser = null; selectedFilial = null;
     todasFiliaisCache = []; cgoCache = []; todosCgoCache = []; carrinhoItens = [];
+    // ATUALIZADO: Usando novas variáveis de cache
     linhasOrcamentariasCache = []; todasLinhasOrcamentariasCache = []; orcamentosCache = {};
-    tiposBaixaCache = []; todasTiposBaixaCache = []; 
+    tiposBaixaCache = []; todasTiposBaixaCache = []; realizadoManualCache = []; 
     carrinhoFinanceiro = []; lancamentosCache = [];
     document.getElementById('mainSystem').style.display = 'none';
     document.getElementById('loginContainer').style.display = 'flex';
@@ -1160,7 +1177,9 @@ async function handleRetiradaSubmit(event) {
             status: 'finalizada', // Status final do ITEM
             retirada_por_id: currentUser.id,
             data_retirada: new Date().toISOString(),
-            foto_retirada_url: fotoUrl
+            // ATENÇÃO: A lógica original só salvava uma foto. Mantenho a correção feita mais abaixo para suportar array de URLs.
+            // foto_retirada_url: fotoUrl 
+            fotos_retirada_urls: [fotoUrl] // Garante que seja um array para consistência
         };
         await supabaseRequest(`solicitacao_itens?id=eq.${itemId}`, 'PATCH', updateData);
         
@@ -2610,6 +2629,7 @@ async function calcularRealizadoLinha(linhaId, filialId, ano, mes) {
 
     let realizadoBaixas = 0;
     let realizadoDespesas = 0;
+    let realizadoManual = 0; // NOVO
 
     // --- PARTE 1: Calcula o realizado das BAIXAS (lógica antiga) ---
     const cgos = await getAllCgoCache();
@@ -2628,9 +2648,29 @@ async function calcularRealizadoLinha(linhaId, filialId, ano, mes) {
     );
     realizadoDespesas = (responseDespesas || []).reduce((sum, item) => sum + (item.valor_total_nf || 0), 0);
     
-    // --- PARTE 3: Soma tudo ---
-    const realizadoTotal = realizadoBaixas + realizadoDespesas;
-    console.log(`Realizado Linha ${linhaId} (Mês ${mes}): Baixas R$ ${realizadoBaixas} + Despesas NF R$ ${realizadoDespesas} = R$ ${realizadoTotal}`);
+    // --- PARTE 3: Busca o realizado manual (NOVO) ---
+    const responseManual = await supabaseRequest(
+        `realizado_manual_historico?filial_id=eq.${filialId}&linha_orcamentaria_id=eq.${linhaId}&ano=eq.${ano}&mes=eq.${mes}&select=valor_realizado`
+    );
+    realizadoManual = (responseManual && responseManual[0]) ? parseFloat(responseManual[0].valor_realizado) : 0; // Usa parseFloat
+
+    // LÓGICA DE PRIORIDADE: Se houver valor manual, ele SOBREPÕE o valor calculado.
+    // Presumimos que o valor manual é o "real" para o período histórico.
+    let realizadoTotal = 0;
+    
+    // Se for o mês/ano atual, ou se o valor manual for 0, usa o calculado.
+    // Se for um mês/ano passado E tiver valor manual, usa o manual.
+    const hoje = new Date();
+    const dataAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const dataBusca = new Date(ano, mes - 1, 1);
+    
+    if (dataBusca < dataAtual && realizadoManual > 0) {
+        realizadoTotal = realizadoManual;
+        console.log(`Realizado Linha ${linhaId} (Mês ${mes}): USANDO VALOR MANUAL R$ ${realizadoManual}`);
+    } else {
+        realizadoTotal = realizadoBaixas + realizadoDespesas;
+        console.log(`Realizado Linha ${linhaId} (Mês ${mes}): Baixas R$ ${realizadoBaixas} + Despesas NF R$ ${realizadoDespesas} = R$ ${realizadoTotal}`);
+    }
     
     return realizadoTotal;
 }
@@ -3023,7 +3063,7 @@ async function abrirDetalhesDespesaModal(despesaId) {
     
     try {
         // Busca os itens desta despesa
-        const itens = await supabaseRequest(`despesas_externas_itens?despesa_id=eq.${despesaId}&select=*&order=id.asc`);
+        const itens = await supabaseRequest(`despesas_externas_itens?despesa_id=eq.${despesaId}&select=*%20&order=id.asc`);
         
         const dataLanc = new Date(despesa.created_at).toLocaleString('pt-BR');
         const dataNf = despesa.data_nf ? new Date(despesa.data_nf).toLocaleDateString('pt-BR') : 'N/A';
@@ -3091,3 +3131,234 @@ function limparCarrinho() {
     }
 }
 
+// =======================================================
+// === NOVAS FUNÇÕES: GRÁFICOS E LANÇAMENTO MANUAL ===
+// =======================================================
+
+/**
+ * NOVO: Prepara os filtros para a view de gráficos.
+ */
+async function prepararGraficosView() {
+    const filialSelect = document.getElementById('graficoFilialSelect');
+    const anoSelect = document.getElementById('graficoAnoSelect');
+    
+    // Popula filiais (usa o cache já existente)
+    filialSelect.innerHTML = '<option value="">Carregando filiais...</option>';
+    try {
+        const filiais = await getFiliaisCache(true);
+        filialSelect.innerHTML = filiais.map(f => `<option value="${f.id}" ${f.id === selectedFilial.id ? 'selected' : ''}>${f.nome} - ${f.descricao}</option>`).join('');
+    } catch (e) { filialSelect.innerHTML = '<option value="">Erro ao carregar</option>'; }
+
+    // Popula anos
+    const anoAtual = new Date().getFullYear();
+    anoSelect.innerHTML = '';
+    for (let i = anoAtual - 2; i <= anoAtual + 1; i++) {
+        anoSelect.innerHTML += `<option value="${i}" ${i === anoAtual ? 'selected' : ''}>${i}</option>`;
+    }
+}
+
+/**
+ * NOVO: Função principal para carregar os dados e renderizar todos os gráficos.
+ * Implementação do esqueleto de coleta de dados e renderização.
+ */
+async function loadGraficosData() {
+    const filialId = document.getElementById('graficoFilialSelect').value;
+    const ano = document.getElementById('graficoAnoSelect').value;
+    const container = document.getElementById('graficosContainer');
+    
+    if (!filialId || !ano) {
+         showNotification('Selecione a Filial e o Ano para gerar os gráficos.', 'error');
+         return;
+    }
+    
+    // Destrói instâncias de gráficos antigas (boa prática)
+    Object.values(chartInstances).forEach(chart => {
+        if (chart && typeof chart.destroy === 'function') chart.destroy();
+    });
+    chartInstances = {};
+
+    container.innerHTML = '<div class="loading"><div class="spinner"></div>Calculando métricas e gerando gráficos...</div>';
+    
+    try {
+        // --- ETAPA 1: Busca e Processa Dados (Esqueleto) ---
+        // Aqui você faria as chamadas para APIs de métricas e processaria os dados.
+        // Ex: const dadosLinhas = await fetchOrcadoRealizadoMensal(filialId, ano);
+        
+        // --- ETAPA 2: Renderiza Gráficos (Esqueleto) ---
+        // É necessário que as funções de renderização (ex: renderChartLinhas) e os dados estejam prontos.
+        // Como o Chart.js é uma biblioteca externa, apenas o placeholder será inserido.
+        
+        // Exemplo:
+        // const dadosLinhasExemplo = { labels: meses, datasets: [...] };
+        // chartInstances.linhas = renderChartLinhas(document.getElementById('orcamentoRealizadoLinhasChart'), dadosLinhasExemplo);
+        
+        // Coloca o conteúdo original da view de volta após o carregamento
+        container.innerHTML = `
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold mb-4">Filtros</h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    </div>
+            </div>
+            <div class="alert alert-success">Gráficos gerados com sucesso para a Filial ${filialId} no ano de ${ano}. (A lógica de renderização e cálculo deve ser implementada aqui).</div>
+        `;
+        
+        showNotification('Gráficos carregados. Implemente as funções de renderização de gráficos.', 'success', 4000);
+        
+    } catch (error) {
+        console.error("Erro ao carregar dados dos gráficos:", error);
+        container.innerHTML = `<div class="alert alert-error">Erro ao carregar dados: ${error.message}</div>`;
+    }
+}
+
+/**
+ * NOVO: Prepara os filtros e o formulário para a view de lançamento manual.
+ */
+async function prepararLancamentoManualRealizadoView() {
+    const filialSelect = document.getElementById('manualFilialSelect');
+    const anoSelect = document.getElementById('manualAnoSelect');
+    const linhaSelect = document.getElementById('manualLinhaSelect');
+    
+    document.getElementById('lancamentoManualFormContainer').style.display = 'none';
+
+    // 1. Popula Filiais
+    filialSelect.innerHTML = '<option value="">Carregando...</option>';
+    try {
+        const filiais = await getFiliaisCache(true);
+        filialSelect.innerHTML = '<option value="">-- Selecione a Filial --</option>' + filiais.map(f => `<option value="${f.id}">${f.nome} - ${f.descricao}</option>`).join('');
+    } catch (e) { filialSelect.innerHTML = '<option value="">Erro ao carregar</option>'; }
+
+    // 2. Popula Linhas Orçamentárias (TODAS)
+    linhaSelect.innerHTML = '<option value="">Carregando...</option>';
+    try {
+        const linhas = await getAllLinhasOrcamentariasCache(true);
+        linhaSelect.innerHTML = '<option value="">-- Selecione a Linha --</option>' + linhas.map(l => `<option value="${l.id}">${l.codigo} - ${l.descricao} ${l.ativo ? '' : '(Inativa)'}</option>`).join('');
+    } catch (e) { linhaSelect.innerHTML = '<option value="">Erro ao carregar</option>'; }
+    
+    // 3. Popula Anos (Anos anteriores)
+    const anoAtual = new Date().getFullYear();
+    anoSelect.innerHTML = '';
+    for (let i = anoAtual - 5; i <= anoAtual; i++) {
+        anoSelect.innerHTML += `<option value="${i}" ${i === anoAtual ? 'selected' : ''}>${i}</option>`;
+    }
+}
+
+/**
+ * NOVO: Busca os valores manuais existentes e popula os inputs do formulário.
+ */
+async function loadRealizadoManualForm() {
+    const filialId = document.getElementById('manualFilialSelect').value;
+    const ano = document.getElementById('manualAnoSelect').value;
+    const linhaId = document.getElementById('manualLinhaSelect').value;
+    const container = document.getElementById('lancamentoManualFormContainer');
+    const grid = document.getElementById('realizadoManualInputsGrid');
+    const alertContainer = document.getElementById('lancamentoManualAlert');
+    
+    alertContainer.innerHTML = '';
+    container.style.display = 'none';
+
+    if (!filialId || !ano || !linhaId) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Selecione a Filial, o Ano e a Linha Orçamentária.</div>';
+        return;
+    }
+
+    grid.innerHTML = '<div class="loading col-span-4"><div class="spinner"></div>Buscando valores existentes...</div>';
+
+    document.getElementById('manualFormLinhaId').value = linhaId;
+    document.getElementById('manualFormFilialId').value = filialId;
+    document.getElementById('manualFormAno').value = ano;
+
+    try {
+        // Busca os valores salvos para a Linha/Filial/Ano (SUPOSIÇÃO DE NOVA TABELA)
+        const response = await supabaseRequest(
+            `realizado_manual_historico?filial_id=eq.${filialId}&linha_orcamentaria_id=eq.${linhaId}&ano=eq.${ano}&select=mes,valor_realizado`
+        );
+        
+        const realizadoMap = new Map((response || []).map(r => [r.mes, parseFloat(r.valor_realizado) || 0]));
+        
+        grid.innerHTML = '';
+        meses.forEach((nomeMes, index) => {
+            const mes = index + 1;
+            const valor = realizadoMap.get(mes) || 0;
+            grid.innerHTML += `
+                <div class="form-group">
+                    <label for="mes_${mes}" class="font-semibold">${nomeMes} (R$):</label>
+                    <input type="number" id="mes_${mes}" step="0.01" min="0" value="${valor.toFixed(2)}" class="w-full text-right">
+                </div>
+            `;
+        });
+        
+        container.style.display = 'block';
+        if (typeof feather !== 'undefined') feather.replace(); // Renderiza ícones se houver
+
+    } catch (error) {
+        console.error("Erro ao buscar realizado manual:", error);
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao buscar: ${error.message}</div>`;
+    }
+}
+
+/**
+ * NOVO: Trata a submissão do formulário de lançamento manual (fazendo UPSERT).
+ */
+async function handleLancamentoManualRealizadoSubmit(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('lancamentoManualAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando valores...</div>';
+
+    const linhaId = document.getElementById('manualFormLinhaId').value;
+    const filialId = document.getElementById('manualFormFilialId').value;
+    const ano = document.getElementById('manualFormAno').value;
+    
+    if (!linhaId || !filialId || !ano) {
+         alertContainer.innerHTML = '<div class="alert alert-error">Erro nos IDs de referência. Tente buscar os valores novamente.</div>';
+         return;
+    }
+
+    let valoresParaUpsert = [];
+    let hasError = false;
+
+    meses.forEach((_, index) => {
+        const mes = index + 1;
+        const input = document.getElementById(`mes_${mes}`);
+        const valor = parseFloat(input.value);
+        
+        if (isNaN(valor) || valor < 0) {
+            input.classList.add('input-error');
+            hasError = true;
+        } else {
+            input.classList.remove('input-error');
+            valoresParaUpsert.push({
+                filial_id: parseInt(filialId),
+                linha_orcamentaria_id: parseInt(linhaId),
+                ano: parseInt(ano),
+                mes: mes,
+                valor_realizado: valor.toFixed(2)
+            });
+        }
+    });
+
+    if (hasError) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Valores inválidos encontrados. Corrija os campos em vermelho.</div>';
+        return;
+    }
+
+    try {
+        // SUPOSIÇÃO: Endpoint para a tabela 'realizado_manual_historico'
+        // Chave de conflito é a composição: linha_orcamentaria_id, filial_id, ano, mes
+        await supabaseRequest(
+            `realizado_manual_historico?on_conflict=linha_orcamentaria_id,filial_id,ano,mes`,
+            'POST',
+            valoresParaUpsert,
+            { 'Prefer': 'resolution=merge-duplicates' } // Header essencial para UPSERT em lote
+        );
+
+        alertContainer.innerHTML = '';
+        showNotification('Valores de Realizado Manual salvos com sucesso!', 'success');
+        
+        // Recarrega o formulário para ver os valores atualizados
+        loadRealizadoManualForm();
+
+    } catch (error) {
+        console.error("Erro ao salvar realizado manual:", error);
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
+    }
+}
