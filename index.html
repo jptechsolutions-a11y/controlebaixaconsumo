@@ -12,6 +12,9 @@
 
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script> 
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 
 </head>
 <body class="bg-gray-100 font-sans">
@@ -98,6 +101,11 @@
                     <span>Histórico Geral</span>
                 </a>
                 
+                <a href="#graficos" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('graficosView', this)" data-role="gestor,admin">
+                    <i data-feather="trending-up" class="h-5 w-5 mr-3"></i>
+                    <span>Gráficos & Análises</span>
+                </a>
+                
                 <div class="mt-4 border-t border-gray-700 pt-2">
                     <span class="p-3 text-xs font-semibold text-gray-500 uppercase">Administração</span>
                 </div>
@@ -131,6 +139,11 @@
                <a href="#gerenciarOrcamentos" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('gerenciarOrcamentosView', this)" data-role="admin">
                     <i data-feather="dollar-sign" class="h-5 w-5 mr-3"></i>
                     <span>Gerenciar Orçamentos</span>
+                </a>
+                
+                <a href="#lancamentoManualRealizado" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('lancamentoManualRealizadoView', this)" data-role="admin">
+                    <i data-feather="edit-3" class="h-5 w-5 mr-3"></i>
+                    <span>Lançar Realizado Manual</span>
                 </a>
 
                 <a href="#lancamentosFinanceiros" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('lancamentosFinanceirosView', this)" data-role="gestor,admin">
@@ -315,6 +328,112 @@
                             <tbody id="historicoBaixasBody">
                                 </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <div id="graficosView" class="view-content">
+                    <h1 class="text-3xl font-bold text-gray-800 mb-6">Análises e Indicadores</h1>
+                    <div id="graficosContainer" class="space-y-8">
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-4">Filtros</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div class="form-group">
+                                    <label for="graficoFilialSelect" class="font-semibold">Filial:</label>
+                                    <select id="graficoFilialSelect" class="w-full"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="graficoAnoSelect" class="font-semibold">Ano:</label>
+                                    <select id="graficoAnoSelect" class="w-full"></select>
+                                </div>
+                                <div class="form-group pt-6">
+                                    <button id="gerarGraficosBtn" class="btn btn-primary w-full">Gerar Gráficos</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div class="bg-white p-6 rounded-lg shadow-md">
+                                <h3 class="text-xl font-semibold mb-4">Orçado vs Realizado (Linhas Orçamentárias)</h3>
+                                <p class="text-sm text-gray-500 mb-2">Comparativo Orçado vs Realizado por Linha (Mês a Mês). Use o Desvio % para Savings.</p>
+                                <div class="relative h-96">
+                                    <canvas id="orcamentoRealizadoLinhasChart"></canvas>
+                                </div>
+                                <div id="desvioOrcamentarioLinhas" class="mt-4"></div>
+                            </div>
+                            <div class="bg-white p-6 rounded-lg shadow-md">
+                                <h3 class="text-xl font-semibold mb-4">Orçado vs Realizado (CGOs Mais Usados)</h3>
+                                <p class="text-sm text-gray-500 mb-2">Comparativo Orçado vs Realizado por CGO (Mês Atual).</p>
+                                <div class="relative h-96">
+                                    <canvas id="orcamentoRealizadoCGOsChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-4">Top 10 Itens que Mais Impactam o Custo</h3>
+                            <p class="text-sm text-gray-500 mb-2">Itens classificados por Valor e Quantidade total de baixas.</p>
+                            <div class="relative h-96">
+                                <canvas id="topItensImpactoChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div class="bg-white p-6 rounded-lg shadow-md">
+                                <h3 class="text-xl font-semibold mb-4">Projeção de Gastos (Mês Atual)</h3>
+                                <p class="text-sm text-gray-500 mb-2">Valor Realizado até hoje vs Projeção de Fechamento (Linhas).</p>
+                                <div class="relative h-96">
+                                    <canvas id="projecaoGastosMensalChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="bg-white p-6 rounded-lg shadow-md">
+                                <h3 class="text-xl font-semibold mb-4">Comparativo Anual (Realizado)</h3>
+                                <p class="text-sm text-gray-500 mb-2">Visualização do Realizado nos últimos anos (Crescimento/Redução).</p>
+                                <div class="relative h-96">
+                                    <canvas id="comparativoAnualChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="lancamentoManualRealizadoView" class="view-content">
+                    <h1 class="text-3xl font-bold text-gray-800 mb-6">Lançamento Manual Realizado (Histórico)</h1>
+                    <p class="text-gray-600 mb-6">Permite o registro de valores realizados para anos/meses anteriores onde o sistema não estava em uso. Estes valores serão usados nos gráficos comparativos.</p>
+
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <h3 class="text-xl font-semibold mb-4">Filtros e Edição</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div class="form-group">
+                                <label for="manualFilialSelect" class="font-semibold">Filial:</label>
+                                <select id="manualFilialSelect" class="w-full"></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="manualAnoSelect" class="font-semibold">Ano:</label>
+                                <select id="manualAnoSelect" class="w-full"></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="manualLinhaSelect" class="font-semibold">Linha Orçamentária:</label>
+                                <select id="manualLinhaSelect" class="w-full"></select>
+                            </div>
+                            <div class="form-group pt-6">
+                                <button id="buscarRealizadoManualBtn" class="btn btn-primary w-full">Buscar Valores</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="lancamentoManualFormContainer" style="display: none;" class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-4">Valores Realizados por Mês (R$)</h3>
+                        <form id="lancamentoManualForm">
+                            <input type="hidden" id="manualFormLinhaId">
+                            <input type="hidden" id="manualFormFilialId">
+                            <input type="hidden" id="manualFormAno">
+                            
+                            <div id="realizadoManualInputsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                </div>
+                            
+                            <div id="lancamentoManualAlert" class="mt-4"></div>
+                            <button type="submit" class="btn btn-success w-full md:w-auto">Salvar Realizado Manual</button>
+                        </form>
                     </div>
                 </div>
 
