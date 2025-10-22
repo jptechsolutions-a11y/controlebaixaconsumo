@@ -3410,10 +3410,30 @@ function renderChartLinhas(canvasId, data) {
     }
     
     chartInstances[canvasId] = new Chart(ctx, {
-        type: 'bar',
+        type: 'bar', // Tipo principal: Bar (para o Realizado)
         data: {
             labels: data.labels, // Meses
-            datasets: data.datasets
+            datasets: [
+                {
+                    label: 'Orçado',
+                    data: data.datasets[0].data, // Pega os dados do Orçado
+                    backgroundColor: 'rgba(0, 119, 182, 1)', 
+                    borderColor: 'rgba(0, 119, 182, 1)',
+                    borderWidth: 2,
+                    type: 'line', // <--- MUDANÇA AQUI: Define o Orçado como LINHA
+                    fill: false, // Não preenche a área abaixo da linha
+                    tension: 0.2, // Deixa a linha levemente curva
+                    pointRadius: 5, // Deixa os pontos de dados visíveis
+                },
+                {
+                    label: 'Realizado (Baixas + NF + Manual)',
+                    data: data.datasets[1].data, // Pega os dados do Realizado
+                    backgroundColor: 'rgba(0, 212, 170, 0.7)', // Cor Verde (Primary)
+                    borderColor: 'rgba(0, 212, 170, 1)',
+                    borderWidth: 1,
+                    type: 'bar' // <--- MUDANÇA AQUI: Mantém o Realizado como BARRA
+                }
+            ]
         },
         options: {
             responsive: true,
