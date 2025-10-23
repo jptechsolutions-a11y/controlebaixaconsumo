@@ -44,7 +44,7 @@ export default async (req, res) => {
             'Accept': 'application/json',
             // Token do usuário para RLS (Row Level Security)
             'Authorization': `Bearer ${userJwt}`,
-            // CORREÇÃO: Usar a Chave ANÔNIMA para 'apiKey'
+            // CORREÇÃO: Usar a Chave ANÔNIMA para 'apiKey' (Requisito da API REST)
             'apiKey': SUPABASE_ANON_KEY 
         }
     };
