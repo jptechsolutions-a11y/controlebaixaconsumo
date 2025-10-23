@@ -96,20 +96,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function handleLogin(event) {
-    event.preventDefault(); // Impede o recarregamento da página
-
+    event.preventDefault();
     showError(''); 
     
-    // CORREÇÃO: Lê o campo com ID 'email'
     const email = document.getElementById('email').value.trim(); 
     const password = document.getElementById('password').value;
     
     try {
         // 1. Chamar a API de Autenticação do Supabase
         const authResponse = await fetch('/api/login', { 
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ email, password })
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
         });
         
         if (!authResponse.ok) {
@@ -117,11 +115,9 @@ async function handleLogin(event) {
         }
 
         const { user: authUser, session: authSession } = await authResponse.json();
-        
         const authUserId = authUser?.id;
 
         if (!authUserId) {
-            // Se o ID for NULL ou undefined, gera este erro claro
             throw new Error('Erro de sessão. ID de usuário não retornado após autenticação.');
         }
         
@@ -129,9 +125,20 @@ async function handleLogin(event) {
         localStorage.setItem('auth_token', authSession.access_token);
         
         // 2. Buscar o perfil customizado E AS FILIAIS
-        // CORREÇÃO FINAL: Removida a sanitização ('') que estava quebrando o fetch.
-        // O UUID deve ser passado puro no filtro eq.
-        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUserId}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
+        // CORREÇÃO: Construir a query separadamente para evitar corrupção
+        console.log("Auth User ID recebido:", authUserId); // Debug
+        
+        // Monta a query de forma segura
+        const baseEndpoint = 'usuarios';
+        const filters = `auth_user_id=eq.${authUserId}`;
+        const selectClause = 'select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))';
+        const fullEndpoint = `${baseEndpoint}?${filters}&${selectClause}`;
+        
+        console.log("Endpoint completo para buscar usuário:", fullEndpoint); // Debug
+        
+        const customProfile = await supabaseRequest(fullEndpoint, 'GET');
+        
+        console.log("Perfil customizado recebido:", customProfile); // Debug
         
         const user = customProfile[0];
 
@@ -139,7 +146,7 @@ async function handleLogin(event) {
             throw new Error('Perfil de usuário não encontrado. Vínculo de dados incompleto.');
         }
         
-        // *** Mapear e Limpar Filiais ***
+        // Mapear e Limpar Filiais
         const userFiliais = user.usuario_filiais ? user.usuario_filiais.map(uf => uf.filiais) : [];
         
         if (userFiliais.length === 0) {
@@ -160,6 +167,7 @@ async function handleLogin(event) {
         redirectToDashboard();
 
     } catch (error) {
+        console.error("Erro detalhado no login:", error); // Debug completo
         showError(error.message);
     }
 }
@@ -1186,48 +1194,71 @@ async function handleRetiradaSubmit(event) {
 }
 
 
-async function supabaseRequest(endpoint, method, body = null) {
+async function supabaseRequest(endpoint, method = 'GET', body = null, customHeaders = {}) {
     // 1. Obter o token JWT do armazenamento local
     const authToken = localStorage.getItem('auth_token');
     if (!authToken) {
+        console.error("Token JWT não encontrado no localStorage");
         logout(); 
         throw new Error("Sessão expirada. Faça login novamente.");
     }
 
     // 2. Montar a requisição para o Proxy
-    const url = `/api/proxy?endpoint=${endpoint}`;
+    // CORREÇÃO: NÃO fazer encode do endpoint aqui, pois já vem formatado
+    const url = `/api/proxy?endpoint=${encodeURIComponent(endpoint)}`;
     
-    // --- TRATAMENTO DE FILTRO UUID INVÁLIDO ---
-    // Intercepta a falha de sintaxe UUID antes de enviar a requisição
-    if (endpoint.startsWith('usuarios?') && (endpoint.includes('auth_user_id=eq.null') || endpoint.includes('auth_user_id=eq.undefined'))) {
-         throw new Error("Erro de Vínculo: O ID de usuário Auth não está sendo retornado ou está corrompido na busca do perfil customizado.");
-    }
-    // --- FIM DO TRATAMENTO ---
+    console.log("Requisição para o proxy:", {
+        url: url,
+        endpoint: endpoint,
+        method: method
+    }); // Debug
     
+    // 3. Configurar headers
     const config = {
         method: method,
         headers: {
             'Content-Type': 'application/json',
-            // 3. INJETAR O TOKEN NO CABEÇALHO 'Authorization'
-            'Authorization': `Bearer ${authToken}` 
+            'Authorization': `Bearer ${authToken}`,
+            ...customHeaders // Permite headers customizados se necessário
         }
     };
 
+    // 4. Adicionar body se necessário
     if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
         config.body = JSON.stringify(body);
     }
 
-    const response = await fetch(url, config);
-    
-    if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-             logout(); 
+    try {
+        const response = await fetch(url, config);
+        
+        // Log da resposta para debug
+        console.log("Resposta do proxy:", {
+            status: response.status,
+            ok: response.ok,
+            headers: response.headers
+        });
+        
+        if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                console.error("Erro de autorização (401/403), fazendo logout");
+                logout();
+                throw new Error("Sessão expirada ou sem autorização.");
+            }
+            
+            const errorText = await response.text();
+            console.error("Erro na resposta:", errorText);
+            throw new Error(`Erro na requisição Supabase: ${errorText}`);
         }
-        const errorText = await response.text();
-        throw new Error(`Erro na requisição Supabase: ${errorText}`);
+        
+        const data = await response.json();
+        console.log("Dados recebidos do Supabase:", data); // Debug
+        
+        return data;
+        
+    } catch (error) {
+        console.error("Erro na requisição supabaseRequest:", error);
+        throw error;
     }
-    
-    return response.json();
 }
 
 // Função de Notificação (sem alteração)
