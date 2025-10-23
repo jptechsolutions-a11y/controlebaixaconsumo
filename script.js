@@ -98,10 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
 async function handleLogin(event) {
     event.preventDefault(); // Impede o recarregamento da página
 
-    // Limpa a mensagem de erro anterior
     showError(''); 
     
-    // Leitura dos campos do formulário (ID 'email' e 'password')
+    // CORREÇÃO: Lê o campo com ID 'email'
     const email = document.getElementById('email').value.trim(); 
     const password = document.getElementById('password').value;
     
@@ -119,7 +118,6 @@ async function handleLogin(event) {
 
         const { user: authUser, session: authSession } = await authResponse.json();
         
-        // NOVO: VALIDAÇÃO RIGOROSA DO ID ANTES DE USAR
         const authUserId = authUser?.id;
 
         if (!authUserId) {
@@ -130,10 +128,9 @@ async function handleLogin(event) {
         localStorage.setItem('auth_token', authSession.access_token);
         
         // 2. Buscar o perfil customizado E AS FILIAIS
-        // CRÍTICO: Sanitiza o UUID para inclusão na URL, garantindo as aspas simples.
+        // CORREÇÃO FINAL: As aspas simples ('') são necessárias para o Supabase reconhecer o UUID na URL.
         const authUserIdSanitized = `'${authUserId}'`; 
 
-        // Adiciona as aspas simples através da variável sanitizada.
         const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUserIdSanitized}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
         
         const user = customProfile[0];
@@ -1193,7 +1190,6 @@ async function supabaseRequest(endpoint, method, body = null) {
     // 1. Obter o token JWT do armazenamento local
     const authToken = localStorage.getItem('auth_token');
     if (!authToken) {
-        // Se não tiver token, força o logout para segurança
         logout(); 
         throw new Error("Sessão expirada. Faça login novamente.");
     }
@@ -1202,9 +1198,7 @@ async function supabaseRequest(endpoint, method, body = null) {
     const url = `/api/proxy?endpoint=${endpoint}`;
     
     // --- NOVO: Tratamento de Endpoint com Filtro UUID INVÁLIDO ---
-    // Verifica se a URL contém a substring que causa o erro de sintaxe UUID
     if (endpoint.startsWith('usuarios?') && (endpoint.includes('auth_user_id=eq.null') || endpoint.includes('auth_user_id=eq.undefined'))) {
-         // Intercepta o erro 400 do Supabase e o transforma em um erro claro de aplicação
          throw new Error("Erro de Vínculo: O ID de usuário Auth não está sendo retornado ou está corrompido na busca do perfil customizado. Verifique se o usuário possui um UUID válido na tabela 'auth.users' e se a linha correspondente em 'public.usuarios' tem o 'auth_user_id' preenchido.");
     }
     // --- FIM DO NOVO TRATAMENTO ---
@@ -1225,7 +1219,6 @@ async function supabaseRequest(endpoint, method, body = null) {
     const response = await fetch(url, config);
     
     if (!response.ok) {
-        // Se 401 ou 403, pode ser token inválido/expirado
         if (response.status === 401 || response.status === 403) {
              logout(); 
         }
