@@ -3808,24 +3808,74 @@ function redirectToDashboard() {
     // Certifique-se de que 'currentUser' foi definido em 'handleLogin'
     if (!currentUser || !currentUser.filiais || currentUser.filiais.length === 0) {
         showError("Erro fatal: Dados do usuário incompletos após o login.");
-        logout(); // Força o logout
+        logout(); 
         return;
     }
     
     const filiais = currentUser.filiais;
+    const filialSelectGroup = document.getElementById('filialSelectGroup');
+    const filialSelect = document.getElementById('filialSelect');
+    
+    // ZERA selectedFilial para garantir que seja definido após esta função
+    selectedFilial = null;
 
     // Se o usuário tem apenas 1 filial, seleciona automaticamente
     if (filiais.length === 1) {
         selectedFilial = filiais[0];
-        // Sua função que carrega a interface principal do sistema
+        // Chama a função que carrega a interface principal do sistema
         showMainSystem(); 
     } 
-    // Se o usuário tem mais de 1 filial (AJUSTE NECESSÁRIO NO SEU SISTEMA)
+    // Se o usuário tem mais de 1 filial: exibe o seletor de filial
     else if (filiais.length > 1) {
-        console.warn("Usuário tem múltiplas filiais. Exibir modal de seleção é o ideal.");
+        console.warn("Usuário tem múltiplas filiais. Exibindo modal/seletor de seleção.");
         
-        // PARA TESTES: Seleciona a primeira filial para prosseguir
-        selectedFilial = filiais[0];
-        showMainSystem(); 
+        // 1. Popula o Select
+        filialSelect.innerHTML = filiais.map(f => 
+            `<option value="${f.id}">${f.nome} - ${f.descricao}</option>`
+        ).join('');
+        
+        // 2. Torna o grupo de seleção visível e foca
+        filialSelectGroup.style.display = 'block';
+        filialSelect.focus();
+        
+        // 3. Modifica o botão de login para ser o botão de seleção
+        const loginButton = document.querySelector('#loginForm button[type="submit"]');
+        loginButton.textContent = 'CONFIRMAR FILIAL';
+        
+        // 4. Altera o listener do formulário para o novo handler
+        document.getElementById('loginForm').removeEventListener('submit', handleLogin);
+        document.getElementById('loginForm').addEventListener('submit', handleFilialSelection);
     }
 }
+
+function handleFilialSelection(event) {
+    event.preventDefault();
+    const filialId = document.getElementById('filialSelect').value;
+    const filial = currentUser.filiais.find(f => f.id == filialId);
+
+    if (filial) {
+        selectedFilial = filial;
+        // Restaura o listener do login para uso futuro (se houver logout)
+        document.getElementById('loginForm').removeEventListener('submit', handleFilialSelection);
+        document.getElementById('loginForm').addEventListener('submit', handleLogin);
+        
+        // Esconde o seletor e restaura o botão
+        document.getElementById('filialSelectGroup').style.display = 'none';
+        document.querySelector('#loginForm button[type="submit"]').textContent = 'ENTRAR';
+
+        // Carrega o sistema principal
+        showMainSystem();
+    } else {
+        showError("Erro: Filial selecionada não encontrada nos seus acessos.");
+    }
+}
+
+// NOVO: Adicione esta linha no início do seu script.js, junto com os outros binds do DOMContentLoaded
+// ...
+document.addEventListener('DOMContentLoaded', () => {
+    // ... outros binds
+    
+    // Novo bind para o caso de seleção manual de filial
+    document.getElementById('loginForm').addEventListener('submit', handleLogin);
+    // ... o restante do seu DOMContentLoaded
+});
