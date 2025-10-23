@@ -95,7 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Substitua sua versão de handleLogin no script.js
 async function handleLogin(event) {
     event.preventDefault(); // Impede o recarregamento da página
 
@@ -121,8 +120,13 @@ async function handleLogin(event) {
 
         const { user: authUser, session: authSession } = await authResponse.json();
         
-        // 2. Buscar o perfil customizado E AS FILIAIS (SELECT COMPLEXO COM JOIN)
-        // Isso requer RLS na tabela 'usuarios' e 'usuario_filiais'
+        // 2. ARMAZENAR O TOKEN JWT (CRUCIAL para todas as requisições futuras)
+        // ESTAS LINHAS FORAM MOVIDAS PARA CÁ.
+        localStorage.setItem('auth_token', authSession.access_token);
+        // O user só será salvo no final, após a busca do perfil
+        
+        // 3. Buscar o perfil customizado E AS FILIAIS (SELECT COMPLEXO COM JOIN)
+        // O supabaseRequest agora tem o token no localStorage e deve funcionar.
         const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
         
         const user = customProfile[0];
@@ -133,7 +137,6 @@ async function handleLogin(event) {
         }
         
         // *** Mapear e Limpar Filiais ***
-        // user.usuario_filiais é a lista de vínculos, userFiliais é a lista das filiais em si
         const userFiliais = user.usuario_filiais ? user.usuario_filiais.map(uf => uf.filiais) : [];
         
         if (userFiliais.length === 0) {
@@ -147,11 +150,10 @@ async function handleLogin(event) {
         // Define o usuário globalmente para uso em redirectToDashboard
         currentUser = user; 
 
-        // 3. ARMAZENAR O TOKEN JWT (CRUCIAL para todas as requisições futuras)
-        localStorage.setItem('auth_token', authSession.access_token);
+        // 4. ARMAZENAR DADOS DO USUÁRIO
         localStorage.setItem('user', JSON.stringify(currentUser)); 
         
-        // 4. Redirecionar
+        // 5. Redirecionar
         redirectToDashboard();
 
     } catch (error) {
