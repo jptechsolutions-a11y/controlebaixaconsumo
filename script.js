@@ -73,6 +73,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('buscarRealizadoManualBtn')?.addEventListener('click', loadRealizadoManualForm);
     document.getElementById('lancamentoManualForm')?.addEventListener('submit', handleLancamentoManualRealizadoSubmit);
 
+    document.addEventListener('DOMContentLoaded', () => {
+    // ...
+    document.getElementById('loginForm').addEventListener('submit', handleLogin);
+        
     // Adiciona listener para salvar orçamento via delegation (AJUSTADO)
     const orcamentosTableBody = document.getElementById('orcamentosTableBody');
     if (orcamentosTableBody) {
@@ -94,11 +98,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-async function handleLogin(email, password) {
+async function handleLogin(event) {
+    event.preventDefault(); // Impede o recarregamento da página
+
+    // --- LEITURA DIRETA DOS INPUTS ---
+    const email = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    // --- FIM DA LEITURA ---
+    
+    // O resto da lógica da função permanece como está
     try {
-        // 1. Chamar a API de Autenticação do Supabase (assumindo que você use o SDK ou um endpoint direto)
-        // Isso retorna o token JWT e o objeto do usuário autenticado.
-        const authResponse = await fetch('/api/login', { // Um novo endpoint (veja Parte 3) ou o SDK do Supabase
+        // 1. Chamar a API de Autenticação do Supabase
+        const authResponse = await fetch('/api/login', { 
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
              body: JSON.stringify({ email, password })
@@ -111,6 +122,8 @@ async function handleLogin(email, password) {
         const { user: authUser, session: authSession } = await authResponse.json();
         
         // 2. Buscar o perfil customizado usando o ID seguro
+        // ATENÇÃO: O campo no HTML é 'username', mas a autenticação Supabase é feita por email
+        // Você precisa se certificar que o valor inserido no campo 'username' é o EMAIL.
         const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}`);
         const user = customProfile[0];
 
@@ -122,7 +135,7 @@ async function handleLogin(email, password) {
         localStorage.setItem('auth_token', authSession.access_token);
         localStorage.setItem('user', JSON.stringify(user)); // Armazena o perfil customizado
         
-        // 4. Redirecionar (mantém o resto do seu código original)
+        // 4. Redirecionar
         redirectToDashboard();
 
     } catch (error) {
