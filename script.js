@@ -147,7 +147,11 @@ async function handleLogin(event) {
         }
         
         // Mapear e Limpar Filiais
-        const userFiliais = user.usuario_filiais ? user.usuario_filiais.map(uf => uf.filiais) : [];
+       const userFiliais = user.usuario_filiais 
+            ? user.usuario_filiais
+                .map(uf => uf.filiais) // Mapeia para o objeto de filial
+                .filter(f => f && f.id) // FILTRO CRÍTICO: Remove entradas nulas/indefinidas e garante que 'id' existe
+            : [];
         
         if (userFiliais.length === 0) {
             throw new Error('Usuário não tem filiais associadas ou RLS bloqueou a busca das filiais.');
