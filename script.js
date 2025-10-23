@@ -3817,9 +3817,12 @@ function redirectToDashboard() {
     const filialSelect = document.getElementById('filialSelect');
     const loginButton = document.querySelector('#loginForm button[type="submit"]');
 
-    // VERIFICAÇÃO CRÍTICA DO DOM:
+    // ADICIONADO: Verifica se os elementos do DOM existem
     if (!filialSelectGroup || !filialSelect || !loginButton) {
-        showError("Erro fatal de renderização: Elementos de seleção de filial não encontrados.");
+        showError("Erro fatal: Elementos de seleção de filial não encontrados no DOM.");
+        // Acessamos um elemento de alerta que deve estar sempre presente no loginContainer
+        const loginAlert = document.getElementById('loginAlert');
+        if(loginAlert) loginAlert.innerHTML = `<div class="alert alert-error">ERRO CRÍTICO: Não foi possível encontrar os elementos de seleção (filialSelect). O DOM está incompleto.</div>`;
         return;
     }
 
@@ -3849,7 +3852,6 @@ function redirectToDashboard() {
         loginButton.textContent = 'CONFIRMAR FILIAL';
         
         // 4. Altera o listener do formulário para o novo handler
-        // REMOVER o listener antigo (handleLogin) ANTES de adicionar o novo
         document.getElementById('loginForm').removeEventListener('submit', handleLogin);
         document.getElementById('loginForm').addEventListener('submit', handleFilialSelection);
     }
