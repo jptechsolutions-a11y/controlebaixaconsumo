@@ -94,87 +94,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// --- Funções de Autenticação e Navegação ---
-
-async function handleLogin(event) {
-    event.preventDefault();
-    const username = document.getElementById('username').value.trim();
-    const password = document.getElementById('password').value; // Não use trim na senha
-    const filialSelect = document.getElementById('filialSelect');
-    const filialIdSelecionada = filialSelect.value;
-    const alertContainer = document.getElementById('loginAlert');
-    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Autenticando...</div>';
-
+async function handleLogin(email, password) {
     try {
-        // 1. Buscar usuário pelo username
-        const userResponse = await supabaseRequest(`usuarios?username=eq.${username}&select=id,nome,senha_hash,role,ativo`);
-
-        if (!userResponse || userResponse.length === 0 || !userResponse[0].ativo) {
-            throw new Error('Usuário não encontrado ou inativo.');
+        // 1. Chamar a API de Autenticação do Supabase (assumindo que você use o SDK ou um endpoint direto)
+        // Isso retorna o token JWT e o objeto do usuário autenticado.
+        const authResponse = await fetch('/api/login', { // Um novo endpoint (veja Parte 3) ou o SDK do Supabase
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ email, password })
+        });
+        
+        if (!authResponse.ok) {
+            throw new Error('Falha na autenticação. Verifique e-mail e senha.');
         }
 
-        const user = userResponse[0];
+        const { user: authUser, session: authSession } = await authResponse.json();
+        
+        // 2. Buscar o perfil customizado usando o ID seguro
+        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}`);
+        const user = customProfile[0];
 
-        // --- INÍCIO DA ALTERAÇÃO (Comparação de Senha) ---
-        // Compara a senha digitada com o valor na coluna senha_hash do banco
-        // ATENÇÃO: ISSO SÓ FUNCIONA COM SENHAS EM TEXTO PLANO NO BANCO (NÃO SEGURO!)
-        if (password !== user.senha_hash) {
-             throw new Error('Senha incorreta.');
+        if (!user) {
+            throw new Error('Perfil de usuário não encontrado.');
         }
-        // --- FIM DA ALTERAÇÃO ---
-
-
-        // 2. Buscar filiais associadas ao usuário
-        const filiaisResponse = await supabaseRequest(`usuario_filiais?usuario_id=eq.${user.id}&select=filial_id(id,nome,descricao)`);
-
-        if (!filiaisResponse || filiaisResponse.length === 0) {
-            throw new Error('Usuário não associado a nenhuma filial.');
-        }
-
-        const filiaisUsuario = filiaisResponse.map(f => f.filial_id);
-
-        currentUser = {
-            id: user.id,
-            nome: user.nome,
-            username: username,
-            role: user.role,
-            filiais: filiaisUsuario
-        };
-
-        // 3. Lógica de Seleção de Filial
-        if (filiaisUsuario.length === 1) {
-            // Apenas uma filial, seleciona automaticamente
-            selectedFilial = filiaisUsuario[0];
-            showMainSystem();
-        } else {
-            // Múltiplas filiais
-            const filialSelectGroup = document.getElementById('filialSelectGroup');
-            if (filialSelectGroup.style.display === 'none') {
-                // Primeira vez, popula o select e mostra
-                filialSelect.innerHTML = '<option value="">-- Selecione uma Filial --</option>';
-                filiaisUsuario.forEach(f => {
-                    filialSelect.innerHTML += `<option value="${f.id}">${f.nome} - ${f.descricao}</option>`;
-                });
-                filialSelectGroup.style.display = 'block';
-                alertContainer.innerHTML = '<div class="alert alert-info">Selecione a filial desejada.</div>';
-            } else {
-                // Segunda vez (já selecionou a filial no dropdown)
-                if (!filialIdSelecionada) {
-                    throw new Error('Por favor, selecione uma filial.');
-                }
-                selectedFilial = filiaisUsuario.find(f => f.id == filialIdSelecionada);
-                if (!selectedFilial) {
-                     throw new Error('Filial selecionada inválida.');
-                }
-                showMainSystem();
-            }
-        }
+        
+        // 3. ARMAZENAR O TOKEN JWT (CRUCIAL!)
+        localStorage.setItem('auth_token', authSession.access_token);
+        localStorage.setItem('user', JSON.stringify(user)); // Armazena o perfil customizado
+        
+        // 4. Redirecionar (mantém o resto do seu código original)
+        redirectToDashboard();
 
     } catch (error) {
-        console.error("Erro no login:", error);
-        // AJUSTE: Mostrar error.message em vez do objeto error inteiro
-        alertContainer.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
-        document.getElementById('filialSelectGroup').style.display = 'none'; // Esconde filial em caso de erro
+        showError(error.message);
     }
 }
 
@@ -1200,43 +1152,43 @@ async function handleRetiradaSubmit(event) {
 }
 
 
-/**
- * REESCRITO: supabaseRequest (Mantendo o error handling melhorado)
- */
-async function supabaseRequest(endpoint, method = 'GET', data = null, headers = {}) { // AJUSTADO: Aceita headers
-    const [endpointBase, queryParams] = endpoint.split('?', 2);
-    if (typeof SUPABASE_PROXY_URL === 'undefined') throw new Error("SUPABASE_PROXY_URL não definida.");
-    let proxyUrl = `${SUPABASE_PROXY_URL}?endpoint=${endpointBase}`;
-    if (queryParams) proxyUrl += `&${queryParams}`;
-
-    // AJUSTADO: Mescla headers padrão com os opcionais
-    const options = {
-        method,
+async function supabaseRequest(method, endpoint, body = null) {
+    // 1. Obter o token JWT do armazenamento local
+    const authToken = localStorage.getItem('auth_token');
+    if (!authToken) {
+        // Se não tiver token, força o logout para segurança
+        logout(); 
+        throw new Error("Sessão expirada. Faça login novamente.");
+    }
+    
+    // 2. Montar a requisição para o Proxy
+    const url = `/api/proxy?endpoint=${endpoint}`;
+    
+    const config = {
+        method: method,
         headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            ...headers // Inclui headers extras (como o 'Prefer' do UPSERT)
+            // 3. INJETAR O TOKEN NO CABEÇALHO 'Authorization'
+            'Authorization': `Bearer ${authToken}` 
         }
     };
 
-    if (data && (method === 'POST' || method === 'PATCH')) options.body = JSON.stringify(data);
-
-    try {
-        const response = await fetch(proxyUrl, options);
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[Frontend] Proxy/Supabase Error:', response.status, errorText);
-            let errorJson; let errorMessage = errorText || `Erro ${response.status}.`;
-            try { errorJson = JSON.parse(errorText); errorMessage = errorJson.message || errorJson.error || errorMessage; } catch (e) { /* ignore */ }
-            throw new Error(errorMessage);
-        }
-        if (response.status === 204 || method === 'DELETE') return null;
-        try { return await response.json(); } catch (e) { console.warn("Resposta não era JSON."); return null; }
-    } catch (error) {
-        console.error(`Falha Proxy [${method} ${endpoint}]:`, error);
-        if (typeof showNotification === 'function') showNotification(`Erro: ${error.message}`, 'error'); else alert(`Erro: ${error.message}`);
-        throw error;
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+        config.body = JSON.stringify(body);
     }
+
+    const response = await fetch(url, config);
+    
+    if (!response.ok) {
+        // Se 401 ou 403, pode ser token inválido/expirado
+        if (response.status === 401 || response.status === 403) {
+             logout(); 
+        }
+        const errorText = await response.text();
+        throw new Error(`Erro na requisição Supabase: ${errorText}`);
+    }
+    
+    return response.json();
 }
 
 // Função de Notificação (sem alteração)
