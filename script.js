@@ -1189,7 +1189,7 @@ async function handleRetiradaSubmit(event) {
 }
 
 
-async function supabaseRequest(method, endpoint, body = null) {
+async function supabaseRequest(endpoint, method, body = null) {
     // 1. Obter o token JWT do armazenamento local
     const authToken = localStorage.getItem('auth_token');
     if (!authToken) {
@@ -1197,9 +1197,17 @@ async function supabaseRequest(method, endpoint, body = null) {
         logout(); 
         throw new Error("Sessão expirada. Faça login novamente.");
     }
-    
+
     // 2. Montar a requisição para o Proxy
     const url = `/api/proxy?endpoint=${endpoint}`;
+    
+    // --- NOVO: Tratamento de Endpoint com Filtro UUID INVÁLIDO ---
+    // Verifica se a URL contém a substring que causa o erro de sintaxe UUID
+    if (endpoint.startsWith('usuarios?') && (endpoint.includes('auth_user_id=eq.null') || endpoint.includes('auth_user_id=eq.undefined'))) {
+         // Intercepta o erro 400 do Supabase e o transforma em um erro claro de aplicação
+         throw new Error("Erro de Vínculo: O ID de usuário Auth não está sendo retornado ou está corrompido na busca do perfil customizado. Verifique se o usuário possui um UUID válido na tabela 'auth.users' e se a linha correspondente em 'public.usuarios' tem o 'auth_user_id' preenchido.");
+    }
+    // --- FIM DO NOVO TRATAMENTO ---
     
     const config = {
         method: method,
