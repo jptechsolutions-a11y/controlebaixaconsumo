@@ -3815,7 +3815,14 @@ function redirectToDashboard() {
     const filiais = currentUser.filiais;
     const filialSelectGroup = document.getElementById('filialSelectGroup');
     const filialSelect = document.getElementById('filialSelect');
-    
+    const loginButton = document.querySelector('#loginForm button[type="submit"]');
+
+    // VERIFICAÇÃO CRÍTICA DO DOM:
+    if (!filialSelectGroup || !filialSelect || !loginButton) {
+        showError("Erro fatal de renderização: Elementos de seleção de filial não encontrados.");
+        return;
+    }
+
     // ZERA selectedFilial para garantir que seja definido após esta função
     selectedFilial = null;
 
@@ -3827,7 +3834,7 @@ function redirectToDashboard() {
     } 
     // Se o usuário tem mais de 1 filial: exibe o seletor de filial
     else if (filiais.length > 1) {
-        console.warn("Usuário tem múltiplas filiais. Exibindo modal/seletor de seleção.");
+        console.warn("Usuário tem múltiplas filiais. Exibindo seletor.");
         
         // 1. Popula o Select
         filialSelect.innerHTML = filiais.map(f => 
@@ -3839,10 +3846,10 @@ function redirectToDashboard() {
         filialSelect.focus();
         
         // 3. Modifica o botão de login para ser o botão de seleção
-        const loginButton = document.querySelector('#loginForm button[type="submit"]');
         loginButton.textContent = 'CONFIRMAR FILIAL';
         
         // 4. Altera o listener do formulário para o novo handler
+        // REMOVER o listener antigo (handleLogin) ANTES de adicionar o novo
         document.getElementById('loginForm').removeEventListener('submit', handleLogin);
         document.getElementById('loginForm').addEventListener('submit', handleFilialSelection);
     }
@@ -3851,31 +3858,27 @@ function redirectToDashboard() {
 function handleFilialSelection(event) {
     event.preventDefault();
     const filialId = document.getElementById('filialSelect').value;
+    
+    // Procura a filial no array do currentUser (já buscado no login)
     const filial = currentUser.filiais.find(f => f.id == filialId);
 
     if (filial) {
         selectedFilial = filial;
-        // Restaura o listener do login para uso futuro (se houver logout)
-        document.getElementById('loginForm').removeEventListener('submit', handleFilialSelection);
-        document.getElementById('loginForm').addEventListener('submit', handleLogin);
+        
+        // *** REVERTE O ESTADO DO LOGIN PARA QUE A TELA POSSA SER ESCONDIDA ***
+        
+        // Restaura o listener do login para uso futuro (após logout)
+        const loginForm = document.getElementById('loginForm');
+        loginForm.removeEventListener('submit', handleFilialSelection);
+        loginForm.addEventListener('submit', handleLogin); // Volta a ser o handleLogin
         
         // Esconde o seletor e restaura o botão
         document.getElementById('filialSelectGroup').style.display = 'none';
         document.querySelector('#loginForm button[type="submit"]').textContent = 'ENTRAR';
 
-        // Carrega o sistema principal
+        // Carrega o sistema principal (FINALMENTE ESCONDE A TELA DE LOGIN)
         showMainSystem();
     } else {
         showError("Erro: Filial selecionada não encontrada nos seus acessos.");
     }
 }
-
-// NOVO: Adicione esta linha no início do seu script.js, junto com os outros binds do DOMContentLoaded
-// ...
-document.addEventListener('DOMContentLoaded', () => {
-    // ... outros binds
-    
-    // Novo bind para o caso de seleção manual de filial
-    document.getElementById('loginForm').addEventListener('submit', handleLogin);
-    // ... o restante do seu DOMContentLoaded
-});
