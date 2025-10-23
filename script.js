@@ -114,7 +114,6 @@ async function handleLogin(event) {
         });
         
         if (!authResponse.ok) {
-            // Isso captura o 401: credenciais inválidas
             throw new Error('Falha na autenticação. Verifique e-mail e senha.');
         }
 
@@ -124,7 +123,6 @@ async function handleLogin(event) {
         const authUserId = authUser?.id;
 
         if (!authUserId) {
-             // Se o Auth retornou a sessão, mas sem ID
             throw new Error('Erro de sessão. ID de usuário não retornado após autenticação.');
         }
         
@@ -132,13 +130,15 @@ async function handleLogin(event) {
         localStorage.setItem('auth_token', authSession.access_token);
         
         // 2. Buscar o perfil customizado E AS FILIAIS
-        // <<< CORREÇÃO FINAL AQUI: Envolver o authUserId com aspas simples ('') >>>
-        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.'${authUserId}'&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
+        // CRÍTICO: Sanitiza o UUID para inclusão na URL, garantindo as aspas simples.
+        const authUserIdSanitized = `'${authUserId}'`; 
+
+        // Adiciona as aspas simples através da variável sanitizada.
+        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUserIdSanitized}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
         
         const user = customProfile[0];
 
         if (!user) {
-            // Falha se o usuário autenticado não tiver um registro correspondente na tabela 'usuarios'
             throw new Error('Perfil de usuário não encontrado. Vínculo de dados incompleto.');
         }
         
