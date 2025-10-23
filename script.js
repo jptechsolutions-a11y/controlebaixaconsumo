@@ -3639,3 +3639,114 @@ async function loadGraficosData() {
         document.getElementById('gerarGraficosBtn').addEventListener('click', loadGraficosData);
     }
 }
+
+
+async function loadRealizadoManualForm() {
+    const filialId = document.getElementById('manualFilialSelect').value;
+    const ano = document.getElementById('manualAnoSelect').value;
+    const linhaId = document.getElementById('manualLinhaSelect').value;
+    const alertContainer = document.getElementById('lancamentoManualAlert');
+    const formContainer = document.getElementById('lancamentoManualFormContainer');
+    const inputsGrid = document.getElementById('realizadoManualInputsGrid');
+    
+    alertContainer.innerHTML = '';
+    formContainer.style.display = 'none';
+
+    if (!filialId || !ano || !linhaId) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Selecione a Filial, o Ano e a Linha Orçamentária.</div>';
+        return;
+    }
+    
+    inputsGrid.innerHTML = '<div class="loading col-span-4"><div class="spinner"></div>Carregando valores existentes...</div>';
+    
+    // Atualiza campos ocultos do formulário
+    document.getElementById('manualFormLinhaId').value = linhaId;
+    document.getElementById('manualFormFilialId').value = filialId;
+    document.getElementById('manualFormAno').value = ano;
+
+    try {
+        // 1. Busca os valores manuais existentes para o período (12 meses)
+        const response = await supabaseRequest(
+            `realizado_manual_historico?filial_id=eq.${filialId}&linha_orcamentaria_id=eq.${linhaId}&ano=eq.${ano}&select=mes,valor_realizado`
+        );
+        
+        // Mapeia o resultado para fácil acesso: { 1: 1500.00, 2: 2000.00, ... }
+        const valoresExistentes = new Map(response.map(r => [r.mes, parseFloat(r.valor_realizado) || 0]));
+        
+        // 2. Cria os 12 inputs
+        let inputsHtml = '';
+        for (let mes = 1; mes <= 12; mes++) {
+            const valor = valoresExistentes.get(mes) || 0;
+            inputsHtml += `
+                <div class="form-group">
+                    <label for="manual_mes_${mes}">${meses[mes - 1]} (${mes}):</label>
+                    <input type="number" id="manual_mes_${mes}" name="manual_mes_${mes}" 
+                           value="${valor.toFixed(2)}" step="0.01" min="0" class="w-full text-right" required>
+                </div>
+            `;
+        }
+        
+        // 3. Exibe o formulário
+        inputsGrid.innerHTML = inputsHtml;
+        formContainer.style.display = 'block';
+
+        // Opcional: Mostra a descrição da linha
+        const linhaSelect = document.getElementById('manualLinhaSelect');
+        const linhaDesc = linhaSelect.options[linhaSelect.selectedIndex].text;
+        showNotification(`Pronto para editar a linha: ${linhaDesc}`, 'info', 3000);
+
+    } catch (error) {
+        console.error("Erro ao buscar Realizado Manual:", error);
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar: ${error.message}</div>`;
+    }
+}
+
+async function handleLancamentoManualRealizadoSubmit(event) {
+    event.preventDefault();
+    const alertContainer = document.getElementById('lancamentoManualAlert');
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando realizado manual...</div>';
+    
+    const linhaId = document.getElementById('manualFormLinhaId').value;
+    const filialId = document.getElementById('manualFormFilialId').value;
+    const ano = document.getElementById('manualFormAno').value;
+    
+    let dadosParaUpsert = [];
+
+    // 1. Coleta os 12 valores
+    for (let mes = 1; mes <= 12; mes++) {
+        const input = document.getElementById(`manual_mes_${mes}`);
+        const valor = parseFloat(input.value);
+        
+        if (isNaN(valor) || valor < 0) {
+            alertContainer.innerHTML = `<div class="alert alert-error">Valor inválido para o mês ${meses[mes-1]}.</div>`;
+            return;
+        }
+
+        dadosParaUpsert.push({
+            filial_id: parseInt(filialId),
+            linha_orcamentaria_id: parseInt(linhaId),
+            ano: parseInt(ano),
+            mes: mes,
+            valor_realizado: valor.toFixed(2)
+        });
+    }
+
+    try {
+        await supabaseRequest(
+            `realizado_manual_historico?on_conflict=filial_id,linha_orcamentaria_id,ano,mes`,
+            'POST',
+            dadosParaUpsert,
+            { 'Prefer': 'resolution=merge-duplicates' } // Header essencial para UPSERT
+        );
+        
+        realizadoManualCache = []; // Limpa o cache para forçar a próxima busca a ler o novo valor
+        showNotification('Valores manuais salvos com sucesso!', 'success');
+        
+        // Opcional: Recarrega a tela para limpar, mas não é estritamente necessário
+        document.getElementById('lancamentoManualFormContainer').style.display = 'none';
+
+    } catch (error) {
+        console.error("Erro ao salvar Realizado Manual:", error);
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
+    }
+}
