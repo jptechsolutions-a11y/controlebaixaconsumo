@@ -1,85 +1,70 @@
-// /api/proxy.js
+// api/proxy.js
+import fetch from 'node-fetch';
 
-// As credenciais são lidas das Variáveis de Ambiente do Vercel
+// AS VARIÁVEIS DE CHAVE ANON E SERVICE NÃO SÃO MAIS USADAS
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-// NOVO: Adiciona a chave de serviço
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 export default async (req, res) => {
-    // Extrai o 'endpoint' e 'upsert' dos query parameters da URL da requisição Vercel
-    const { endpoint, upsert } = req.query;
-
+    const { endpoint } = req.query;
+    const { method, body } = req;
+    
+    // VERIFICAÇÃO INICIAL DE ENDPOINT
     if (!endpoint) {
         return res.status(400).json({ error: 'Endpoint Supabase não especificado.' });
     }
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_KEY) {
-        return res.status(500).json({ error: 'Configuração do Supabase ausente nas variáveis de ambiente.' });
-    }
+    // 1. MIDDLEWARE DE SEGURANÇA: EXTRAIR E VALIDAR O JWT
+    const authHeader = req.headers.authorization;
     
-    // NOVO: Define qual chave usar. Usa Service Key apenas para rotas que exigem ADMIN
-    let useServiceKey = false;
-    if (endpoint.includes('realizado_manual_historico') || endpoint.includes('orcamentos_mensais')) {
-        useServiceKey = true;
+    // Verifica se o cabeçalho de autorização está presente
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        // Retorna 401: Não Autorizado
+        return res.status(401).json({ error: 'Não autorizado. Token JWT necessário.' });
     }
+
+    // Extrai o token
+    const userJwt = authHeader.split(' ')[1];
     
-    const keyToUse = useServiceKey ? SUPABASE_SERVICE_KEY : SUPABASE_ANON_KEY;
-    const authHeader = `Bearer ${keyToUse}`;
-
-    // Monta a URL base do Supabase
-    const supabaseBaseUrl = `${SUPABASE_URL}/rest/v1/${endpoint}`;
-
-    // Reconstrói os query parameters originais, removendo os que são do proxy
+    // 2. CONSTRUÇÃO DA URL E REMOÇÃO DE PARÂMETROS DO PROXY
+    // Reconstrói os query parameters originais, removendo os que são do proxy (upsert não será mais necessário aqui)
     const searchParams = new URLSearchParams(req.url.split('?')[1]);
     searchParams.delete('endpoint');
-    searchParams.delete('upsert'); 
+    searchParams.delete('upsert'); // Remove o upsert que era tratado pelo proxy
 
     // Monta a URL final para o Supabase
-    const fullSupabaseUrl = `${supabaseBaseUrl}?${searchParams.toString()}`;
-
-    // Configurações da requisição para o Supabase
+    const fullSupabaseUrl = `${SUPABASE_URL}/rest/v1/${endpoint}?${searchParams.toString()}`;
+    
+    // 3. CONFIGURAÇÃO DA REQUISIÇÃO (USANDO O TOKEN DO USUÁRIO)
     const options = {
-        method: req.method, // Repassa o método original (GET, POST, PATCH, DELETE)
+        method: method,
         headers: {
-            'apikey': keyToUse, // Usa a chave correta aqui também
-            'Authorization': authHeader, // Usa o cabeçalho correto
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'Prefer': req.headers.prefer || 'return=representation'
-        },
+            // Agora usamos o TOKEN DO USUÁRIO no cabeçalho "Authorization" (RLS será aplicado)
+            'Authorization': `Bearer ${userJwt}`,
+            // O Supabase pode aceitar o JWT no apiKey também, mas o Authorization é o principal.
+            'apiKey': userJwt
+        }
     };
 
-    // Adiciona o corpo da requisição se for POST, PATCH ou PUT
-    if (req.body && ['POST', 'PATCH', 'PUT'].includes(req.method)) {
-        options.body = JSON.stringify(req.body);
+    if (body && ['POST', 'PATCH', 'PUT'].includes(method)) {
+        options.body = JSON.stringify(body);
     }
-
-    // Lógica para o header 'Prefer' específico do UPSERT
-    if (req.method === 'POST' && upsert === 'true') {
-        options.headers.Prefer = 'return=representation,resolution=merge-duplicates';
-    }
-
+    
+    // 4. EXECUÇÃO E TRATAMENTO DE ERROS
     try {
-        console.log(`[Proxy] Forwarding ${req.method} request to: ${fullSupabaseUrl} (Service Key: ${useServiceKey})`); // Log de debug
-        if(options.body) console.log(`[Proxy] Body: ${options.body.substring(0, 100)}...`); 
-
-        // Faz a requisição para o Supabase
         const response = await fetch(fullSupabaseUrl, options);
-
+        
         const responseBodyText = await response.text();
         res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
 
-        // Verifica se a resposta do Supabase foi bem-sucedida
         if (!response.ok) {
-            console.error('[Proxy] Supabase Error:', response.status, responseBodyText);
             let errorJson;
             try { errorJson = JSON.parse(responseBodyText); }
             catch (e) { return res.status(response.status).send(responseBodyText || 'Erro desconhecido do Supabase'); }
             return res.status(response.status).json(errorJson);
         }
 
-        // Retorna a resposta
         if (responseBodyText) {
             try {
                 res.status(response.status).json(JSON.parse(responseBodyText));
