@@ -1,8 +1,10 @@
 // api/proxy.js
 import fetch from 'node-fetch';
 
-// AS VARIÁVEIS DE CHAVE ANON E SERVICE NÃO SÃO MAIS USADAS
+// As chaves são carregadas das Variáveis de Ambiente
 const SUPABASE_URL = process.env.SUPABASE_URL;
+// NOVO: Adicione a Chave Anônima, pois a API REST do Supabase a requer.
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY; 
 
 export default async (req, res) => {
     const { endpoint } = req.query;
@@ -26,10 +28,10 @@ export default async (req, res) => {
     const userJwt = authHeader.split(' ')[1];
     
     // 2. CONSTRUÇÃO DA URL E REMOÇÃO DE PARÂMETROS DO PROXY
-    // Reconstrói os query parameters originais, removendo os que são do proxy (upsert não será mais necessário aqui)
+    // Reconstrói os query parameters originais, removendo os que são do proxy
     const searchParams = new URLSearchParams(req.url.split('?')[1]);
     searchParams.delete('endpoint');
-    searchParams.delete('upsert'); // Remove o upsert que era tratado pelo proxy
+    searchParams.delete('upsert'); 
 
     // Monta a URL final para o Supabase
     const fullSupabaseUrl = `${SUPABASE_URL}/rest/v1/${endpoint}?${searchParams.toString()}`;
@@ -40,10 +42,10 @@ export default async (req, res) => {
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            // Agora usamos o TOKEN DO USUÁRIO no cabeçalho "Authorization" (RLS será aplicado)
+            // Token do usuário para RLS (Row Level Security)
             'Authorization': `Bearer ${userJwt}`,
-            // O Supabase pode aceitar o JWT no apiKey também, mas o Authorization é o principal.
-            'apiKey': userJwt
+            // CORREÇÃO: Usar a Chave ANÔNIMA para 'apiKey'
+            'apiKey': SUPABASE_ANON_KEY 
         }
     };
 
