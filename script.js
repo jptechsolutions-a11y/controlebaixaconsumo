@@ -95,17 +95,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Substitua sua versão de handleLogin no script.js
 async function handleLogin(event) {
     event.preventDefault(); // Impede o recarregamento da página
 
-    // --- LEITURA DIRETA DOS INPUTS ---
     const email = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
-    // --- FIM DA LEITURA ---
     
-    // O resto da lógica da função permanece como está
     try {
-        // 1. Chamar a API de Autenticação do Supabase
+        // 1. Chamar a API de Autenticação do Supabase (Login)
         const authResponse = await fetch('/api/login', { 
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
@@ -113,29 +111,48 @@ async function handleLogin(event) {
         });
         
         if (!authResponse.ok) {
+            // Isso cobre o erro 401 de credenciais incorretas
             throw new Error('Falha na autenticação. Verifique e-mail e senha.');
         }
 
         const { user: authUser, session: authSession } = await authResponse.json();
         
-        // 2. Buscar o perfil customizado usando o ID seguro
-        // ATENÇÃO: O campo no HTML é 'username', mas a autenticação Supabase é feita por email
-        // Você precisa se certificar que o valor inserido no campo 'username' é o EMAIL.
-        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}`);
+        // 2. Buscar o perfil customizado E AS FILIAIS associadas (Requer RLS configurada)
+        // O select=* inclui todas as colunas de 'usuarios'.
+        // O uso do Foreign Key Joint (usuario_filiais!) é necessário aqui.
+        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
+        
         const user = customProfile[0];
 
         if (!user) {
-            throw new Error('Perfil de usuário não encontrado.');
+            // Isso ocorre se o usuário existe no Auth, mas não na tabela 'usuarios'.
+            throw new Error('Perfil de usuário não encontrado ou sem vínculo. Contate o suporte.');
         }
         
+        // *** NOVO PASSO: Mapear e Limpar Filiais ***
+        const userFiliais = user.usuario_filiais.map(uf => uf.filiais);
+        
+        // Certifica que o usuário tem permissão em pelo menos uma filial
+        if (userFiliais.length === 0) {
+            throw new Error('Usuário não tem filiais associadas.');
+        }
+
+        // Atualiza o objeto do usuário antes de armazenar
+        user.filiais = userFiliais; 
+        delete user.usuario_filiais; // Remove a estrutura de vínculo para manter o objeto limpo
+        
+        // Define o usuário globalmente (assumindo que 'currentUser' é uma var global)
+        currentUser = user; 
+
         // 3. ARMAZENAR O TOKEN JWT (CRUCIAL!)
         localStorage.setItem('auth_token', authSession.access_token);
-        localStorage.setItem('user', JSON.stringify(user)); // Armazena o perfil customizado
+        localStorage.setItem('user', JSON.stringify(currentUser)); 
         
         // 4. Redirecionar
         redirectToDashboard();
 
     } catch (error) {
+        // Captura e exibe o erro (ex: Falha de autenticação, erro de RLS, ou sem filial)
         showError(error.message);
     }
 }
@@ -3713,14 +3730,41 @@ async function handleLancamentoManualRealizadoSubmit(event) {
     }
 }
 
+
 function showError(message) {
     const alertContainer = document.getElementById('loginAlert');
     if (alertContainer) {
-        // Usa a classe alert-error do seu style.css
+        // Usa a classe alert-error do seu style.css (ou similar)
         alertContainer.innerHTML = `<div class="alert alert-error">${message}</div>`;
     } else {
-        // Fallback caso a div não exista
         console.error("Erro de Login:", message);
-        alert(`Erro de Login: ${message}`);
+    }
+}
+
+// Adicione ou substitua a função redirectToDashboard no script.js
+function redirectToDashboard() {
+    // currentUser deve ser uma variável global preenchida por handleLogin
+    if (!currentUser || !currentUser.filiais || currentUser.filiais.length === 0) {
+        showError("Erro: Não foi possível determinar as filiais do usuário.");
+        logout(); // Força o logout se o perfil estiver incompleto
+        return;
+    }
+    
+    const filiais = currentUser.filiais;
+
+    // Se o usuário tem apenas 1 filial, seleciona automaticamente
+    if (filiais.length === 1) {
+        selectedFilial = filiais[0];
+        // Sua função que carrega a dashboard com a filial selecionada
+        showMainSystem(); 
+    } 
+    // Se o usuário tem mais de 1 filial (NÃO IMPLEMENTADO AQUI - APENAS LOG)
+    else if (filiais.length > 1) {
+        // Você precisará implementar um modal ou tela de seleção
+        console.warn("Usuário tem múltiplas filiais. Exibir modal de seleção.");
+        
+        // PARA PROSSEGUIR COM TESTES: Seleciona o primeiro como padrão
+        selectedFilial = filiais[0];
+        showMainSystem(); 
     }
 }
