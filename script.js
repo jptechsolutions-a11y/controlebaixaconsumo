@@ -73,7 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('buscarRealizadoManualBtn')?.addEventListener('click', loadRealizadoManualForm);
     document.getElementById('lancamentoManualForm')?.addEventListener('submit', handleLancamentoManualRealizadoSubmit);
 
-    document.getElementById('loginForm').addEventListener('submit', handleLogin);
         
     // Adiciona listener para salvar orçamento via delegation (AJUSTADO)
     const orcamentosTableBody = document.getElementById('orcamentosTableBody');
@@ -90,10 +89,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     salvarOrcamento(linhaId, filialId, ano, row);
                 } else {
                     console.error("Faltando dados para salvar orçamento:", { linhaId, filialId, ano, row });
-                }
+               }
             }
         });
-}
+    }
+});
 
 async function handleLogin(event) {
     event.preventDefault(); // Impede o recarregamento da página
