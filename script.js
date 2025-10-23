@@ -3712,3 +3712,15 @@ async function handleLancamentoManualRealizadoSubmit(event) {
         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
     }
 }
+
+function showError(message) {
+    const alertContainer = document.getElementById('loginAlert');
+    if (alertContainer) {
+        // Usa a classe alert-error do seu style.css
+        alertContainer.innerHTML = `<div class="alert alert-error">${message}</div>`;
+    } else {
+        // Fallback caso a div não exista
+        console.error("Erro de Login:", message);
+        alert(`Erro de Login: ${message}`);
+    }
+}
