@@ -99,11 +99,15 @@ document.addEventListener('DOMContentLoaded', () => {
 async function handleLogin(event) {
     event.preventDefault(); // Impede o recarregamento da página
 
+    // Limpa a mensagem de erro anterior
+    showError(''); 
+    
+    // Leitura dos campos do formulário (ID 'username' e 'password')
     const email = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
     
     try {
-        // 1. Chamar a API de Autenticação do Supabase (Login)
+        // 1. Chamar a API de Autenticação do Supabase
         const authResponse = await fetch('/api/login', { 
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
@@ -111,40 +115,39 @@ async function handleLogin(event) {
         });
         
         if (!authResponse.ok) {
-            // Isso cobre o erro 401 de credenciais incorretas
+            // Isso captura o 401: credenciais inválidas
             throw new Error('Falha na autenticação. Verifique e-mail e senha.');
         }
 
         const { user: authUser, session: authSession } = await authResponse.json();
         
-        // 2. Buscar o perfil customizado E AS FILIAIS associadas (Requer RLS configurada)
-        // O select=* inclui todas as colunas de 'usuarios'.
-        // NOVO CÓDIGO TEMPORÁRIO DE DIAGNÓSTICO
-const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}&select=id,nome,username,email,role,ativo`);
+        // 2. Buscar o perfil customizado E AS FILIAIS (SELECT COMPLEXO COM JOIN)
+        // Isso requer RLS na tabela 'usuarios' e 'usuario_filiais'
+        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
         
         const user = customProfile[0];
 
         if (!user) {
-            // Isso ocorre se o usuário existe no Auth, mas não na tabela 'usuarios'.
-            throw new Error('Perfil de usuário não encontrado ou sem vínculo. Contate o suporte.');
+            // Falha se o usuário autenticado não tiver um registro correspondente na tabela 'usuarios'
+            throw new Error('Perfil de usuário não encontrado. Vínculo de dados incompleto.');
         }
         
-        // *** NOVO PASSO: Mapear e Limpar Filiais ***
-        const userFiliais = user.usuario_filiais.map(uf => uf.filiais);
+        // *** Mapear e Limpar Filiais ***
+        // user.usuario_filiais é a lista de vínculos, userFiliais é a lista das filiais em si
+        const userFiliais = user.usuario_filiais ? user.usuario_filiais.map(uf => uf.filiais) : [];
         
-        // Certifica que o usuário tem permissão em pelo menos uma filial
         if (userFiliais.length === 0) {
-            throw new Error('Usuário não tem filiais associadas.');
+            throw new Error('Usuário não tem filiais associadas ou RLS bloqueou a busca das filiais.');
         }
 
-        // Atualiza o objeto do usuário antes de armazenar
+        // Finaliza o objeto do usuário
         user.filiais = userFiliais; 
-        delete user.usuario_filiais; // Remove a estrutura de vínculo para manter o objeto limpo
+        delete user.usuario_filiais; 
         
-        // Define o usuário globalmente (assumindo que 'currentUser' é uma var global)
+        // Define o usuário globalmente para uso em redirectToDashboard
         currentUser = user; 
 
-        // 3. ARMAZENAR O TOKEN JWT (CRUCIAL!)
+        // 3. ARMAZENAR O TOKEN JWT (CRUCIAL para todas as requisições futuras)
         localStorage.setItem('auth_token', authSession.access_token);
         localStorage.setItem('user', JSON.stringify(currentUser)); 
         
@@ -152,7 +155,7 @@ const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${a
         redirectToDashboard();
 
     } catch (error) {
-        // Captura e exibe o erro (ex: Falha de autenticação, erro de RLS, ou sem filial)
+        // Exibe o erro (incluindo falha de RLS que retorna 401/403)
         showError(error.message);
     }
 }
@@ -3734,8 +3737,12 @@ async function handleLancamentoManualRealizadoSubmit(event) {
 function showError(message) {
     const alertContainer = document.getElementById('loginAlert');
     if (alertContainer) {
-        // Usa a classe alert-error do seu style.css (ou similar)
+        // Assume que 'alert-error' é a classe de estilo para a mensagem de erro
         alertContainer.innerHTML = `<div class="alert alert-error">${message}</div>`;
+        // Remove a mensagem de erro após 5 segundos, se necessário
+        setTimeout(() => {
+            alertContainer.innerHTML = '';
+        }, 5000);
     } else {
         console.error("Erro de Login:", message);
     }
@@ -3743,10 +3750,10 @@ function showError(message) {
 
 // Adicione ou substitua a função redirectToDashboard no script.js
 function redirectToDashboard() {
-    // currentUser deve ser uma variável global preenchida por handleLogin
+    // Certifique-se de que 'currentUser' foi definido em 'handleLogin'
     if (!currentUser || !currentUser.filiais || currentUser.filiais.length === 0) {
-        showError("Erro: Não foi possível determinar as filiais do usuário.");
-        logout(); // Força o logout se o perfil estiver incompleto
+        showError("Erro fatal: Dados do usuário incompletos após o login.");
+        logout(); // Força o logout
         return;
     }
     
@@ -3755,15 +3762,14 @@ function redirectToDashboard() {
     // Se o usuário tem apenas 1 filial, seleciona automaticamente
     if (filiais.length === 1) {
         selectedFilial = filiais[0];
-        // Sua função que carrega a dashboard com a filial selecionada
+        // Sua função que carrega a interface principal do sistema
         showMainSystem(); 
     } 
-    // Se o usuário tem mais de 1 filial (NÃO IMPLEMENTADO AQUI - APENAS LOG)
+    // Se o usuário tem mais de 1 filial (AJUSTE NECESSÁRIO NO SEU SISTEMA)
     else if (filiais.length > 1) {
-        // Você precisará implementar um modal ou tela de seleção
-        console.warn("Usuário tem múltiplas filiais. Exibir modal de seleção.");
+        console.warn("Usuário tem múltiplas filiais. Exibir modal de seleção é o ideal.");
         
-        // PARA PROSSEGUIR COM TESTES: Seleciona o primeiro como padrão
+        // PARA TESTES: Seleciona a primeira filial para prosseguir
         selectedFilial = filiais[0];
         showMainSystem(); 
     }
