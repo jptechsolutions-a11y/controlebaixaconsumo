@@ -119,8 +119,8 @@ async function handleLogin(event) {
         
         // 2. Buscar o perfil customizado E AS FILIAIS associadas (Requer RLS configurada)
         // O select=* inclui todas as colunas de 'usuarios'.
-        // O uso do Foreign Key Joint (usuario_filiais!) é necessário aqui.
-        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
+        // NOVO CÓDIGO TEMPORÁRIO DE DIAGNÓSTICO
+const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}&select=id,nome,username,email,role,ativo`);
         
         const user = customProfile[0];
 
