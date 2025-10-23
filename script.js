@@ -73,8 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('buscarRealizadoManualBtn')?.addEventListener('click', loadRealizadoManualForm);
     document.getElementById('lancamentoManualForm')?.addEventListener('submit', handleLancamentoManualRealizadoSubmit);
 
-    document.addEventListener('DOMContentLoaded', () => {
-    // ...
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
         
     // Adiciona listener para salvar orçamento via delegation (AJUSTADO)
@@ -95,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-});
+}
 
 async function handleLogin(event) {
     event.preventDefault(); // Impede o recarregamento da página
