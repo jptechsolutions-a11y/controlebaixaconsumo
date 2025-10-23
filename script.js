@@ -102,7 +102,7 @@ async function handleLogin(event) {
     showError(''); 
     
     // Leitura dos campos do formulário (ID 'username' e 'password')
-    const email = document.getElementById('username').value.trim();
+   const email = document.getElementById('email').value.trim(); 
     const password = document.getElementById('password').value;
     
     try {
