@@ -1,12 +1,13 @@
 // api/proxy.js
-import fetch from 'node-fetch';
+
+// REMOVER: import fetch from 'node-fetch'; 
 
 // As chaves são carregadas das Variáveis de Ambiente
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY; 
 
 export default async (req, res) => {
-    // --- NOVO: VERIFICAÇÃO CRÍTICA DE VARIÁVEIS ---
+    // --- VERIFICAÇÃO CRÍTICA DE VARIÁVEIS ---
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
         console.error("ERRO CRÍTICO DE AMBIENTE: Variáveis SUPABASE_URL ou SUPABASE_ANON_KEY estão ausentes/inválidas.");
         return res.status(500).json({ 
@@ -63,7 +64,8 @@ export default async (req, res) => {
     
     // 4. EXECUÇÃO E TRATAMENTO DE ERROS
     try {
-        const response = await fetch(fullSupabaseUrl, options);
+        // Usa o fetch global
+        const response = await fetch(fullSupabaseUrl, options); 
         
         const responseBodyText = await response.text();
         res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
