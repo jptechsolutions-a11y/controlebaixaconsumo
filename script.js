@@ -129,7 +129,7 @@ async function handleLogin(event) {
         
         // 2. Buscar o perfil customizado E AS FILIAIS
         // CORREÇÃO FINAL: As aspas simples ('') são necessárias para o Supabase reconhecer o UUID na URL.
-        const authUserIdSanitized = `'${authUserId}'`; 
+       const authUserIdSanitized = authUserId; 
 
         const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUserIdSanitized}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
         
