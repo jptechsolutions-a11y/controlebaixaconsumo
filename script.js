@@ -95,7 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-    }
 });
 
 async function handleLogin(event) {
