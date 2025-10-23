@@ -120,12 +120,10 @@ async function handleLogin(event) {
 
         const { user: authUser, session: authSession } = await authResponse.json();
         
-        // 2. ARMAZENAR O TOKEN JWT (CRUCIAL para todas as requisições futuras)
-        // ESTAS LINHAS FORAM MOVIDAS PARA CÁ.
+        // <<< CRUCIAL: ARMAZENAR O TOKEN JWT ANTES DA PRIMEIRA CHAMADA AO PROXY >>>
         localStorage.setItem('auth_token', authSession.access_token);
-        // O user só será salvo no final, após a busca do perfil
         
-        // 3. Buscar o perfil customizado E AS FILIAIS (SELECT COMPLEXO COM JOIN)
+        // 2. Buscar o perfil customizado E AS FILIAIS (SELECT COMPLEXO COM JOIN)
         // O supabaseRequest agora tem o token no localStorage e deve funcionar.
         const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
         
@@ -150,14 +148,13 @@ async function handleLogin(event) {
         // Define o usuário globalmente para uso em redirectToDashboard
         currentUser = user; 
 
-        // 4. ARMAZENAR DADOS DO USUÁRIO
+        // 3. ARMAZENAR DADOS DO USUÁRIO
         localStorage.setItem('user', JSON.stringify(currentUser)); 
         
-        // 5. Redirecionar
+        // 4. Redirecionar
         redirectToDashboard();
 
     } catch (error) {
-        // Exibe o erro (incluindo falha de RLS que retorna 401/403)
         showError(error.message);
     }
 }
@@ -1391,6 +1388,7 @@ async function abrirUsuarioModal(id = null) {
         feather.replace();
     }
 }
+
 async function handleUsuarioFormSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('usuarioAlert');
@@ -1399,47 +1397,61 @@ async function handleUsuarioFormSubmit(event) {
     const nome = document.getElementById('usuarioNome').value;
     const username = document.getElementById('usuarioUsername').value;
     const email = document.getElementById('usuarioEmail').value;
-    const senha = document.getElementById('usuarioSenha').value;
+    const senha = document.getElementById('usuarioSenha').value; // Senha (para Admin)
     const role = document.getElementById('usuarioRole').value;
     const ativo = document.getElementById('usuarioAtivo').checked;
     const selectedFiliaisCheckboxes = document.querySelectorAll('#usuarioFiliaisCheckboxes input[name="filiais"]:checked');
     const selectedFilialIds = Array.from(selectedFiliaisCheckboxes).map(cb => parseInt(cb.value));
     const isEdit = !!id;
+    
     if (!nome || !username || !role || !email) {
          alertContainer.innerHTML = '<div class="alert alert-error">Nome, Usuário, E-mail e Grupo são obrigatórios.</div>';
          return;
     }
-    if (!isEdit && !senha) {
-        alertContainer.innerHTML = '<div class="alert alert-error">A Senha é obrigatória para novos usuários.</div>';
+     if (!isEdit && !senha) {
+        alertContainer.innerHTML = '<div class="alert alert-error">A Senha é obrigatória para novos usuários.';
         return;
     }
      if (selectedFilialIds.length === 0) {
         alertContainer.innerHTML = '<div class="alert alert-error">Selecione ao menos uma filial.</div>';
         return;
     }
+    
+    // CORREÇÃO: Removida a linha 'userData.senha_hash = senha;' que estava causando o erro de coluna.
     const userData = { nome, username, email, role, ativo };
-    if (senha) {
-        userData.senha_hash = senha;
-    }
+    
     try {
         let userId = id;
+        
         if (isEdit) {
+            // Edita apenas os dados de perfil
             await supabaseRequest(`usuarios?id=eq.${id}`, 'PATCH', userData);
+            
+            if (senha) {
+                 showNotification('Aviso: A senha não foi alterada. Para alterar a senha, utilize as ferramentas de Administração de Auth do Supabase.', 'warning', 8000);
+            }
+            
         } else {
+             // Cria o registro de perfil (pressupondo que o usuário Auth foi criado separadamente)
             const response = await supabaseRequest('usuarios', 'POST', userData);
             if (!response || response.length === 0) throw new Error("Falha ao criar o usuário, não obteve resposta.");
             userId = response[0].id;
         }
+        
         if (!userId) throw new Error("ID do usuário não definido.");
+        
+        // Gerenciamento de Filiais
         await supabaseRequest(`usuario_filiais?usuario_id=eq.${userId}`, 'DELETE');
         const filiaisToInsert = selectedFilialIds.map(filialId => ({
             usuario_id: userId,
             filial_id: filialId
         }));
         await supabaseRequest('usuario_filiais', 'POST', filiaisToInsert);
+        
         showNotification(`Usuário ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
         closeModal('usuarioModal');
         loadGerenciarUsuarios();
+        
     } catch (error) {
         console.error("Erro ao salvar usuário:", error);
         alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
