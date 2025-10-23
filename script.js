@@ -101,8 +101,9 @@ async function handleLogin(event) {
     // Limpa a mensagem de erro anterior
     showError(''); 
     
-    // Leitura dos campos do formulário (ID 'username' e 'password')
-   const email = document.getElementById('email').value.trim(); 
+    // Leitura dos campos do formulário (ID 'email' e 'password')
+    // CORREÇÃO: Lê o campo com ID 'email' (que você ajustou no index.html)
+    const email = document.getElementById('email').value.trim(); 
     const password = document.getElementById('password').value;
     
     try {
@@ -120,12 +121,19 @@ async function handleLogin(event) {
 
         const { user: authUser, session: authSession } = await authResponse.json();
         
-        // <<< CRUCIAL: ARMAZENAR O TOKEN JWT ANTES DA PRIMEIRA CHAMADA AO PROXY >>>
+        // <<< NOVO: VALIDAÇÃO RIGOROSA DO ID ANTES DE USAR >>>
+        const authUserId = authUser?.id;
+
+        if (!authUserId) {
+             // Esta mensagem será exibida se o Auth retornar null no ID.
+            throw new Error('Erro de sessão. ID de usuário não retornado após autenticação.');
+        }
+        
+        // CRUCIAL: ARMAZENAR O TOKEN JWT ANTES DA PRIMEIRA CHAMADA AO PROXY
         localStorage.setItem('auth_token', authSession.access_token);
         
-        // 2. Buscar o perfil customizado E AS FILIAIS (SELECT COMPLEXO COM JOIN)
-        // O supabaseRequest agora tem o token no localStorage e deve funcionar.
-        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUser.id}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
+        // 2. Buscar o perfil customizado E AS FILIAIS (USANDO O ID SANITIZADO)
+        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUserId}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
         
         const user = customProfile[0];
 
