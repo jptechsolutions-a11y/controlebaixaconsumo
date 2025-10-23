@@ -121,6 +121,7 @@ async function handleLogin(event) {
         const authUserId = authUser?.id;
 
         if (!authUserId) {
+            // Se o ID for NULL ou undefined, gera este erro claro
             throw new Error('Erro de sessão. ID de usuário não retornado após autenticação.');
         }
         
@@ -128,10 +129,9 @@ async function handleLogin(event) {
         localStorage.setItem('auth_token', authSession.access_token);
         
         // 2. Buscar o perfil customizado E AS FILIAIS
-        // CORREÇÃO FINAL: As aspas simples ('') são necessárias para o Supabase reconhecer o UUID na URL.
-       const authUserIdSanitized = authUserId; 
-
-        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUserIdSanitized}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
+        // CORREÇÃO FINAL: Removida a sanitização ('') que estava quebrando o fetch.
+        // O UUID deve ser passado puro no filtro eq.
+        const customProfile = await supabaseRequest('GET', `usuarios?auth_user_id=eq.${authUserId}&select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))`);
         
         const user = customProfile[0];
 
@@ -1197,11 +1197,12 @@ async function supabaseRequest(endpoint, method, body = null) {
     // 2. Montar a requisição para o Proxy
     const url = `/api/proxy?endpoint=${endpoint}`;
     
-    // --- NOVO: Tratamento de Endpoint com Filtro UUID INVÁLIDO ---
+    // --- TRATAMENTO DE FILTRO UUID INVÁLIDO ---
+    // Intercepta a falha de sintaxe UUID antes de enviar a requisição
     if (endpoint.startsWith('usuarios?') && (endpoint.includes('auth_user_id=eq.null') || endpoint.includes('auth_user_id=eq.undefined'))) {
-         throw new Error("Erro de Vínculo: O ID de usuário Auth não está sendo retornado ou está corrompido na busca do perfil customizado. Verifique se o usuário possui um UUID válido na tabela 'auth.users' e se a linha correspondente em 'public.usuarios' tem o 'auth_user_id' preenchido.");
+         throw new Error("Erro de Vínculo: O ID de usuário Auth não está sendo retornado ou está corrompido na busca do perfil customizado.");
     }
-    // --- FIM DO NOVO TRATAMENTO ---
+    // --- FIM DO TRATAMENTO ---
     
     const config = {
         method: method,
