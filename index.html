@@ -42,6 +42,11 @@
                         <select id="filialSelect" style="width: 100%; padding: 14px; border: 1px solid #ccc; border-radius: 8px;"></select>
                     </div>
                     <button type="submit" class="btn btn-primary w-full" style="background: var(--primary-gradient); color: white; padding: 14px; border-radius: 8px; font-weight: 700; font-size: 1rem;">ENTRAR</button>
+                    <div class="mt-6 text-center text-sm">
+                <a href="#" class="text-blue-600 hover:underline" onclick="openForgotPasswordModal()">Esqueceu sua senha?</a>
+                <span class="mx-2 text-gray-400">|</span>
+                <a href="#" class="text-blue-600 hover:underline" onclick="openRequestAccessModal()">Solicitar Acesso</a>
+            </div>
                 </form>
                 <div id="loginAlert" class="mt-4" style="text-align: center;"></div>
                 </div>
@@ -839,7 +844,7 @@
 
     <div id="usuarioModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 600px;">
-            <h3 class="text-xl font-semibold mb-4" id="usuarioModalTitle">Novo Usuário</h3>
+           <h3 class="text-xl font-semibold mb-4" id="usuarioModalTitle">Editar Perfil de Usuário</h3>
             <form id="usuarioForm">
                 <input type="hidden" id="usuarioId">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -848,19 +853,15 @@
                         <input type="text" id="usuarioNome" required class="w-full">
                     </div>
                     <div class="form-group">
-                        <label for="usuarioUsername">Usuário (login):</label>
-                        <input type="text" id="usuarioUsername" required class="w-full">
+                       <label for="usuarioUsername">Usuário (login - Não editável aqui):</label> <input type="text" id="usuarioUsername" required class="w-full bg-gray-200" disabled> ```
                     </div>
                 </div>
                 <div class="form-group mb-4">
-                    <label for="usuarioEmail">E-mail:</label>
-                    <input type="email" id="usuarioEmail" required class="w-full">
+                   <label for="usuarioEmail">E-mail (do Perfil - Login não alterado aqui):</label> <input type="email" id="usuarioEmail" required class="w-full">
                 </div>
-                <div class="form-group mb-4">
-                    <label for="usuarioSenha">Senha:</label>
-                    <input type="password" id="usuarioSenha" class="w-full">
-                    <small class="text-gray-500" id="usuarioSenhaHelp">Deixe em branco para não alterar a senha (ao editar).</small>
-                </div>
+             <div class="alert alert-info mb-4 text-sm">
+                <strong>Gerenciamento de Login e Senha:</strong> A criação de novos usuários e a alteração de senhas devem ser feitas pelo painel de Autenticação do Supabase (que envia convites/links de recuperação por e-mail). Esta tela gerencia apenas o perfil (Nome, Grupo, Filiais, Status).
+            </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div class="form-group">
                         <label for="usuarioRole">Grupo (Role):</label>
@@ -886,7 +887,7 @@
 
                 <div id="usuarioAlert" class="mt-4"></div>
                 <div class="flex gap-4 mt-6">
-                    <button type="submit" class="btn btn-success flex-1">Salvar Usuário</button>
+                    <button type="submit" class="btn btn-success flex-1">Salvar Alterações no Perfil</button>
                     <button type="button" class="btn btn-danger flex-1" onclick="closeModal('usuarioModal')">Cancelar</button>
                 </div>
             </form>
@@ -1079,7 +1080,49 @@
     </button>
     
     <div id="notificationContainer"></div>
+<div id="forgotPasswordModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 450px;">
+        <h3 class="text-xl font-semibold mb-4 text-gray-800">Recuperar Senha</h3>
+        <p class="text-sm text-gray-600 mb-4">Digite seu e-mail cadastrado. Se ele existir no sistema, você receberá um link para redefinir sua senha.</p>
+        <form id="forgotPasswordForm">
+            <div class="form-group mb-4">
+                <label for="forgotEmail" class="font-semibold text-gray-700">E-mail:</label>
+                <input type="email" id="forgotEmail" required class="w-full">
+            </div>
+            <div id="forgotPasswordAlert" class="mt-4"></div>
+            <div class="flex gap-4 mt-6">
+                <button type="submit" class="btn btn-primary flex-1">Enviar Link de Recuperação</button>
+                <button type="button" class="btn btn-danger flex-1" onclick="closeModal('forgotPasswordModal')">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
 
+<div id="requestAccessModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 500px;">
+        <h3 class="text-xl font-semibold mb-4 text-gray-800">Solicitar Acesso</h3>
+        <p class="text-sm text-gray-600 mb-4">Preencha seus dados. Sua solicitação será enviada ao administrador para aprovação.</p>
+        <form id="requestAccessForm">
+            <div class="form-group mb-3">
+                <label for="requestNome" class="font-semibold text-gray-700">Nome Completo:</label>
+                <input type="text" id="requestNome" required class="w-full">
+            </div>
+            <div class="form-group mb-3">
+                <label for="requestEmail" class="font-semibold text-gray-700">Seu E-mail:</label>
+                <input type="email" id="requestEmail" required class="w-full">
+            </div>
+            <div class="form-group mb-4">
+                <label for="requestMotivo" class="font-semibold text-gray-700">Motivo/Justificativa:</label>
+                <textarea id="requestMotivo" rows="3" required class="w-full"></textarea>
+            </div>
+            <div id="requestAccessAlert" class="mt-4"></div>
+            <div class="flex gap-4 mt-6">
+                <button type="submit" class="btn btn-primary flex-1">Enviar Solicitação</button>
+                <button type="button" class="btn btn-danger flex-1" onclick="closeModal('requestAccessModal')">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
     <script>
         // Configuração Inicial - Use o Proxy
         const SUPABASE_PROXY_URL = '/api/proxy'; // Aponta para a sua serverless function
