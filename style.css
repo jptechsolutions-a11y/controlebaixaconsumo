@@ -1333,3 +1333,16 @@ input[type="file"]::file-selector-button:hover {
 input[type="file"] {
     text-align: left; 
 }
+/* Modifique este bloco existente */
+body {
+    font-family: 'Inter', 'Segoe UI', -apple-system, sans-serif;
+    /* INICIALMENTE, usa o fundo escuro da tela de login */
+    background-color: var(--darker);
+    /* Remove a transição que pode causar o flash */
+    transition: none;
+}
+
+/* Adicione este novo bloco */
+body.system-active {
+    background-color: #f4f7fa; /* Volta para o cinza claro */
+}
