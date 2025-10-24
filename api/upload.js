@@ -4,7 +4,13 @@ import { createClient } from '@supabase/supabase-js';
 // Pega as credenciais das Variáveis de Ambiente
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
-// Ainda precisamos do cliente para a função .getPublicUrl()
+
+// --- AJUSTE DE SEGURANÇA ---
+// Crie um cliente anônimo APENAS para verificar o JWT do usuário
+const supabaseAnon = createClient(supabaseUrl, process.env.SUPABASE_ANON_KEY); 
+// --- FIM DO AJUSTE ---
+
+// Cliente com Service Key para a função .getPublicUrl()
 const supabase = createClient(supabaseUrl, supabaseServiceKey); 
 
 const BUCKET_NAME = 'arquivos-baixas';
@@ -13,6 +19,23 @@ export default async (req, res) => {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Método não permitido.' });
     }
+
+    // --- INÍCIO DA VALIDAÇÃO DE SEGURANÇA ---
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Não autorizado. Token JWT ausente.' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    // Verifica se o token é válido
+    const { data: { user }, error: authError } = await supabaseAnon.auth.getUser(token);
+
+    if (authError || !user) {
+        console.error("Erro de autenticação no upload:", authError?.message);
+        return res.status(401).json({ error: 'Não autorizado. Token inválido.' });
+    }
+    // --- FIM DA VALIDAÇÃO ---
+
 
     // A lógica de nomes de arquivo e pastas continua a mesma
     const fileName = req.query.fileName || `arquivo_${Date.now()}`;
@@ -28,9 +51,6 @@ export default async (req, res) => {
     const filePath = `${folder}/${solicitacaoId}/${Date.now()}_${fileName}`;
 
     // ---- INÍCIO DA NOVA LÓGICA DE UPLOAD ----
-    // Vamos usar o 'fetch' nativo em vez de 'supabase.storage.upload()' 
-    // para contornar o erro 'duplex'
-    
     const uploadUrl = `${supabaseUrl}/storage/v1/object/${BUCKET_NAME}/${filePath}`;
     
     try {
@@ -47,15 +67,12 @@ export default async (req, res) => {
             body: req, // Passa o stream 'req' (o arquivo) diretamente
             
             // --- A CORREÇÃO MÁGICA ---
-            // Isso informa ao 'undici' (motor de rede do Vercel)
-            // que estamos enviando um stream "half duplex"
             // @ts-ignore
             duplex: 'half' 
             // --- FIM DA CORREÇÃO ---
         });
 
         if (!response.ok) {
-            // Se o upload falhar, tenta ler o erro
             const errorBody = await response.json();
             console.error('[Upload API v4] Erro do Supabase Storage (Manual Fetch):', errorBody);
             throw new Error(errorBody.message || 'Falha ao fazer upload para o storage.');
