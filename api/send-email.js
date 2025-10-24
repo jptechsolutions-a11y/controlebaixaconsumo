@@ -7,6 +7,12 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM;
 
+// --- AJUSTE DE SEGURANÇA ---
+// A chave de serviço é necessária para buscar dados de forma segura no backend
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+// --- FIM DO AJUSTE ---
+
+
 // --- Configurações de Template ---
 const APP_URL = process.env.APP_URL || 'https://seu-app.vercel.app';
 // Certifique-se que o logo 'teste.png' esteja acessível publicamente nesta URL
@@ -16,6 +22,7 @@ const FOOTER_TEXT = `© ${new Date().getFullYear()} JP Tech Solutions. Todos os 
 
 // =================================================================
 // --- TEMPLATE HTML/TEXTO PROFISSIONAL ---
+// (Esta seção não foi alterada)
 // =================================================================
 
 /**
@@ -108,7 +115,13 @@ async function fetchSupabaseQuery(endpoint) {
     try {
         const response = await fetch(url, {
             method: 'GET',
-            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Accept': 'application/json' },
+            headers: { 
+                'apikey': SUPABASE_ANON_KEY, 
+                // --- AJUSTE DE SEGURANÇA ---
+                'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, // <-- USE SERVICE KEY
+                // --- FIM DO AJUSTE ---
+                'Accept': 'application/json' 
+            },
         });
         if (!response.ok) throw new Error(`Supabase query failed: ${response.statusText}`);
         const data = await response.json();
@@ -128,7 +141,14 @@ async function fetchSupabaseRecord(endpoint) {
     try {
         const response = await fetch(url, {
             method: 'GET',
-            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Accept': 'application/json', 'Prefer': 'return=representation' },
+            headers: { 
+                'apikey': SUPABASE_ANON_KEY, 
+                // --- AJUSTE DE SEGURANÇA ---
+                'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, // <-- USE SERVICE KEY
+                // --- FIM DO AJUSTE ---
+                'Accept': 'application/json', 
+                'Prefer': 'return=representation' 
+            },
         });
         if (!response.ok) throw new Error(`Supabase record failed: ${response.statusText}`);
         const data = await response.json();
@@ -141,7 +161,7 @@ async function fetchSupabaseRecord(endpoint) {
 
 /**
  * Helper para formatar uma lista de itens em HTML e TEXTO
- * Retorna um objeto com os fragmentos: { htmlList, textList, totalHtml, totalText }
+ * (Esta função não foi alterada)
  */
 function formatarListaItens(itens) {
     if (!itens || itens.length === 0) {
@@ -183,6 +203,7 @@ function formatarListaItens(itens) {
 
 // =================================================================
 // --- HANDLER PRINCIPAL DA API ---
+// (Esta seção não foi alterada)
 // =================================================================
 
 export default async (req, res) => {
@@ -190,6 +211,13 @@ export default async (req, res) => {
         console.error('Erro Crítico: A variável de ambiente EMAIL_FROM não está definida no Vercel.');
         return res.status(500).json({ error: 'Configuração de e-mail do servidor está incompleta.' });
     }
+    // --- NOVO CHECK DE SEGURANÇA ---
+    if (!SUPABASE_SERVICE_KEY) {
+        console.error('Erro Crítico: A variável de ambiente SUPABASE_SERVICE_KEY não está definida.');
+        return res.status(500).json({ error: 'Configuração de segurança do servidor está incompleta.' });
+    }
+    // --- FIM DO CHECK ---
+
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Método não permitido.' });
     }
