@@ -177,21 +177,33 @@ async function handleLogin(event) {
 }
 
 function showMainSystem() {
-    document.getElementById('loginContainer').style.display = 'none';
-    document.getElementById('mainSystem').style.display = 'flex';
-    document.getElementById('helpCgoButton').style.display = 'flex'; // NOVO: Mostra o botão flutuante
+    const loginContainer = document.getElementById('loginContainer');
+    const mainSystem = document.getElementById('mainSystem');
+    const helpButton = document.getElementById('helpCgoButton');
 
-    // Preenche informações no Sidebar
-    document.getElementById('sidebarUser').textContent = currentUser.nome;
-    document.getElementById('sidebarFilial').textContent = `${selectedFilial.nome} (${selectedFilial.descricao})`;
+    if (loginContainer) loginContainer.style.display = 'none';
+    if (mainSystem) mainSystem.style.display = 'flex';
+    if (helpButton) helpButton.style.display = 'flex';
+
+    // --- NOVO: Adiciona a classe ao body ---
+    document.body.classList.add('system-active');
+    // --- FIM NOVO ---
+
+    // Preenche informações no Sidebar (com verificação)
+    const sidebarUser = document.getElementById('sidebarUser');
+    const sidebarFilial = document.getElementById('sidebarFilial');
+    if (sidebarUser && currentUser) sidebarUser.textContent = currentUser.nome || 'Usuário';
+    if (sidebarFilial && selectedFilial) sidebarFilial.textContent = `${selectedFilial.nome || '?'} (${selectedFilial.descricao || '?'})`;
 
     // Filtra os links da navegação baseado no role
-    filterSidebarNav();
+    filterSidebarNav(); // Esta função já define a view inicial
 
-    // Mostra a view inicial (pode ser a home ou a primeira permitida)
-    showView('homeView'); // Ou determine a view inicial baseada no role
+    showNotification(`Acesso liberado para filial ${selectedFilial?.nome || 'desconhecida'}!`, 'success');
 
-    showNotification(`Acesso liberado para filial ${selectedFilial.nome}!`, 'success');
+    // Inicializa ícones Feather que podem ter sido adicionados dinamicamente
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
 }
 
 function filterSidebarNav() {
@@ -268,20 +280,61 @@ function showView(viewId, element = null) {
 
 // SUBSTITUA A FUNÇÃO 'logout' (Linha ~234)
 function logout() {
-    currentUser = null; selectedFilial = null;
-    todasFiliaisCache = []; cgoCache = []; todosCgoCache = []; carrinhoItens = [];
-    // ATUALIZADO: Usando novas variáveis de cache
-    linhasOrcamentariasCache = []; todasLinhasOrcamentariasCache = []; orcamentosCache = {};
-    tiposBaixaCache = []; todasTiposBaixaCache = []; realizadoManualCache = []; 
-    carrinhoFinanceiro = []; lancamentosCache = [];
-    document.getElementById('mainSystem').style.display = 'none';
-    document.getElementById('loginContainer').style.display = 'flex';
-    document.getElementById('helpCgoButton').style.display = 'none';
-    document.getElementById('loginForm').reset();
-    document.getElementById('loginAlert').innerHTML = '';
-    document.getElementById('filialSelectGroup').style.display = 'none';
+    // Limpa variáveis globais e localStorage
+    currentUser = null;
+    selectedFilial = null;
+    produtosCache = [];
+    todasFiliaisCache = [];
+    cgoCache = [];
+    todosCgoCache = [];
+    carrinhoItens = [];
+    tiposBaixaCache = [];
+    todasTiposBaixaCache = [];
+    lancamentosCache = [];
+    carrinhoFinanceiro = [];
+    orcamentosCache = {};
+    realizadoManualCache = [];
+    linhasOrcamentariasCache = [];
+    todasLinhasOrcamentariasCache = [];
+    chartInstances = {}; // Limpa instâncias de gráficos
+
+    localStorage.removeItem('user');
+    localStorage.removeItem('auth_token');
+
+    // --- NOVO: Remove a classe do body ---
+    document.body.classList.remove('system-active');
+    // --- FIM NOVO ---
+
+    // Esconde o sistema principal e mostra o login
+    const mainSystem = document.getElementById('mainSystem');
+    const loginContainer = document.getElementById('loginContainer');
+    const helpButton = document.getElementById('helpCgoButton');
+    const loginForm = document.getElementById('loginForm');
+    const loginAlert = document.getElementById('loginAlert');
+    const filialSelectGroup = document.getElementById('filialSelectGroup');
+    const loginButton = loginForm ? loginForm.querySelector('button[type="submit"]') : null;
+
+    if (mainSystem) mainSystem.style.display = 'none';
+    if (loginContainer) loginContainer.style.display = 'flex';
+    if (helpButton) helpButton.style.display = 'none';
+
+    // Reseta o formulário de login e alertas
+    if (loginForm) loginForm.reset();
+    if (loginAlert) loginAlert.innerHTML = '';
+    if (filialSelectGroup) filialSelectGroup.style.display = 'none';
+
+    // Garante que o botão de login esteja no estado inicial e com o listener correto
+    if (loginButton) loginButton.textContent = 'ENTRAR';
+    if (loginForm) {
+        loginForm.removeEventListener('submit', handleFilialSelection); // Remove listener de seleção
+        loginForm.removeEventListener('submit', handleLogin);       // Remove listener antigo de login (segurança)
+        loginForm.addEventListener('submit', handleLogin);          // Adiciona listener correto de login
+    }
+
+
     showNotification('Você foi desconectado.', 'info');
 }
+
 
 function handleAddItem(event) {
     event.preventDefault();
@@ -1524,145 +1577,192 @@ function renderUsuariosTable(tbody, usuarios) {
 
 
 async function abrirUsuarioModal(id = null) {
+    // Se não for edição (ID não fornecido), impede a abertura e avisa
+    if (id === null || id === undefined || id === '') {
+        showNotification('Para criar um novo usuário, utilize o painel de Autenticação do Supabase. Use esta tela apenas para editar perfis existentes.', 'info', 8000);
+        return; // Não abre o modal para criação
+    }
+
     const modal = document.getElementById('usuarioModal');
     const form = document.getElementById('usuarioForm');
     const alertContainer = document.getElementById('usuarioAlert');
     const title = document.getElementById('usuarioModalTitle');
-    const senhaHelp = document.getElementById('usuarioSenhaHelp');
     const filiaisContainer = document.getElementById('usuarioFiliaisCheckboxes');
-    alertContainer.innerHTML = '';
-    form.reset();
-    document.getElementById('usuarioId').value = id || '';
-    filiaisContainer.innerHTML = '<div class="loading text-sm">Carregando filiais...</div>';
+    const usernameInput = document.getElementById('usuarioUsername'); // Para desabilitar
+
+    // Reseta estado antes de preencher
+    if (alertContainer) alertContainer.innerHTML = '';
+    if (form) form.reset();
+    if (filiaisContainer) filiaisContainer.innerHTML = '<div class="loading text-sm">Carregando filiais...</div>';
+    if (usernameInput) {
+        usernameInput.disabled = true; // Sempre desabilitado
+        usernameInput.classList.add('bg-gray-200');
+    }
+    const userIdInput = document.getElementById('usuarioId');
+    if (userIdInput) userIdInput.value = id; // Define o ID para edição
+
+    // Carrega filiais (essencial para o modal)
     let filiais = [];
     try {
-        filiais = await getFiliaisCache();
+        filiais = await getFiliaisCache(false); // Reutiliza cache se possível
     } catch (e) {
-        console.error("Falha ao carregar filiais:", e);
-        alertContainer.innerHTML = `<div class="alert alert-error">Falha fatal ao carregar filiais. Tente novamente.</div>`;
-        return;
+        console.error("Falha ao carregar filiais no modal:", e);
+        if (alertContainer) alertContainer.innerHTML = `<div class="alert alert-error">Falha fatal ao carregar filiais. Não é possível editar.</div>`;
+        return; // Impede a abertura se filiais falharem
     }
-    if (filiais.length > 0) {
-         filiaisContainer.innerHTML = filiais.map(f => {
-            // --- CORREÇÃO DE SEGURANÇA ---
-            const idSeguro = escapeHTML(f.id);
-            const nomeSeguro = escapeHTML(f.nome);
-            const descSegura = escapeHTML(f.descricao);
-            // --- FIM DA CORREÇÃO ---
-            return `
-            <label class="flex items-center space-x-2 text-sm">
-                <input type="checkbox" value="${idSeguro}" name="filiais">
-                <span>${nomeSeguro} (${descSegura})</span>
-            </label>
-         `}).join('');
-    } else {
-        filiaisContainer.innerHTML = '<div class="text-sm text-red-600">Nenhuma filial cadastrada.</div>';
-    }
-    if (id) {
-        title.textContent = `Editar Usuário #${escapeHTML(id)}`; // textContent é seguro
-        // ... (resto da lógica de preenchimento do formulário, que usa .value, é segura) ...
-        try {
-            const userResponse = await supabaseRequest(`usuarios?id=eq.${id}&select=*,usuario_filiais(filial_id)`);
-            if (!userResponse || userResponse.length === 0) throw new Error('Usuário não encontrado.');
-            const user = userResponse[0];
-            const filiaisAtuais = user.usuario_filiais.map(uf => uf.filial_id);
-            document.getElementById('usuarioNome').value = user.nome;
-            document.getElementById('usuarioUsername').value = user.username;
-            document.getElementById('usuarioEmail').value = user.email || '';
-            document.getElementById('usuarioRole').value = user.role;
-            document.getElementById('usuarioAtivo').checked = user.ativo;
-            filiaisContainer.querySelectorAll('input[name="filiais"]').forEach(checkbox => {
-                if (filiaisAtuais.includes(parseInt(checkbox.value))) {
-                    checkbox.checked = true;
-                }
-            });
-        } catch (error) {
-            console.error("Erro ao carregar dados do usuário:", error);
-            alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados. Tente novamente.</div>`;
-            return;
+
+    // Popula checkboxes de filiais
+    if (filiaisContainer) {
+        if (filiais.length > 0) {
+            filiaisContainer.innerHTML = filiais.map(f => {
+                const idSeguro = escapeHTML(f.id);
+                const nomeSeguro = escapeHTML(f.nome);
+                const descSegura = escapeHTML(f.descricao || ''); // Garante que não seja null
+                return `
+                <label class="flex items-center space-x-2 text-sm">
+                    <input type="checkbox" value="${idSeguro}" name="filiais">
+                    <span>${nomeSeguro} (${descSegura})</span>
+                </label>
+             `}).join('');
+        } else {
+            filiaisContainer.innerHTML = '<div class="text-sm text-red-600">Nenhuma filial cadastrada no sistema.</div>';
         }
-    } else {
-        title.textContent = 'Novo Usuário'; // textContent é seguro
-        // ...
     }
-    modal.style.display = 'flex';
+
+    // Modo Edição (único modo agora)
+    if (title) title.textContent = `Editar Perfil do Usuário #${escapeHTML(id)}`;
+
+    // Carrega dados existentes do usuário a ser editado
+    try {
+        const userIdInt = parseInt(id); // Garante que ID é número para a query
+        if (isNaN(userIdInt)) throw new Error("ID de usuário inválido.");
+
+        const userResponse = await supabaseRequest(`usuarios?id=eq.${userIdInt}&select=nome,username,email,role,ativo,usuario_filiais(filial_id)`);
+        if (!userResponse || userResponse.length === 0) throw new Error('Usuário não encontrado.');
+        const user = userResponse[0];
+        const filiaisAtuais = user.usuario_filiais.map(uf => uf.filial_id);
+
+        // Preenche o formulário
+        const nomeInput = document.getElementById('usuarioNome');
+        const emailInput = document.getElementById('usuarioEmail');
+        const roleSelect = document.getElementById('usuarioRole');
+        const ativoCheckbox = document.getElementById('usuarioAtivo');
+        // Username já está desabilitado, apenas preenchemos
+        if (usernameInput) usernameInput.value = user.username || '';
+
+        if (nomeInput) nomeInput.value = user.nome || '';
+        if (emailInput) emailInput.value = user.email || '';
+        if (roleSelect) roleSelect.value = user.role || '';
+        if (ativoCheckbox) ativoCheckbox.checked = user.ativo;
+
+        // Marca as filiais atuais
+        if (filiaisContainer) {
+            filiaisContainer.querySelectorAll('input[name="filiais"]').forEach(checkbox => {
+                // Compara valores como números
+                checkbox.checked = filiaisAtuais.includes(parseInt(checkbox.value));
+            });
+        }
+
+    } catch (error) {
+        console.error("Erro ao carregar dados do usuário para edição:", error);
+        if (alertContainer) alertContainer.innerHTML = `<div class="alert alert-error">Erro ao carregar dados do usuário: ${escapeHTML(error.message)}</div>`;
+        return; // Impede a abertura do modal se houver erro
+    }
+
+    // Abre o modal apenas se tudo correu bem
+    if (modal) modal.style.display = 'flex';
     if (typeof feather !== 'undefined') {
-        feather.replace();
+        feather.replace(); // Atualiza ícones se houver no modal
     }
 }
+
 
 async function handleUsuarioFormSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('usuarioAlert');
+    if (!alertContainer) return; // Sai se o container não existe
     alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Salvando...</div>';
-    const id = document.getElementById('usuarioId').value;
-    const nome = document.getElementById('usuarioNome').value;
-    const username = document.getElementById('usuarioUsername').value;
-    const email = document.getElementById('usuarioEmail').value;
-    const senha = document.getElementById('usuarioSenha').value; // Senha (para Admin)
-    const role = document.getElementById('usuarioRole').value;
-    const ativo = document.getElementById('usuarioAtivo').checked;
+
+    // Coleta dados do formulário
+    const idInput = document.getElementById('usuarioId');
+    const nomeInput = document.getElementById('usuarioNome');
+    const usernameInput = document.getElementById('usuarioUsername'); // Mantido para leitura
+    const emailInput = document.getElementById('usuarioEmail');
+    const roleSelect = document.getElementById('usuarioRole');
+    const ativoCheckbox = document.getElementById('usuarioAtivo');
     const selectedFiliaisCheckboxes = document.querySelectorAll('#usuarioFiliaisCheckboxes input[name="filiais"]:checked');
+
+    // Validações básicas
+    const id = idInput ? idInput.value : null;
+    const nome = nomeInput ? nomeInput.value.trim() : '';
+    const username = usernameInput ? usernameInput.value.trim() : ''; // Lemos, mas não enviamos para update
+    const email = emailInput ? emailInput.value.trim() : '';
+    const role = roleSelect ? roleSelect.value : '';
+    const ativo = ativoCheckbox ? ativoCheckbox.checked : false;
     const selectedFilialIds = Array.from(selectedFiliaisCheckboxes).map(cb => parseInt(cb.value));
     const isEdit = !!id;
-    
-    if (!nome || !username || !role || !email) {
-         alertContainer.innerHTML = '<div class="alert alert-error">Nome, Usuário, E-mail e Grupo são obrigatórios.</div>';
-         return;
-    }
-     if (!isEdit && !senha) {
-        alertContainer.innerHTML = '<div class="alert alert-error">A Senha é obrigatória para novos usuários.';
+
+    if (!isEdit) {
+        // Impede a criação via UI, força o uso do painel Supabase
+        alertContainer.innerHTML = `<div class="alert alert-error">A criação de novos usuários deve ser feita pelo painel Supabase Auth (que envia convite). Use esta tela apenas para editar perfis existentes.</div>`;
         return;
+    }
+
+    if (!nome || !username || !role || !email) { // Username ainda é validado pois é parte do perfil
+         alertContainer.innerHTML = '<div class="alert alert-error">Nome, Usuário (não editável), E-mail e Grupo são obrigatórios.</div>';
+         return;
     }
      if (selectedFilialIds.length === 0) {
         alertContainer.innerHTML = '<div class="alert alert-error">Selecione ao menos uma filial.</div>';
         return;
     }
-    
-    // CORREÇÃO: Removida a linha 'userData.senha_hash = senha;' que estava causando o erro de coluna.
-    const userData = { nome, username, email, role, ativo };
-    
+
+    // Prepara dados para o PATCH (APENAS EDIÇÃO)
+    // Não incluímos 'username' pois ele está desabilitado e não deve ser alterado aqui
+    const userData = { nome, email, role, ativo };
+
     try {
-        let userId = id;
-        
-        if (isEdit) {
-            // Edita apenas os dados de perfil
-            await supabaseRequest(`usuarios?id=eq.${id}`, 'PATCH', userData);
-            
-            if (senha) {
-                 showNotification('Aviso: A senha não foi alterada. Para alterar a senha, utilize as ferramentas de Administração de Auth do Supabase.', 'warning', 8000);
-            }
-            
-        } else {
-             // Cria o registro de perfil (pressupondo que o usuário Auth foi criado separadamente)
-            const response = await supabaseRequest('usuarios', 'POST', userData);
-            if (!response || response.length === 0) throw new Error("Falha ao criar o usuário, não obteve resposta.");
-            userId = response[0].id;
+        let userId = parseInt(id); // Garante que o ID é número
+
+        // --- Lógica de Edição ---
+        // 1. Pega o e-mail original para comparação (antes de atualizar)
+        const originalUserResponse = await supabaseRequest(`usuarios?id=eq.${userId}&select=email`);
+        const originalEmail = originalUserResponse?.[0]?.email;
+
+        // 2. Atualiza os dados do perfil na tabela 'usuarios'
+        await supabaseRequest(`usuarios?id=eq.${userId}`, 'PATCH', userData);
+
+        // 3. Verifica se o e-mail do perfil foi alterado e avisa o admin
+        if (originalEmail && originalEmail !== email) {
+            showNotification('Aviso: O e-mail do PERFIL foi atualizado. O e-mail de LOGIN (Supabase Auth) NÃO foi alterado por esta interface.', 'warning', 10000);
         }
-        
-        if (!userId) throw new Error("ID do usuário não definido.");
-        
-        // Gerenciamento de Filiais
+
+        // 4. Gerenciamento de Filiais (Sincroniza)
+        // Deleta vínculos antigos
         await supabaseRequest(`usuario_filiais?usuario_id=eq.${userId}`, 'DELETE');
-        const filiaisToInsert = selectedFilialIds.map(filialId => ({
-            usuario_id: userId,
-            filial_id: filialId
-        }));
-        await supabaseRequest('usuario_filiais', 'POST', filiaisToInsert);
-        
-        showNotification(`Usuário ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
+        // Insere novos vínculos (se houver)
+        if (selectedFilialIds.length > 0) {
+            const filiaisToInsert = selectedFilialIds.map(filialId => ({
+                usuario_id: userId, // ID do usuário que estamos editando
+                filial_id: filialId // ID da filial selecionada
+            }));
+            await supabaseRequest('usuario_filiais', 'POST', filiaisToInsert);
+        }
+
+        // Sucesso
+        alertContainer.innerHTML = ''; // Limpa o loading/erro
+        showNotification(`Perfil do usuário atualizado com sucesso!`, 'success');
         closeModal('usuarioModal');
-        loadGerenciarUsuarios();
-        
+        if (typeof loadGerenciarUsuarios === 'function') loadGerenciarUsuarios(); // Recarrega a lista
+
     } catch (error) {
-        console.error("Erro ao salvar usuário:", error);
-        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${error.message}</div>`;
+        console.error("Erro ao salvar perfil do usuário:", error);
+        // Usa escapeHTML na mensagem de erro que vem do servidor
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao salvar: ${escapeHTML(error.message)}</div>`;
     }
 }
 
-// =======================================================
-// === NOVO: FUNÇÕES DE GERENCIAMENTO DE TIPOS DE BAIXA ===
-// =======================================================
+
 
 async function loadGerenciarTiposBaixa() {
     const tbody = document.getElementById('tiposBaixaTableBody');
@@ -4149,4 +4249,141 @@ function escapeHTML(str) {
          .replace(/>/g, '&gt;')
          .replace(/"/g, '&quot;')
          .replace(/'/g, '&#39;');
+}
+
+// --- NOVO: Funções para abrir os novos modais ---
+function openForgotPasswordModal() {
+    // Garante que o alerta esteja limpo e o form resetado
+    const alertContainer = document.getElementById('forgotPasswordAlert');
+    const form = document.getElementById('forgotPasswordForm');
+    if (alertContainer) alertContainer.innerHTML = '';
+    if (form) form.reset();
+
+    // Mostra o modal
+    const modal = document.getElementById('forgotPasswordModal');
+    if (modal) modal.style.display = 'flex';
+
+    // Adiciona o listener APENAS quando o modal é aberto (evita múltiplos listeners)
+    if (form) {
+        form.removeEventListener('submit', handleForgotPassword); // Remove listener antigo
+        form.addEventListener('submit', handleForgotPassword);    // Adiciona o novo
+    }
+}
+
+function openRequestAccessModal() {
+    // Garante que o alerta esteja limpo e o form resetado
+    const alertContainer = document.getElementById('requestAccessAlert');
+    const form = document.getElementById('requestAccessForm');
+    if (alertContainer) alertContainer.innerHTML = '';
+    if (form) form.reset();
+
+    // Mostra o modal
+    const modal = document.getElementById('requestAccessModal');
+    if (modal) modal.style.display = 'flex';
+
+    // Adiciona o listener APENAS quando o modal é aberto
+    if (form) {
+        form.removeEventListener('submit', handleRequestAccess); // Remove listener antigo
+        form.addEventListener('submit', handleRequestAccess);    // Adiciona o novo
+    }
+}
+
+// --- NOVO: Handler para Esqueceu Senha ---
+async function handleForgotPassword(event) {
+    event.preventDefault(); // Impede o recarregamento da página
+    const emailInput = document.getElementById('forgotEmail');
+    const email = emailInput ? emailInput.value : '';
+    const alertContainer = document.getElementById('forgotPasswordAlert');
+
+    if (!alertContainer) return; // Sai se o container de alerta não existir
+
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Enviando...</div>';
+
+    if (!email) {
+        alertContainer.innerHTML = `<div class="alert alert-error">Por favor, digite seu e-mail.</div>`;
+        return;
+    }
+
+    try {
+        // --- CHAMADA VIA API (MAIS SEGURO) - Assumindo que você criará /api/forgot-password ---
+        console.log(`Enviando pedido de reset para: ${email}`);
+        const response = await fetch('/api/forgot-password', { // VOCÊ PRECISA CRIAR ESTA API
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email })
+        });
+
+        // Mesmo se a API retornar erro (ex: e-mail não encontrado), mostramos sucesso por segurança
+        if (!response.ok) {
+            // Logamos o erro real no console para depuração
+            try {
+                const result = await response.json();
+                console.error("Erro da API forgot-password:", result.error || response.statusText);
+            } catch (e) {
+                console.error("Erro da API forgot-password (não JSON):", response.statusText);
+            }
+             // Não lançamos erro aqui, mostramos mensagem genérica
+        }
+        // --- FIM CHAMADA VIA API ---
+
+        alertContainer.innerHTML = ''; // Limpa o loading
+        showNotification('Se o e-mail estiver cadastrado, um link de recuperação foi enviado.', 'success', 6000);
+        closeModal('forgotPasswordModal');
+
+    } catch (error) {
+        // Erro de rede ou falha geral no fetch
+        console.error("Erro de rede ao solicitar recuperação de senha:", error);
+         // Mostra mensagem genérica para o usuário
+        alertContainer.innerHTML = `<div class="alert alert-error">Não foi possível enviar a solicitação. Verifique sua conexão ou tente novamente mais tarde.</div>`;
+    }
+}
+
+// --- NOVO: Handler para Solicitar Acesso ---
+async function handleRequestAccess(event) {
+    event.preventDefault(); // Impede o recarregamento da página
+    const nomeInput = document.getElementById('requestNome');
+    const emailInput = document.getElementById('requestEmail');
+    const motivoInput = document.getElementById('requestMotivo');
+    const alertContainer = document.getElementById('requestAccessAlert');
+
+    if (!alertContainer || !nomeInput || !emailInput || !motivoInput) return; // Sai se elementos não existem
+
+    const nome = nomeInput.value.trim();
+    const email = emailInput.value.trim();
+    const motivo = motivoInput.value.trim();
+
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Enviando solicitação...</div>';
+
+    if (!nome || !email || !motivo) {
+        alertContainer.innerHTML = `<div class="alert alert-error">Todos os campos são obrigatórios.</div>`;
+        return;
+    }
+
+    try {
+        // Chamada para a API que enviará o e-mail/notificação para o admin
+        console.log(`Enviando solicitação de acesso para: ${nome} (${email})`);
+        const response = await fetch('/api/request-access', { // VOCÊ PRECISA CRIAR ESTA API
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ nome, email, motivo })
+        });
+
+        if (!response.ok) {
+            let errorMsg = 'Falha ao enviar solicitação.';
+            try {
+                const result = await response.json();
+                errorMsg = result.error || errorMsg;
+            } catch (e) { /* Ignora erro de parse */ }
+             throw new Error(errorMsg);
+        }
+
+        alertContainer.innerHTML = '';
+        showNotification('Solicitação de acesso enviada com sucesso! Aguarde a aprovação do administrador.', 'success', 6000);
+        closeModal('requestAccessModal');
+
+    } catch (error) {
+        console.error("Erro ao solicitar acesso:", error);
+        // Usa escapeHTML na mensagem de erro que vem do servidor, por segurança
+        alertContainer.innerHTML = `<div class="alert alert-error">Erro ao enviar: ${escapeHTML(error.message)}</div>`;
+    }
 }
