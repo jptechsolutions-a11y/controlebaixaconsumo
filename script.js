@@ -591,76 +591,98 @@ async function loadHistoricoGeral() {
 
 
 // SUBSTITUA esta função no script.js
+/**
+ * AJUSTADA COM escapeHTML e CORREÇÃO PARA itens NULOS
+ */
 function renderSolicitacoesTable(tbody, solicitacoes, context) {
+    if (!tbody) {
+        console.error("Erro: Elemento tbody não encontrado para renderizar a tabela.");
+        return;
+    }
     if (!solicitacoes || solicitacoes.length === 0) {
-        const colspan = context === 'historico' ? 9 : 7;
+        const colspan = context === 'historico' ? 9 : (context === 'operacao' ? 7 : 8); // Ajuste colspan
         tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center py-4 text-gray-500">Nenhuma solicitação encontrada.</td></tr>`;
         return;
     }
 
     tbody.innerHTML = solicitacoes.map(s => {
-        const itens = s.solicitacao_itens || [];
-        const dataSol = new Date(s.data_solicitacao).toLocaleDateString('pt-BR');
+        // --- CORREÇÃO PRINCIPAL: Garante que 'itens' seja sempre um array ---
+        const itens = Array.isArray(s.solicitacao_itens) ? s.solicitacao_itens : [];
+        // --- FIM DA CORREÇÃO PRINCIPAL ---
+
+        const dataSol = s.data_solicitacao ? new Date(s.data_solicitacao).toLocaleDateString('pt-BR') : 'Data Inválida';
+        
         // --- CORREÇÃO DE SEGURANÇA (Variáveis) ---
         const idSeguro = escapeHTML(s.id);
         const solicitanteNomeSeguro = escapeHTML(s.usuarios ? s.usuarios.nome : 'Desconhecido');
-        const filialNomeSeguro = escapeHTML(s.filiais ? s.filiais.nome : selectedFilial.nome);
+        const filialNomeSeguro = escapeHTML(s.filiais ? s.filiais.nome : (selectedFilial ? selectedFilial.nome : 'N/A')); // Usa selectedFilial como fallback
         const statusLabelSeguro = escapeHTML(getStatusLabel(s.status));
         // --- FIM DA CORREÇÃO ---
 
-        // --- Lógica de Resumo de Itens (sem alteração) ---
+        // --- Lógica de Resumo de Itens ---
         let produtoDesc = 'Nenhum item';
         let qtdTotalSol = 0;
         let valorTotalSol = 0;
         let qtdTotalExec = 0;
-        let valorTotalExec = 0;
+        let valorTotalExec = 0; // Inicializado como 0
 
         if (itens.length === 1) {
             const item = itens[0];
-            produtoDesc = item.produtos ? `${item.produtos.codigo} - ${item.produtos.descricao}` : 'Produto inválido'; // Será escapado abaixo
-            qtdTotalSol = item.quantidade_solicitada;
-            valorTotalSol = item.valor_total_solicitado;
+            produtoDesc = item.produtos ? `${item.produtos.codigo} - ${item.produtos.descricao}` : 'Produto inválido';
+            qtdTotalSol = item.quantidade_solicitada ?? 0; // Usa ?? 0 para segurança
+            valorTotalSol = item.valor_total_solicitado ?? 0;
             qtdTotalExec = item.quantidade_executada ?? 0;
             valorTotalExec = item.valor_total_executado ?? 0;
         } else if (itens.length > 1) {
             produtoDesc = `Múltiplos Itens (${itens.length})`;
             itens.forEach(item => {
-                qtdTotalSol += item.quantidade_solicitada;
-                valorTotalSol += item.valor_total_solicitado;
+                qtdTotalSol += item.quantidade_solicitada ?? 0;
+                valorTotalSol += item.valor_total_solicitado ?? 0;
                 qtdTotalExec += item.quantidade_executada ?? 0;
                 valorTotalExec += item.valor_total_executado ?? 0;
             });
         }
-        
+        // Neste ponto, valorTotalExec é garantido ser um número (0 se não houver itens ou valores)
+
         // --- CORREÇÃO DE SEGURANÇA (Variáveis de resumo) ---
         const produtoDescSeguro = escapeHTML(produtoDesc);
         const qtdTotalSolSeguro = escapeHTML(qtdTotalSol);
-        const valorTotalSolSeguro = escapeHTML(valorTotalSol.toFixed(2));
+        // Aplica toFixed APENAS se valorTotalSol for número
+        const valorTotalSolSeguro = typeof valorTotalSol === 'number' ? escapeHTML(valorTotalSol.toFixed(2)) : '0.00'; 
         const qtdTotalExecSeguro = escapeHTML(qtdTotalExec);
+         // Aplica toFixed APENAS se valorTotalExec for número (garantido pela inicialização e ??)
         const valorTotalExecSeguro = escapeHTML(valorTotalExec.toFixed(2));
         // --- FIM DA CORREÇÃO ---
 
-
+        // --- Lógica de Ações ---
         let actions = '';
         if (context === 'operacao') {
             actions = `<button class="btn btn-primary btn-small" onclick="abrirDetalhesModal('${idSeguro}')">Ver Detalhes</button>`;
-            if (s.status === 'aguardando_retirada') {
-                 actions += `<button class="btn btn-success btn-small ml-1" onclick="abrirRetiradaLoteModal('${idSeguro}')">Confirmar Retirada</Sbutton>`;
+            if (s.status === 'aguardando_retirada' || s.status === 'parcialmente_executado') { // Ajuste para status parcial
+                 actions += `<button class="btn btn-success btn-small ml-1" onclick="abrirRetiradaLoteModal('${idSeguro}')">Confirmar Retirada</button>`; // Corrigido </Sbutton>
             }
         } else if (context === 'gestor') {
-            actions = `
-                <button class="btn btn-success btn-small" onclick="aprovarSolicitacao('${idSeguro}')">Aprovar</button>
-                <button class="btn btn-danger btn-small ml-1" onclick="negarSolicitacao('${idSeguro}')">Negar</button>
-                 <button class="btn btn-primary btn-small ml-1" onclick="abrirDetalhesModal('${idSeguro}')">Ver</button>
-            `;
+            // Só mostra botões se o status for realmente 'aguardando_aprovacao'
+            if (s.status === 'aguardando_aprovacao') {
+                 actions = `
+                    <button class="btn btn-success btn-small" onclick="aprovarSolicitacao('${idSeguro}')">Aprovar</button>
+                    <button class="btn btn-danger btn-small ml-1" onclick="negarSolicitacao('${idSeguro}')">Negar</button>
+                `;
+            }
+            // Botão 'Ver' sempre aparece
+            actions += `<button class="btn btn-primary btn-small ml-1" onclick="abrirDetalhesModal('${idSeguro}')">Ver</button>`;
         } else if (context === 'prevencao') {
-            actions = `<button class="btn btn-warning btn-small" onclick="abrirExecutarModal('${idSeguro}')">Executar</button>
-                       <button class="btn btn-primary btn-small ml-1" onclick="abrirDetalhesModal('${idSeguro}')">Ver</button>`;
+             // Só mostra 'Executar' se AINDA HÁ itens aprovados para executar
+            const hasItensAprovados = itens.some(item => item.status === 'aprovada');
+            if (hasItensAprovados && (s.status === 'aprovada' || s.status === 'parcialmente_executado')) {
+                 actions = `<button class="btn btn-warning btn-small" onclick="abrirExecutarModal('${idSeguro}')">Executar</button>`;
+             }
+             actions += `<button class="btn btn-primary btn-small ml-1" onclick="abrirDetalhesModal('${idSeguro}')">Ver</button>`;
         } else if (context === 'historico') {
             actions = `<button class="btn btn-primary btn-small" onclick="abrirDetalhesModal('${idSeguro}')">Ver Detalhes</button>`;
         }
 
-
+        // --- Renderização da Linha ---
         if (context === 'historico') {
              return `
                 <tr class="text-sm">
@@ -670,26 +692,32 @@ function renderSolicitacoesTable(tbody, solicitacoes, context) {
                     <td>${solicitanteNomeSeguro}</td>
                     <td>${produtoDescSeguro}</td>
                     <td class="text-center">${qtdTotalExecSeguro}</td>
-                    <td class="text-right">${valorTotalExecSeguro}</td>
+                    <td class="text-right">R$ ${valorTotalExecSeguro}</td>
                     <td><span class="status-badge status-${s.status}">${statusLabelSeguro}</span></td>
                     <td>${actions}</td>
                 </tr>
             `;
-        } else {
+        } else { // operacao, gestor, prevencao
+             const solicitanteColumn = (context !== 'operacao') ? `<td>${solicitanteNomeSeguro}</td>` : '';
              return `
                 <tr class="text-sm">
                     <td>${idSeguro}</td>
                     <td>${dataSol}</td>
-                    ${context !== 'operacao' ? `<td>${solicitanteNomeSeguro}</td>` : ''}
+                    ${solicitanteColumn}
                     <td>${produtoDescSeguro}</td>
                     <td class="text-center">${qtdTotalSolSeguro}</td>
-                    <td class="text-right">${valorTotalSolSeguro}</td>
+                    <td class="text-right">R$ ${valorTotalSolSeguro}</td>
                     <td><span class="status-badge status-${s.status}">${statusLabelSeguro}</span></td>
                     <td>${actions}</td>
                 </tr>
             `;
         }
     }).join('');
+
+    // Re-renderiza ícones Feather se existirem botões com ícones
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
 }
 
 function getStatusLabel(status) {
