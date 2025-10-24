@@ -1045,7 +1045,12 @@ async function handleExecucaoSubmit(event) {
                     const apiUrl = `/api/upload?fileName=${encodeURIComponent(file.name)}&solicitacaoId=${solicitacaoId}&fileType=anexo`;
                     const response = await fetch(apiUrl, {
                         method: 'POST',
-                        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+                        headers: { 
+                            'Content-Type': file.type || 'application/octet-stream',
+                            // --- AJUSTE DE SEGURANÇA ADICIONADO ---
+                            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                            // --- FIM DO AJUSTE ---
+                        },
                         body: file,
                     });
                     if (!response.ok) {
@@ -1084,9 +1089,6 @@ async function handleExecucaoSubmit(event) {
     }
 }
 
-/**
- * REESCRITO: Abre modal de Retirada para um ITEM
- */
 async function abrirRetiradaModal(itemId, solicitacaoId) { // MUDANÇA: Recebe itemId e solicitacaoId
      const modal = document.getElementById('retiradaModal');
     document.getElementById('retiradaId').textContent = itemId;
@@ -1121,74 +1123,91 @@ async function abrirRetiradaModal(itemId, solicitacaoId) { // MUDANÇA: Recebe i
     }
 }
 
-/**
- * REESCRITO: Submissão do formulário de Retirada (por ITEM)
- */
 async function handleRetiradaSubmit(event) {
     event.preventDefault();
     const alertContainer = document.getElementById('retiradaAlert');
-    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Processando...</div>';
+    alertContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Processando retirada...</div>';
 
-    const itemId = document.getElementById('retiradaSolicitacaoId').value; // Este é o ID do ITEM
-    const solicitacaoId = document.getElementById('retiradaPedidoId').value; // Este é o ID do PEDIDO
-    const fotoFile = document.getElementById('fotoRetirada').files[0];
+    const solicitacaoId = document.getElementById('retiradaSolicitacaoId').value; // ID do PEDIDO
+    const fotoFiles = document.getElementById('fotosRetirada').files; // Múltiplos arquivos
+    const checkedItems = document.querySelectorAll('input[name="retirar_item_ids"]:checked');
 
-    if (!fotoFile) {
-        alertContainer.innerHTML = '<div class="alert alert-error">Por favor, anexe a foto da retirada.</div>';
+    if (checkedItems.length === 0) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Selecione pelo menos um item para confirmar a retirada.</div>';
         return;
     }
-    if (!solicitacaoId) {
-         alertContainer.innerHTML = '<div class="alert alert-error">Erro: ID do Pedido não encontrado.</div>';
-         return;
+    if (!fotoFiles || fotoFiles.length === 0) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Por favor, anexe pelo menos uma foto ou anexo.</div>';
+        return;
     }
 
     try {
-        let fotoUrl = '';
-        alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Enviando foto...</div>';
-
-        // --- LÓGICA DE UPLOAD (Usa o ID do PEDIDO para a pasta) ---
-        try {
-            const apiUrl = `/api/upload?fileName=${encodeURIComponent(fotoFile.name)}&solicitacaoId=${solicitacaoId}&fileType=foto_retirada`;
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': fotoFile.type || 'application/octet-stream' },
-                body: fotoFile,
-            });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`Erro ${response.status} ao enviar foto: ${errorData.details || errorData.error}`);
-            }
-            const result = await response.json();
-            if (result.publicUrl) {
-                fotoUrl = result.publicUrl;
-            } else {
-                throw new Error('API de upload não retornou a URL da foto.');
-            }
-        } catch (uploadError) {
-             console.error('Falha no upload da foto:', uploadError);
-             throw uploadError;
-        }
-        // --- FIM DO UPLOAD ---
-
-
-        // Atualizar o ITEM com a URL da foto e o status final
-        const updateData = {
-            status: 'finalizada', // Status final do ITEM
-            retirada_por_id: currentUser.id,
-            data_retirada: new Date().toISOString(),
-            // ATENÇÃO: A lógica original só salvava uma foto. Mantenho a correção feita mais abaixo para suportar array de URLs.
-            // foto_retirada_url: fotoUrl 
-            fotos_retirada_urls: [fotoUrl] // Garante que seja um array para consistência
-        };
-        await supabaseRequest(`solicitacao_itens?id=eq.${itemId}`, 'PATCH', updateData);
+        // 1. Fazer Upload de TODAS as fotos/anexos
+        alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Enviando anexos...</div>';
+        let fotosUrls = []; // Array que vai guardar as URLs
         
-        // TODO: Adicionar lógica para verificar se TODOS os itens do pedido 'solicitacaoId'
-        // estão 'finalizada' ou 'negada', e então atualizar o status do PEDIDO (cabeçalho)
-        // para 'finalizada'. (Opcional, mas bom para limpeza)
+        for (const file of fotoFiles) {
+            try {
+                // Usamos o ID do PEDIDO para a pasta
+                const apiUrl = `/api/upload?fileName=${encodeURIComponent(file.name)}&solicitacaoId=${solicitacaoId}&fileType=foto_retirada`; 
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': file.type || 'application/octet-stream',
+                        // --- AJUSTE DE SEGURANÇA ADICIONADO ---
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                        // --- FIM DO AJUSTE ---
+                    },
+                    body: file,
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Erro ${response.status} ao enviar ${file.name}: ${errorData.details || errorData.error}`);
+                }
+                const result = await response.json();
+                if (result.publicUrl) {
+                    fotosUrls.push(result.publicUrl); // Adiciona a URL ao nosso array
+                }
+            } catch (uploadError) {
+                 console.error(`Falha no upload do anexo ${file.name}:`, uploadError);
+                 throw new Error(`Falha no upload do anexo ${file.name}`);
+            }
+        }
+        
+        if (fotosUrls.length === 0) {
+             throw new Error('Nenhum anexo foi enviado com sucesso.');
+        }
 
-        showNotification(`Retirada do item #${itemId} confirmada!`, 'success');
+        // 2. Atualizar todos os ITENS selecionados
+        alertContainer.innerHTML += '<div class="loading"><div class="spinner"></div>Atualizando itens...</div>';
+        
+        const dataRetirada = new Date().toISOString();
+        
+        for (const item of checkedItems) {
+            const itemId = item.value;
+            
+            const updateData = {
+                status: 'finalizada', // Status final do ITEM
+                retirada_por_id: currentUser.id,
+                data_retirada: dataRetirada,
+                fotos_retirada_urls: fotosUrls // Salva o ARRAY de URLs
+            };
+            await supabaseRequest(`solicitacao_itens?id=eq.${itemId}`, 'PATCH', updateData);
+        }
+
+        // 3. (Opcional) Verificar se o PEDIDO (cabeçalho) está 100% finalizado
+        // Busca itens que AINDA NÃO estejam finalizados ou negados
+        const itensPendentes = await supabaseRequest(
+            `solicitacao_itens?solicitacao_id=eq.${solicitacaoId}&status=not.in.(finalizada,negada)&select=id&limit=1`
+        );
+        
+        // Se não há mais itens pendentes, fecha o pedido
+        if (itensPendentes.length === 0) {
+            await supabaseRequest(`solicitacoes_baixa?id=eq.${solicitacaoId}`, 'PATCH', { status: 'finalizada' });
+        }
+        
+        showNotification(`Retirada de ${checkedItems.length} item(ns) confirmada!`, 'success');
         closeModal('retiradaModal');
-        closeModal('detalhesModal'); // Fecha o modal de detalhes também
         loadMinhasSolicitacoes(); // Recarrega a lista principal
 
     } catch (error) {
