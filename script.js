@@ -658,8 +658,9 @@ function renderSolicitacoesTable(tbody, solicitacoes, context) {
         return;
     }
 
-    tbody.innerHTML = solicitacoes.map(s => {
-        // --- CORREÇÃO PRINCIPAL: Garante que 'itens' seja sempre um array ---
+   tbody.innerHTML = solicitacoes
+        .filter(s => s) // <-- ADICIONE ESTA LINHA
+        .map(s => {
         const itens = Array.isArray(s.solicitacao_itens) ? s.solicitacao_itens : [];
         // --- FIM DA CORREÇÃO PRINCIPAL ---
 
