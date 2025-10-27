@@ -85,11 +85,11 @@
                 <p class="text-sm text-gray-300 mt-1">Filial: <span class="font-medium" id="sidebarFilial">N/A</span></p>
             </div>
             <nav class="p-4">
-                <a href="#novaSolicitacao" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('novaSolicitacaoView', this)" data-role="operacao">
+                <a href="#novaSolicitacao" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('novaSolicitacaoView', this)" data-role="operacao,gestor">
                     <i data-feather="plus-circle" class="h-5 w-5 mr-3"></i>
                     <span>Nova Solicitação</span>
                 </a>
-                 <a href="#minhasSolicitacoes" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('minhasSolicitacoesView', this)" data-role="operacao">
+                 <a href="#minhasSolicitacoes" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('minhasSolicitacoesView', this)" data-role="operacao,gestor">
                     <i data-feather="list" class="h-5 w-5 mr-3"></i>
                     <span>Minhas Solicitações</span>
                 </a>
@@ -101,11 +101,11 @@
                     <i data-feather="tool" class="h-5 w-5 mr-3"></i>
                     <span>Executar Baixas</span>
                 </a>
-                 <a href="#historicoBaixas" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('historicoBaixasView', this)" data-role="gestor,prevencao,admin"> <i data-feather="archive" class="h-5 w-5 mr-3"></i>
+                 <a href="#historicoBaixas" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('historicoBaixasView', this)" data-role="gestor,prevencao,admin,operacao"> <i data-feather="archive" class="h-5 w-5 mr-3"></i>
                     <span>Histórico Geral</span>
                 </a>
                 
-                <a href="#graficos" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('graficosView', this)" data-role="gestor,admin">
+                <a href="#graficos" class="nav-item p-3 rounded-lg mb-2 flex items-center cursor-pointer" onclick="showView('graficosView', this)" data-role="gestor,admin,operacao,prevencao">
                     <i data-feather="trending-up" class="h-5 w-5 mr-3"></i>
                     <span>Gráficos & Análises</span>
                 </a>
