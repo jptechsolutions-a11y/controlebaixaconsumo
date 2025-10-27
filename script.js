@@ -1408,7 +1408,6 @@ async function supabaseRequest(endpoint, method = 'GET', body = null, customHead
     }
 
     // 2. Montar a requisição para o Proxy
-    // CORREÇÃO: NÃO fazer encode do endpoint aqui, pois já vem formatado
     const url = `/api/proxy?endpoint=${encodeURIComponent(endpoint)}`;
     
     console.log("Requisição para o proxy:", {
@@ -1423,7 +1422,7 @@ async function supabaseRequest(endpoint, method = 'GET', body = null, customHead
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${authToken}`,
-            ...customHeaders // Permite headers customizados se necessário
+            ...customHeaders 
         }
     };
 
@@ -1435,7 +1434,6 @@ async function supabaseRequest(endpoint, method = 'GET', body = null, customHead
     try {
         const response = await fetch(url, config);
         
-        // Log da resposta para debug
         console.log("Resposta do proxy:", {
             status: response.status,
             ok: response.ok,
@@ -1455,6 +1453,19 @@ async function supabaseRequest(endpoint, method = 'GET', body = null, customHead
         }
         
         const data = await response.json();
+        
+        // --- NOVA CORREÇÃO (Filtro de Nulos) ---
+        // Se a resposta for um array e contiver 'null',
+        // filtramos esses nulos antes de retornar.
+        // Isso impede o erro `cannot read properties of null`.
+        if (Array.isArray(data) && data.some(item => item === null)) {
+            console.warn(`SupabaseRequest: Recebido ${JSON.stringify(data)}. Filtrando valores nulos.`);
+            const filteredData = data.filter(item => item !== null);
+            console.log("Dados filtrados:", filteredData);
+            return filteredData; // Retorna a lista limpa
+        }
+        // --- FIM DA CORREÇÃO ---
+
         console.log("Dados recebidos do Supabase:", data); // Debug
         
         return data;
