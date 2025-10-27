@@ -97,13 +97,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function handleLogin(event) {
     event.preventDefault();
+    
+    // --- NOVA UI DE LOADING ---
+    const loginButton = event.target.querySelector('button[type="submit"]');
+    if (!loginButton) {
+        console.error("Botão de login não encontrado");
+        return;
+    }
+    const originalButtonText = loginButton.innerHTML; // Salva o texto/ícone original
+    
+    // 1. Limpa o alerta
     showError(''); 
     
+    // 2. Ativa o estado de loading no botão
+    loginButton.disabled = true;
+    loginButton.innerHTML = `
+        <div class="spinner" style="border-width: 2px; width: 20px; height: 20px; border-top-color: white; margin-right: 8px; display: inline-block; animation: spin 1s linear infinite;"></div>
+        CARREGANDO...
+    `;
+    // --- FIM DA UI DE LOADING ---
+
     const email = document.getElementById('email').value.trim(); 
     const password = document.getElementById('password').value;
     
     try {
-        // 1. Chamar a API de Autenticação do Supabase
         const authResponse = await fetch('/api/login', { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -111,6 +128,7 @@ async function handleLogin(event) {
         });
         
         if (!authResponse.ok) {
+            // Se a API /api/login falhar (senha errada), é um erro real.
             throw new Error('Falha na autenticação. Verifique e-mail e senha.');
         }
 
@@ -121,66 +139,71 @@ async function handleLogin(event) {
             throw new Error('Erro de sessão. ID de usuário não retornado após autenticação.');
         }
         
-        // CRUCIAL: ARMAZENAR O TOKEN JWT
         localStorage.setItem('auth_token', authSession.access_token);
         
-        // --- NOVA CORREÇÃO (Delay) ---
-        // Adiciona um delay de 500ms para dar tempo ao Supabase
-        // de propagar a nova sessão antes da próxima chamada.
+        // O delay de 500ms ainda é uma boa ideia.
         console.log("Token salvo, aguardando 500ms para propagação...");
         await new Promise(resolve => setTimeout(resolve, 500));
-        // --- FIM DA CORREÇÃO ---
-
-        // 2. Buscar o perfil customizado E AS FILIAIS
-        console.log("Auth User ID recebido:", authUserId); // Debug
         
-        // Monta a query de forma segura
+        // A partir daqui, a UI está em "Carregando..."
+        
         const baseEndpoint = 'usuarios';
         const filters = `auth_user_id=eq.${authUserId}`;
         const selectClause = 'select=*,usuario_filiais(filial_id,filiais(id,nome,descricao))';
         const fullEndpoint = `${baseEndpoint}?${filters}&${selectClause}`;
         
-        console.log("Endpoint completo para buscar usuário:", fullEndpoint); // Debug
-        
-        const customProfile = await supabaseRequest(fullEndpoint, 'GET');
-        
-        console.log("Perfil customizado recebido:", customProfile); // Debug
-        
-        // ... (o resto da função continua igual) ...
-        
-        const user = customProfile[0];
+        let customProfile = await supabaseRequest(fullEndpoint, 'GET');
+        let user = customProfile[0];
 
+        // --- LÓGICA DE NOVA TENTATIVA (RETRY) ---
         if (!user) {
-            throw new Error('Perfil de usuário não encontrado. Vínculo de dados incompleto.');
+            // Este é o erro de race condition (401)
+            console.warn("Perfil não encontrado na primeira tentativa (race condition?). Tentando novamente após 1s...");
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Espera mais 1 segundo
+            
+            const customProfileRetry = await supabaseRequest(fullEndpoint, 'GET');
+            const userRetry = customProfileRetry[0];
+            
+            if (!userRetry) {
+                 // Agora sim é um erro real.
+                throw new Error('Perfil de usuário não encontrado. Vínculo de dados incompleto.');
+            }
+            console.log("Sucesso na segunda tentativa!");
+            currentUser = userRetry; // Usa o resultado da segunda tentativa
+        } else {
+            console.log("Sucesso na primeira tentativa!");
+            currentUser = user; // Usa o resultado da primeira tentativa
         }
+        // --- FIM DO RETRY ---
         
-       // Mapear e Limpar Filiais
-       const userFiliais = user.usuario_filiais 
-            ? user.usuario_filiais
-                .map(uf => uf.filiais) // Mapeia para o objeto de filial
-                .filter(f => f && f.id) // FILTRO CRÍTICO: Remove entradas nulas/indefinidas e garante que 'id' existe
+        // Mapear e Limpar Filiais
+        const userFiliais = currentUser.usuario_filiais 
+            ? currentUser.usuario_filiais
+                .map(uf => uf.filiais) 
+                .filter(f => f && f.id) 
             : [];
         
         if (userFiliais.length === 0) {
             throw new Error('Usuário não tem filiais associadas ou RLS bloqueou a busca das filiais.');
         }
 
-        // Finaliza o objeto do usuário
-        user.filiais = userFiliais; 
-        delete user.usuario_filiais; 
+        currentUser.filiais = userFiliais; 
+        delete currentUser.usuario_filiais; 
         
-        // Define o usuário globalmente para uso em redirectToDashboard
-        currentUser = user; 
-
-        // 3. ARMAZENAR DADOS DO USUÁRIO
         localStorage.setItem('user', JSON.stringify(currentUser)); 
         
-        // 4. Redirecionar
+        // O redirectToDashboard vai esconder a tela de login,
+        // então não precisamos re-ativar o botão se der certo.
         redirectToDashboard();
 
     } catch (error) {
-        console.error("Erro detalhado no login:", error); // Debug completo
-        showError(error.message);
+        console.error("Erro detalhado no login:", error); 
+        showError(error.message); // Mostra o erro real
+        
+        // --- REVERTE O BOTÃO EM CASO DE ERRO ---
+        loginButton.disabled = false;
+        loginButton.innerHTML = originalButtonText;
+        // --- FIM DA REVERSÃO ---
     }
 }
 
@@ -4163,19 +4186,20 @@ async function handleLancamentoManualRealizadoSubmit(event) {
 function showError(message) {
     const alertContainer = document.getElementById('loginAlert');
     
-    // Loga o erro detalhado no console para depuração
-    console.error("Erro detalhado:", message);
+    // Se a mensagem for vazia, apenas limpa o alerta.
+    if (!message) {
+        if (alertContainer) alertContainer.innerHTML = '';
+        return;
+    }
 
-    // Mostra uma mensagem genérica e segura para o usuário
-    const genericMessage = "Ocorreu um erro. Verifique suas credenciais ou tente novamente.";
-    
+    // Loga o erro detalhado no console para depuração
+    console.error("Erro exibido ao usuário:", message);
+
+    // --- CORREÇÃO ---
+    // Usa a 'message' recebida em vez da 'genericMessage'
     if (alertContainer) {
-        alertContainer.innerHTML = `<div class="alert alert-error">${genericMessage}</div>`;
-        // Não é necessário remover a mensagem, pois a próxima tentativa de login
-        // ou a função handleLogin (no sucesso) irá limpar o alerta.
-    } else {
-        // Fallback caso o container de login não exista
-        console.error("Mensagem de erro para o usuário:", genericMessage);
+        // Usamos escapeHTML para garantir que a mensagem de erro seja segura
+        alertContainer.innerHTML = `<div class="alert alert-error">${escapeHTML(message)}</div>`;
     }
 }
 
