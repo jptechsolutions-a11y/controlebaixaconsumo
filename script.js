@@ -4203,7 +4203,8 @@ function showError(message) {
     }
 }
 
-// Adicione ou substitua a função redirectToDashboard no script.js
+// [EM: script.js]
+
 function redirectToDashboard() {
     // Certifique-se de que 'currentUser' foi definido em 'handleLogin'
     if (!currentUser || !currentUser.filiais || currentUser.filiais.length === 0) {
@@ -4215,7 +4216,8 @@ function redirectToDashboard() {
     const filiais = currentUser.filiais;
     const filialSelectGroup = document.getElementById('filialSelectGroup');
     const filialSelect = document.getElementById('filialSelect');
-    const loginButton = document.querySelector('#loginForm button[type="submit"]');
+    // Este é o botão que ainda está desabilitado
+    const loginButton = document.querySelector('#loginForm button[type="submit"]'); 
 
     // ADICIONADO: Verifica se os elementos do DOM existem
     if (!filialSelectGroup || !filialSelect || !loginButton) {
@@ -4239,17 +4241,20 @@ function redirectToDashboard() {
     else if (filiais.length > 1) {
         console.warn("Usuário tem múltiplas filiais. Exibindo seletor.");
         
-        // 1. Popula o Select
+        // 1. Popula o Select (usando escapeHTML para segurança)
         filialSelect.innerHTML = filiais.map(f => 
-            `<option value="${f.id}">${f.nome} - ${f.descricao}</option>`
+            `<option value="${escapeHTML(f.id)}">${escapeHTML(f.nome)} - ${escapeHTML(f.descricao)}</option>`
         ).join('');
         
         // 2. Torna o grupo de seleção visível e foca
         filialSelectGroup.style.display = 'block';
         filialSelect.focus();
         
-        // 3. Modifica o botão de login para ser o botão de seleção
-        loginButton.textContent = 'CONFIRMAR FILIAL';
+        // --- CORREÇÃO APLICADA AQUI ---
+        // 3. Re-habilita o botão e troca seu texto
+        loginButton.disabled = false; 
+        loginButton.innerHTML = 'CONFIRMAR FILIAL'; // (innerHTML limpa o spinner)
+        // --- FIM DA CORREÇÃO ---
         
         // 4. Altera o listener do formulário para o novo handler
         document.getElementById('loginForm').removeEventListener('submit', handleLogin);
