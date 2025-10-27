@@ -121,11 +121,17 @@ async function handleLogin(event) {
             throw new Error('Erro de sessão. ID de usuário não retornado após autenticação.');
         }
         
-        // CRUCIAL: ARMAZENAR O TOKEN JWT ANTES DA PRIMEIRA CHAMADA AO PROXY
+        // CRUCIAL: ARMAZENAR O TOKEN JWT
         localStorage.setItem('auth_token', authSession.access_token);
         
+        // --- NOVA CORREÇÃO (Delay) ---
+        // Adiciona um delay de 500ms para dar tempo ao Supabase
+        // de propagar a nova sessão antes da próxima chamada.
+        console.log("Token salvo, aguardando 500ms para propagação...");
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // --- FIM DA CORREÇÃO ---
+
         // 2. Buscar o perfil customizado E AS FILIAIS
-        // CORREÇÃO: Construir a query separadamente para evitar corrupção
         console.log("Auth User ID recebido:", authUserId); // Debug
         
         // Monta a query de forma segura
@@ -140,13 +146,15 @@ async function handleLogin(event) {
         
         console.log("Perfil customizado recebido:", customProfile); // Debug
         
+        // ... (o resto da função continua igual) ...
+        
         const user = customProfile[0];
 
         if (!user) {
             throw new Error('Perfil de usuário não encontrado. Vínculo de dados incompleto.');
         }
         
-        // Mapear e Limpar Filiais
+       // Mapear e Limpar Filiais
        const userFiliais = user.usuario_filiais 
             ? user.usuario_filiais
                 .map(uf => uf.filiais) // Mapeia para o objeto de filial
