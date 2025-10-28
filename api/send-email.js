@@ -16,7 +16,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 // --- Configurações de Template ---
 const APP_URL = process.env.APP_URL || 'https://seu-app.vercel.app';
 // Certifique-se que o logo 'teste.png' esteja acessível publicamente nesta URL
-const LOGO_URL = `${APP_URL}/teste.png`; 
+const LOGO_URL = `${APP_URL}/icon.png`; 
 const APP_NAME = "Controle de Baixas de Consumo";
 const FOOTER_TEXT = `© ${new Date().getFullYear()} JP Tech Solutions. Todos os direitos reservados.`;
 
