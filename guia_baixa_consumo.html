@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guia de Consulta: Controle de Baixas de Consumo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Cores baseadas no código enviado */
+            --primary: #00D4AA; /* Verde/Ciano Destaque */
+            --secondary: #00B4D8; /* Azul Claro */
+            --accent: #0077B6; /* Azul Médio */
+            --dark: #023047; /* Azul Marinho */
+            --darker: #011627; /* Azul Marinho Profundo (fundo do sidebar e header) */
+            --primary-gradient: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7fa;
+            color: var(--dark);
+        }
+        .header-bg {
+            background-color: var(--darker);
+            border-bottom: 4px solid var(--primary);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        .sidebar-index {
+            background-color: #fff;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+            background: var(--darker);
+            color: white;
+            border-right: 4px solid var(--primary);
+        }
+        .content-card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            padding: 2.5rem;
+        }
+        .step-title {
+            color: var(--accent);
+            border-left: 4px solid var(--secondary);
+            padding-left: 12px;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .action-highlight {
+            background-color: #e0f2f1; 
+            border-radius: 6px;
+            padding: 0.5rem 1rem;
+            display: inline-block;
+            font-weight: 600;
+            color: var(--dark);
+            border: 1px solid var(--primary);
+        }
+        .alert-box {
+            background-color: #fef3c7; /* Amarelo claro - Warning */
+            border-left: 4px solid #F77F00; /* Laranja */
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            color: #92400e;
+        }
+        .screenshot {
+            display: block;
+            margin: 20px auto;
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border: 1px solid #ddd;
+        }
+        /* Estilo para links do índice no modo dark */
+        .index-link {
+            transition: all 0.2s ease;
+            color: #ccc;
+            display: flex;
+            align-items: center;
+        }
+        .index-link:hover, .index-link.active {
+            background-color: rgba(0, 180, 216, 0.2);
+            border-left: 4px solid var(--primary);
+            color: var(--primary);
+            font-weight: 600;
+        }
+        /* Responsividade */
+        @media (min-width: 1024px) {
+            .sidebar-index {
+                position: fixed;
+                height: calc(100vh - 80px);
+                top: 80px;
+                overflow-y: auto;
+            }
+        }
+        /* Cores de status replicadas do sistema */
+        .status-badge { 
+             padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; display: inline-block; text-align: center;
+        }
+        .status-aguardando_aprovacao { background-color: #fef9c3; color: #854d0e; }
+        .status-aprovada { background-color: #dbeafe; color: #1e40af; }
+        .status-negada { background-color: #fee2e2; color: #991b1b; }
+        .status-aguardando_retirada { background-color: #fef3c7; color: #92400e; }
+        .status-finalizada { background-color: #d1fae5; color: #065f46; }
+
+        /* ADDED: Estilos para o Botão Flutuante de Suporte/Índice 2 */
+        #floatingSupportButton {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            width: 56px;
+            height: 56px;
+            background: var(--primary-gradient); /* Usando o gradiente principal */
+            color: white;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0, 212, 170, 0.4);
+            cursor: pointer;
+            z-index: 1000; /* Acima do conteúdo principal */
+            transition: all 0.3s ease;
+        }
+        #floatingSupportButton:hover {
+            transform: scale(1.05) translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 212, 170, 0.5);
+        }
+        @media (max-width: 1023px) {
+            #floatingSupportButton {
+                right: 15px;
+                bottom: 15px;
+                width: 48px;
+                height: 48px;
+            }
+        }
+
+        /* ADDED: Estilos para o Mini-Índice/Painel de Suporte */
+        #supportMiniIndex {
+            position: fixed;
+            bottom: 90px;
+            right: 25px;
+            width: 250px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            z-index: 999;
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+            transform: translateY(10px) scale(0.95);
+            opacity: 0;
+            pointer-events: none; /* Inicia invisível e desativado */
+            transform-origin: bottom right;
+            border: 2px solid var(--secondary);
+            /* Importante para a função JS: */
+            display: none; 
+        }
+        #supportMiniIndex.open {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: all;
+        }
+        .support-link {
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            border-radius: 8px;
+            color: var(--dark);
+            font-weight: 500;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .support-link:hover {
+            background-color: var(--secondary);
+            color: white;
+        }
+        /* Ocultar em telas pequenas para evitar conflito com o índice lateral */
+        @media (max-width: 768px) {
+            #supportMiniIndex, #floatingSupportButton {
+                display: none !important; 
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Fixo (Inspirado no sistema) -->
+    <header class="header-bg fixed top-0 left-0 right-0 h-20 z-10 flex items-center shadow-lg">
+        <div class="container mx-auto px-6 flex items-center justify-between">
+            <div class="flex items-center">
+                 <!-- Substitua por sua logo real -->
+                 <img src="https://placehold.co/150x40/011627/00D4AA?text=Perlog+%2B+JP" class="h-8 object-contain" alt="Logo JP Tech Solutions">
+                <h1 class="text-xl font-extrabold text-white ml-6 hidden md:block">GUIA DE CONSULTA: BAIXA DE CONSUMO</h1>
+            </div>
+            <a href="#indice" class="lg:hidden text-white font-semibold flex items-center">
+                <i data-feather="menu" class="w-5 h-5 mr-2"></i>
+                Índice
+            </a>
+        </div>
+    </header>
+
+    <div class="flex pt-20"> 
+
+        <!-- Índice Lateral (Sidebar) -->
+        <aside id="indice" class="sidebar-index w-full lg:w-64 p-4 lg:p-6 flex-shrink-0">
+            <h2 class="text-lg font-bold mb-4 text-white uppercase tracking-wider hidden lg:block">Índice do Guia</h2>
+            <nav class="space-y-1">
+                <a href="#fluxo-geral" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
+                    <i data-feather="repeat" class="w-4 h-4 mr-2"></i> Fluxo Geral (4 Etapas)
+                </a>
+                <a href="#acesso-login" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
+                    <i data-feather="log-in" class="w-4 h-4 mr-2"></i> 1. Acesso e Login
+                </a>
+                <a href="#operacao-solicitar" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
+                    <i data-feather="shopping-cart" class="w-4 h-4 mr-2"></i> 2. Operação: Criar Solicitação
+                </a>
+                <a href="#operacao-retirada" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
+                    <i data-feather="check-circle" class="w-4 h-4 mr-2"></i> 2. Operação: Confirmar Retirada
+                </a>
+                <a href="#gestor-aprovar" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
+                    <i data-feather="shield" class="w-4 h-4 mr-2"></i> 3. Gestor: Aprovar ou Negar
+                </a>
+                <a href="#gestor-nf" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
+                    <i data-feather="file-text" class="w-4 h-4 mr-2"></i> 3. Gestor: Lançar Despesa (NF)
+                </a>
+                <a href="#prevencao-executar" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
+                    <i data-feather="tool" class="w-4 h-4 mr-2"></i> 4. Prevenção: Executar Baixa
+                </a>
+                <a href="#admin-config" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
+                    <i data-feather="settings" class="w-4 h-4 mr-2"></i> 5. Admin (Config.)
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Conteúdo Principal -->
+        <main class="flex-1 p-6 lg:ml-64">
+            <div class="max-w-4xl mx-auto space-y-8">
+
+                <div class="content-card" id="fluxo-geral">
+                    <h2 class="text-3xl font-extrabold mb-4 text-gray-800">Manual de Instruções: Fluxo Detalhado do Sistema</h2>
+                    <p class="text-lg text-gray-600 mb-6 border-b pb-4">
+                        Este guia detalha o uso da ferramenta **Controle de Baixas de Consumo**, garantindo precisão e rastreabilidade em todo o processo.
+                    </p>
+
+                    <h3 class="step-title mb-4">O Fluxo Principal é dividido em 4 Etapas:</h3>
+                    <ol class="list-decimal list-inside space-y-3 ml-4 text-gray-700 font-medium">
+                        <li><strong style="color: var(--dark);">Solicitação:</strong> <span class="action-highlight">Operação</span> registra a necessidade de baixa.</li>
+                        <li><strong style="color: var(--dark);">Aprovação:</strong> <span class="action-highlight" style="background-color: #dbeafe; border-color: #1e40af;">Gestor</span> autoriza ou nega o pedido.</li>
+                        <li><strong style="color: var(--dark);">Execução:</strong> <span class="action-highlight" style="background-color: #e0f2f1;">Prevenção</span> realiza a baixa física e anexa comprovantes.</li>
+                        <li><strong style="color: var(--dark);">Retirada/Finalização:</strong> <span class="action-highlight">Operação</span> confirma o recebimento dos itens e anexa foto final.</li>
+                    </ol>
+                </div>
+                
+                <!-- 1. ACESSO E LOGIN -->
+                <div class="content-card" id="acesso-login">
+                    <h2 class="step-title mb-6">1. Acesso e Login</h2>
+
+                    <h4 class="text-xl font-semibold mt-6 mb-3 flex items-center">
+                        <i data-feather="user" class="w-6 h-6 mr-2 text-blue-500"></i>
+                        Login Inicial
+                    </h4>
+                    <p class="mb-4">
+                        Na tela inicial (conforme Imagem 1 no guia original), insira seu **E-mail** e **Senha**.
+                    </p>
+                    <img src="https://placehold.co/600x350/F4F7FA/011627?text=Imagem+1:+Tela+de+Login" class="screenshot" alt="Tela de Login do sistema de Baixa de Consumo">
+
+                    <h4 class="text-xl font-semibold mt-6 mb-3 flex items-center">
+                        <i data-feather="users" class="w-6 h-6 mr-2 text-blue-500"></i>
+                        Seleção de Filial (se aplicável)
+                    </h4>
+                    <p class="mb-4">
+                        Se seu usuário estiver associado a múltiplas filiais, você será solicitado a selecionar a filial de trabalho através do dropdown (conforme Imagem 2). Clique em **CONFIRMAR FILIAL**.
+                    </p>
+                    <img src="https://placehold.co/600x350/F4F7FA/011627?text=Imagem+2:+Seleção+de+Filial" class="screenshot" alt="Tela de Seleção de Filial">
+
+                    <h4 class="text-xl font-semibold mt-6 mb-3 flex items-center">
+                        <i data-feather="eye" class="w-6 h-6 mr-2 text-blue-500"></i>
+                        Visualização do Menu
+                    </h4>
+                    <p class="mb-4">
+                        O menu lateral será automaticamente filtrado para exibir apenas as opções correspondentes ao seu **Grupo**: <span class="status-badge status-aguardando_retirada">Operação</span>, <span class="status-badge status-aprovada">Gestor</span>, <span class="status-badge status-aguardando_aprovacao">Prevenção</span> ou <span class="status-badge status-negada">Admin</span>.
+                    </p>
+                </div>
+
+                <!-- 2. FLUXO DA OPERAÇÃO (SOLICITANTE) -->
+                <div class="content-card" id="operacao-solicitar">
+                    <h2 class="step-title mb-6" style="border-left-color: var(--primary);">2. Fluxo da Operação (Solicitante)</h2>
+                    <p class="text-gray-700">A Operação inicia e finaliza o processo.</p>
+
+                    <h3 class="text-2xl font-bold mt-6 mb-4">Tarefa A: Criar Nova Solicitação</h3>
+                    <p class="mb-4">Navegue até a tela **Nova Solicitação** no menu lateral.</p>
+                    
+                    <div class="space-y-4">
+                        <div class="p-4 bg-gray-50 rounded-lg border">
+                            <h4 class="font-semibold text-lg">Passo 1: Intenção da Baixa</h4>
+                            <p class="text-gray-600 mb-2">Selecione o **Tipo de Baixa** (ex: Quebra, Baixa para Cozinha, Filme Stretch). Esta seleção define as regras de CGO e produto válidas para o pedido.</p>
+                            <img src="https://placehold.co/600x150/F4F7FA/011627?text=Imagem+3:+Seleção+Tipo+de+Baixa" class="screenshot max-w-sm" alt="Dropdown de seleção do tipo de baixa.">
+                        </div>
+
+                        <div class="p-4 bg-gray-50 rounded-lg border">
+                            <h4 class="font-semibold text-lg">Passo 2: Adicionar Itens</h4>
+                            <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                                <li>Insira o **Código do Produto**. O sistema buscará a descrição e verificará a compatibilidade.</li>
+                                <li>**Atenção:** Se o item não for compatível com o **Tipo de Baixa** (ex: tentar baixar Etiqueta em Baixa de Cozinha), o item será **bloqueado** e uma mensagem de erro aparecerá (conforme Imagem 5).</li>
+                                <li>Insira a **Quantidade** e o **Valor Unitário**. O sistema calcula o Valor Total.</li>
+                                <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #0077B6); color: white;">Adicionar Item ao Pedido</span>.</li>
+                            </ul>
+                            <img src="https://placehold.co/600x350/F4F7FA/011627?text=Imagem+4:+Formulário+Adicionar+Item" class="screenshot" alt="Formulário de adição de itens.">
+                            <p class="alert-box">
+                                <i data-feather="alert-triangle" class="w-4 h-4 inline-block -mt-1 mr-2"></i>
+                                **Regra de Bloqueio:** O sistema só permite adicionar itens que possuam **CGOs compatíveis** com o **Tipo de Baixa** selecionado. Se bloqueado, revise o Tipo ou o Código.
+                            </p>
+                        </div>
+                        
+                        <div class="p-4 bg-gray-50 rounded-lg border">
+                            <h4 class="font-semibold text-lg">Passo 3: Enviar Pedido e Notificação</h4>
+                            <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                                <li>Revise os itens na tabela.</li>
+                                <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Enviar Solicitação</span>.</li>
+                                <li>O pedido recebe o status inicial: <span class="status-badge status-aguardando_aprovacao">Aguardando Aprovação</span>.</li>
+                                <li>**Notificação:** Um e-mail é enviado ao(s) **Gestor(es)** da filial e ao **Solicitante**.</li>
+                            </ul>
+                            <img src="https://placehold.co/600x150/F4F7FA/011627?text=Imagem+6+e+7:+Exemplo+de+E-mail+para+Gestor" class="screenshot" alt="Exemplo de e-mail de notificação de nova solicitação.">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="content-card" id="operacao-retirada">
+                    <h3 class="text-2xl font-bold mt-2 mb-4">Tarefa B: Confirmar Retirada dos Itens (Em Lote)</h3>
+                    <p class="mb-4">Esta etapa ocorre após a baixa ser **Aprovada** e **Executada** pela Prevenção.</p>
+
+                    <div class="p-4 bg-gray-50 rounded-lg border">
+                        <h4 class="font-semibold text-lg">Localizar e Ação</h4>
+                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                            <li>Navegue até a tela **Minhas Solicitações**.</li>
+                            <li>Localize a solicitação que está no status <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span> (execução parcial ou total realizada).</li>
+                            <li>Clique no botão <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Confirmar Retirada</span>.</li>
+                        </ul>
+                    </div>
+
+                    <div class="p-4 bg-gray-50 rounded-lg border mt-4">
+                        <h4 class="font-semibold text-lg">Modal de Retirada</h4>
+                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                            <li>Selecione os itens que você está confirmando o recebimento (pode ser em lote).</li>
+                            <li>**Anexe** uma ou mais fotos/anexos de retirada ou tire uma foto (**obrigatório**). Estes anexos serão ligados aos itens selecionados.</li>
+                            <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Confirmar Retirada dos Itens Selecionados</span>.</li>
+                        </ul>
+                    </div>
+
+                    <p class="mt-4">**Finalização:** Os itens selecionados têm o status alterado para <span class="status-badge status-finalizada">Finalizada</span>. Se todos os itens do pedido estiverem finalizados ou negados, o pedido (cabeçalho) também é finalizado.</p>
+                    <p class="alert-box mt-4">
+                        <i data-feather="mail" class="w-4 h-4 inline-block -mt-1 mr-2"></i>
+                        **Notificação:** Um e-mail de **Baixa de Item Finalizada (Laudo)** é enviado ao Executor, Aprovador, Solicitante e Gestor.
+                    </p>
+                </div>
+
+                <!-- 3. FLUXO DO GESTOR/FINANCEIRO -->
+                <div class="content-card" id="gestor-aprovar">
+                    <h2 class="step-title mb-6" style="border-left-color: var(--accent);">3. Fluxo do Gestor/Financeiro</h2>
+                    <p class="text-gray-700">O Gestor atua na aprovação e no acompanhamento orçamentário.</p>
+
+                    <h3 class="text-2xl font-bold mt-6 mb-4">Tarefa A: Aprovar ou Negar Baixas</h3>
+                    <p class="mb-4">Navegue até a tela **Aprovar Baixas**.</p>
+                    
+                    <div class="p-4 bg-gray-50 rounded-lg border">
+                        <h4 class="font-semibold text-lg">Análise e Simulação Orçamentária</h4>
+                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                            <li>Clique em <span class="action-highlight" style="background-color: #dbeafe; border-color: #1e40af; color: #1e40af;">Ver (Detalhes)</span> para analisar a solicitação.</li>
+                            <li>O sistema exibirá a **Simulação Orçamentária** para cada linha afetada, mostrando o <strong style="color: #10b981;">Saldo Pós-Aprovação</strong> do orçamento mensal (conforme Imagem 13).</li>
+                        </ul>
+                        <img src="https://placehold.co/600x350/F4F7FA/011627?text=Imagem+13:+Detalhes+com+Simulação+Orçamentária" class="screenshot" alt="Modal de Detalhes com Simulação Orçamentária">
+                    </div>
+
+                    <div class="p-4 bg-gray-50 rounded-lg border mt-4">
+                        <h4 class="font-semibold text-lg">Ação e Notificação</h4>
+                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                            <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Aprovar</span>: O status do pedido e **todos** os itens é alterado para <span class="status-badge status-aprovada">Aprovada</span>.</li>
+                            <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #D62828, #F77F00); color: white;">Negar</span>: Informe o motivo. O status é alterado para <span class="status-badge status-negada">Negada</span>.</li>
+                        </ul>
+                    </div>
+                    <p class="alert-box mt-4">
+                        <i data-feather="mail" class="w-4 h-4 inline-block -mt-1 mr-2"></i>
+                        **Notificação:** E-mail enviado ao **Solicitante** e (no caso de aprovação) ao grupo de **Prevenção**.
+                    </p>
+                </div>
+
+                <div class="content-card" id="gestor-nf">
+                    <h3 class="text-2xl font-bold mt-6 mb-4">Tarefa B: Lançar Despesa Externa (NF)</h3>
+                    <p class="mb-4">Navegue até a tela **Lançar Despesa (NF)** para registrar gastos externos que afetam o orçamento.</p>
+
+                    <div class="space-y-4">
+                         <div class="p-4 bg-gray-50 rounded-lg border">
+                            <h4 class="font-semibold text-lg">Passo 1 & 2: Dados e Itens</h4>
+                             <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                                <li>Preencha **Número da NF**, **Data da NF** e anexe o **Anexo da NF** (PDF/Imagem).</li>
+                                <li>Adicione os itens da nota (Descrição, Quantidade e Valor Unitário) na tabela.</li>
+                            </ul>
+                            <img src="https://placehold.co/600x350/F4F7FA/011627?text=Imagem+14:+Lançamento+de+Despesa+Externa" class="screenshot" alt="Formulário de Lançamento de Nota Fiscal">
+                        </div>
+                        
+                        <div class="p-4 bg-gray-50 rounded-lg border">
+                            <h4 class="font-semibold text-lg">Passo 3: Impacto Orçamentário</h4>
+                             <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                                <li>Selecione a **Linha Orçamentária** a ser debitada.</li>
+                                <li>O sistema exibirá a **Simulação de Saldo Pós-Lançamento** para esta Linha Orçamentária.</li>
+                                <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Salvar Lançamento de Despesa</span>.</li>
+                            </ul>
+                            <p class="mt-4 text-sm text-gray-500">O valor é considerado no cálculo do **Realizado** da Linha Orçamentária a partir da **Data da NF**.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. FLUXO DA PREVENÇÃO (EXECUTOR) -->
+                <div class="content-card" id="prevencao-executar">
+                    <h2 class="step-title mb-6" style="border-left-color: var(--primary);">4. Fluxo da Prevenção (Executor)</h2>
+                    <p class="text-gray-700">A Prevenção é responsável por realizar a baixa física e registrar a execução.</p>
+
+                    <h3 class="text-2xl font-bold mt-6 mb-4">Tarefa A: Executar Baixas Aprovadas</h3>
+                    <p class="mb-4">Navegue até a tela **Executar Baixas**.</p>
+                    
+                    <div class="p-4 bg-gray-50 rounded-lg border">
+                        <h4 class="font-semibold text-lg">Ação na Tabela</h4>
+                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                            <li>Localize um pedido com status <span class="status-badge status-aprovada">Aprovada</span> ou <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span> (execução parcial).</li>
+                            <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #F77F00, #FCBF49); color: white;">Executar</span>.</li>
+                        </ul>
+                        <img src="https://placehold.co/600x200/F4F7FA/011627?text=Imagem+15:+Tabela+Executar+Baixas" class="screenshot" alt="Tabela de Baixas Aprovadas com botão Executar.">
+                    </div>
+                    
+                    <div class="p-4 bg-gray-50 rounded-lg border mt-4">
+                        <h4 class="font-semibold text-lg">Modal de Execução</h4>
+                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                            <li>Selecione os itens que serão executados **neste momento**.</li>
+                            <li>Ajuste a **Qtd. Real** e o **Valor Unit. Real** (se necessário).</li>
+                            <li>**CGO (Cód. Movimentação):** O dropdown mostrará **apenas** os CGOs válidos para os itens e o Tipo de Baixa do pedido.</li>
+                            <li>Preencha a **Justificativa** (**obrigatória**) e anexe **Anexos** (opcional).</li>
+                            <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Confirmar Execução dos Itens Selecionados</span>.</li>
+                        </ul>
+                        <img src="https://placehold.co/600x400/F4F7FA/011627?text=Imagem+16+e+17:+Modal+de+Execução+com+Seleção+CGO" class="screenshot" alt="Modal de Execução com campos de Quantidade Real e seleção de CGO.">
+                    </div>
+
+                    <p class="mt-4">**Status Update:** Os itens executados têm seu status alterado para <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span>.</p>
+                    <p class="alert-box mt-4">
+                        <i data-feather="mail" class="w-4 h-4 inline-block -mt-1 mr-2"></i>
+                        **Notificação:** Um e-mail de **Item Pronto para Retirada** é enviado ao **Solicitante** e **Gestor**.
+                    </p>
+                </div>
+                
+                <!-- 5. FLUXO DO ADMINISTRADOR (CONFIGURAÇÃO) -->
+                <div class="content-card" id="admin-config">
+                    <h2 class="step-title mb-6" style="border-left-color: #D62828;">5. Fluxo do Administrador (Configuração)</h2>
+                    <p class="text-gray-700">O Administrador é responsável por configurar as chaves mestras do sistema (Usuários, Filiais, Produtos, CGOs, Tipos de Baixa, Linhas Orçamentárias e Orçamentos).</p>
+
+                    <h3 class="text-2xl font-bold mt-6 mb-4">Botão de Ajuda Flutuante (Todos os Usuários)</h3>
+                    <p class="mb-4">Em qualquer tela, o botão flutuante **Consultar CGOs** (canto inferior direito do **sistema principal**) permite pesquisar rapidamente por códigos, descrições ou observações de CGOs ativos. Use-o para tirar dúvidas rápidas sobre a movimentação correta.</p>
+                     <p class="flex items-center mt-4">
+                        <span class="action-highlight mr-2" style="background: linear-gradient(135deg, #00D4AA, #0077B6); color: white; border: none;">Consultar CGOs</span>
+                        <i data-feather="help-circle" class="w-6 h-6 text-gray-600"></i>
+                    </p>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- ADDED: Botão Flutuante de Suporte/Índice 2 (Balão) -->
+    <button id="floatingSupportButton" title="Suporte e Ajuda Rápida" onclick="toggleSupportPanel()">
+        <i data-feather="message-circle" class="w-7 h-7"></i>
+    </button>
+
+    <!-- ADDED: Mini-Índice de Suporte (Mini-Index 2) -->
+    <div id="supportMiniIndex">
+        <h4 class="font-bold text-lg mb-3 border-b pb-2 text-gray-700">Central de Ajuda Rápida</h4>
+        <nav class="space-y-2">
+            <!-- Os links usam scrollToSection para scroll suave e o toggle para fechar o balão -->
+            <a href="#fluxo-geral" class="support-link" onclick="toggleSupportPanel(); scrollToSection(event)">
+                <i data-feather="repeat" class="w-4 h-4 mr-3"></i> Fluxo Geral (4 Etapas)
+            </a>
+            <a href="#gestor-aprovar" class="support-link" onclick="toggleSupportPanel(); scrollToSection(event)">
+                <i data-feather="shield" class="w-4 h-4 mr-3"></i> 3. Gestor: Aprovar
+            </a>
+            <a href="#prevencao-executar" class="support-link" onclick="toggleSupportPanel(); scrollToSection(event)">
+                <i data-feather="tool" class="w-4 h-4 mr-3"></i> 4. Prevenção: Executar
+            </a>
+            <!-- Este link pode ser alterado para o e-mail real da JP Tech Solutions -->
+            <a href="mailto:suporte@jptech.com.br" class="support-link bg-red-100 hover:bg-red-500 hover:text-white" target="_blank">
+                <i data-feather="mail" class="w-4 h-4 mr-3"></i> Falar com Suporte
+            </a>
+        </nav>
+    </div>
+
+    <!-- JavaScript para interatividade (Feather Icons e Scroll Spy simples) -->
+    <script>
+        // Inicializa Feather Icons
+        feather.replace();
+
+        // Função para destacar o link ativo no índice
+        function setActiveLink(element) {
+            document.querySelectorAll('.index-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            element.classList.add('active');
+        }
+
+        // Simples scroll spy para o índice (apenas para desktop)
+        if (window.innerWidth >= 1024) {
+            const sections = document.querySelectorAll('.content-card');
+            const navLinks = document.querySelectorAll('.index-link');
+
+            window.addEventListener('scroll', () => {
+                let current = '';
+                sections.forEach(section => {
+                    // Ajuste o offset para 1/3 da altura da tela
+                    const offset = window.innerHeight / 3;
+                    const sectionTop = section.offsetTop - offset; 
+                    
+                    if (scrollY >= sectionTop) {
+                        current = section.getAttribute('id');
+                    }
+                });
+
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    if (link.href.includes(current)) {
+                        link.classList.add('active');
+                    }
+                });
+            });
+        }
+        
+        // ADDED: Função para alternar o Mini-Índice de Suporte (Mini-Index 2)
+        function toggleSupportPanel() {
+            const panel = document.getElementById('supportMiniIndex');
+            if (!panel) return;
+            
+            const isOpen = panel.classList.contains('open');
+
+            if (isOpen) {
+                panel.classList.remove('open');
+                // Timeout para garantir que a animação termine antes de esconder
+                setTimeout(() => { panel.style.display = 'none'; }, 300); 
+            } else {
+                panel.style.display = 'block';
+                // Usa requestAnimationFrame para garantir que a transição ocorra
+                requestAnimationFrame(() => {
+                    panel.classList.add('open');
+                });
+            }
+        }
+        
+        // ADDED: Função para scroll suave (usada no mini-index)
+        function scrollToSection(event) {
+            event.preventDefault();
+            const targetId = event.currentTarget.getAttribute('href');
+            const targetElement = document.querySelector(targetId);
+            
+            if (targetElement) {
+                window.scrollTo({
+                    top: targetElement.offsetTop - 100, // Offset do header fixo
+                    behavior: 'smooth'
+                });
+            }
+        }
+    </script>
+</body>
+</html>
