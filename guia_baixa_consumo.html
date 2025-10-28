@@ -190,9 +190,18 @@
 
                 <div class="content-card" id="fluxo-geral">
                     <h2 class="text-3xl font-extrabold mb-4 text-gray-800">Manual de Instruções: Fluxo de Baixas de Consumo</h2>
-                    <p class="text-xl text-gray-600 mb-6 border-b pb-4">
+                    <p class="text-xl text-gray-600 mb-4 border-b pb-4">
                         Este guia detalha o fluxo <strong>4 Etapas</strong> para o <strong>Controle de Baixas de Consumo</strong>, garantindo total rastreabilidade, controle orçamentário e conformidade.
                     </p>
+
+                    <h3 class="sub-section-title" style="border-bottom: none;">Visão Estratégica e Ganhos</h3>
+                    <p class="text-gray-700 mb-6">A ferramenta foi desenvolvida para estabelecer um padrão de Governança corporativa, mitigando desvios de consumo e assegurando que cada movimentação seja auditável e alinhada ao planejamento financeiro.</p>
+                    
+                    <ul class="list-disc list-inside space-y-2 ml-4 text-gray-700 font-medium">
+                        <li><strong>Governança Financeira:</strong> Integração direta com Linhas Orçamentárias, forçando o controle na fonte e a responsabilidade por custo.</li>
+                        <li><strong>Compliance e Auditoria:</strong> Registro temporal e fotográfico em cada etapa do ciclo, garantindo a prova de consumo e rastreabilidade total por usuário.</li>
+                        <li><strong>Eficiência Operacional:</strong> Eliminação de papelada, digitalização do processo e redução do tempo de ciclo da solicitação à baixa contábil final.</li>
+                    </ul>
 
                     <h3 class="step-title">O Fluxo Principal de Baixa (Consumo/Quebra)</h3>
                     <ol class="list-decimal list-inside space-y-4 ml-4 text-gray-700 font-medium text-lg">
@@ -203,7 +212,7 @@
                     </ol>
                     <div class="alert-box mt-6">
                         <i data-feather="info" class="w-5 h-5 inline-block -mt-1 mr-2"></i>
-                        <strong>Foco no Orçamento:</strong> A principal mudança é a inserção da <strong>Aprovação (Etapa 2)</strong> como *gating factor*. Sem a aprovação do Gestor, o pedido não avança para a Execução.
+                        <strong>Foco no Orçamento:</strong> A principal mudança é a inserção da <strong>Aprovação (Etapa 2)</strong> como *gating factor* de despesa. Sem a aprovação do Gestor, o pedido não avança para a Execução, mitigando riscos de estouro orçamentário.
                     </div>
                 </div>
                 
@@ -216,81 +225,81 @@
                         Credenciais e Autenticação
                     </h4>
                     <p class="mb-4 text-gray-700">
-                        Insira seu E-mail e Senha. Caso seu usuário tenha acesso a mais de uma filial, o sistema solicitará a escolha da filial de trabalho após a autenticação.
+                        Insira seu E-mail e Senha. Caso seu usuário tenha acesso a mais de uma filial, o sistema solicitará a escolha da filial de trabalho após a autenticação. A autorização é baseada no sistema de **Roles** (Grupos de Acesso) do perfil do usuário.
                     </p>
                     <img src="login.png" class="screenshot" alt="Tela de Login do sistema de Baixa de Consumo, com destaque para a área de credenciais.">
 
                     <h4 class="sub-section-title flex items-center">
                         <i data-feather="menu" class="w-6 h-6 mr-2 text-blue-500"></i>
-                        Filtragem de Menu
+                        Filtragem de Menu (Roles)
                     </h4>
                     <p class="mb-4 text-gray-700">
-                        O menu lateral é dinâmico, exibindo apenas as opções correspondentes ao seu <strong>Grupo (Role)</strong>: <span class="status-badge status-aguardando_retirada">Operação</span>, <span class="status-badge status-aprovada">Gestor</span>, <span class="status-badge status-aguardando_aprovacao">Prevenção</span> ou <span class="status-badge status-negada">Admin</span>.
+                        O menu lateral é dinâmico, exibindo apenas as opções correspondentes ao seu <strong>Grupo (Role)</strong>: <span class="status-badge status-aguardando_retirada">Operação</span> (Solicita e Retira), <span class="status-badge status-aprovada">Gestor</span> (Aprova, Lança NF e Orçamento), <span class="status-badge status-aguardando_aprovacao">Prevenção</span> (Executa a Baixa) ou <span class="status-badge status-negada">Admin</span> (Configuração Total).
                     </p>
                 </div>
 
                 <!-- 2. OPERAÇÃO: CRIAR SOLICITAÇÃO (Antiga Etapa 1) -->
                 <div class="content-card" id="operacao-solicitar">
-                    <h2 class="step-title" style="border-left-color: var(--primary);">2. Operação: Criar Nova Solicitação</h2>
-                    <p class="text-gray-700 text-lg">Função principal do grupo <strong>Operação</strong> é dar início ao ciclo.</p>
+                    <h2 class="step-title" style="border-left-color: var(--primary);">2. Operação: Criação e Validação do Pedido</h2>
+                    <p class="text-gray-700 text-lg">Função principal do grupo <strong>Operação</strong>, sendo o ponto de partida para o registro formal da necessidade de materiais e despesas.</p>
 
-                    <h4 class="sub-section-title">Passo 2.1: Definição da Intenção (Tipo de Baixa)</h4>
+                    <h4 class="sub-section-title">Passo 2.1: Governança Inicial (Tipo de Baixa)</h4>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                        <li>Em <strong>Nova Solicitação</strong>, o campo <strong>Tipo de Baixa</strong> é o primeiro e mais importante filtro.</li>
-                        <li><strong>Regra Mestra:</strong> O Tipo de Baixa (Ex: QUEBRA) define quais <strong>Produtos</strong> e, consequentemente, quais <strong>CGOs</strong> serão válidos.</li>
+                        <li>Em <strong>Nova Solicitação</strong>, o campo <strong>Tipo de Baixa</strong> é o primeiro e mais importante filtro de governança.</li>
+                        <li><strong>Regra Mestra:</strong> O Tipo de Baixa (Ex: QUEBRA) define quais <strong>Produtos</strong> e, consequentemente, quais **CGOs** (códigos de movimentação) serão considerados válidos para este pedido. A compatibilidade é imposta pelo sistema para garantir aderência às regras contábeis.</li>
                         <li>Selecione o tipo que mais se aplica à sua necessidade.</li>
                     </ul>
                     <img src="tipobaixa.png" class="screenshot max-w-md" alt="Dropdown de seleção do tipo de baixa, indicando a regra de compatibilidade.">
 
-                    <h4 class="sub-section-title">Passo 2.2: Adição dos Itens</h4>
+                    <h4 class="sub-section-title">Passo 2.2: Registro e Conformidade do Item</h4>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
                         <li>Insira o <strong>Código do Produto</strong> e o sistema carregará a descrição (se cadastrado).</li>
-                        <li>Se o produto não for compatível com o Tipo de Baixa (conflito de CGOs permitidos), a descrição ficará <strong>bloqueada</strong> e o item não poderá ser adicionado.</li>
+                        <li>**Validação Crítica:** Se o produto não for compatível com o Tipo de Baixa (conflito de CGOs permitidos no cadastro do Produto), a descrição ficará <strong>bloqueada</strong> e o item será impedido de ser adicionado. Esta é uma camada de proteção contra erros de lançamento e desvios de finalidade.</li>
                         <li>Preencha <strong>Quantidade</strong> e <strong>Valor Unitário</strong> (o Valor Total é calculado automaticamente).</li>
                         <li>Clique em <span class="btn-style"><i data-feather="plus" class="w-4 h-4 mr-1"></i> Adicionar Item ao Pedido</span>.</li>
                     </ul>
                     <img src="adicionar.png" class="screenshot" alt="Formulário de adição de itens com campos para código, quantidade e valor.">
 
-                    <h4 class="sub-section-title">Passo 2.3: Envio e Notificação</h4>
+                    <h4 class="sub-section-title">Passo 2.3: Envio para Aprovação</h4>
                     <p class="mb-4 text-gray-700">Após revisar a lista de itens, clique em <span class="btn-style"><i data-feather="send" class="w-4 h-4 mr-1"></i> Enviar Solicitação</span>.</p>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                        <li><strong>Status:</strong> O pedido muda para <span class="status-badge status-aguardando_aprovacao">Aguardando Aprovação</span>.</li>
-                        <li><strong>Ação:</strong> O Gestor da filial recebe um e-mail de notificação.</li>
+                        <li><strong>Status Inicial:</strong> O pedido muda para <span class="status-badge status-aguardando_aprovacao">Aguardando Aprovação</span>.</li>
+                        <li><strong>Notificação Automática:</strong> Um e-mail é enviado ao(s) <strong>Gestor(es)</strong> responsável(is) pela filial, movendo a responsabilidade para a próxima etapa.</li>
                     </ul>
                 </div>
 
                 <!-- 3. GESTOR: APROVAR OU NEGAR (Antiga Etapa 2) -->
                 <div class="content-card" id="gestor-aprovar">
-                    <h2 class="step-title" style="border-left-color: var(--accent);">3. Gestor: Aprovar ou Negar</h2>
-                    <p class="text-gray-700 text-lg">Responsável pela validação e pelo <strong>controle orçamentário</strong>.</p>
+                    <h2 class="step-title" style="border-left-color: var(--accent);">3. Gestor: Aprovação e Governança Financeira</h2>
+                    <p class="text-gray-700 text-lg">Responsável pela **validação da necessidade** e, principalmente, pelo **controle orçamentário** antes da movimentação, atuando como *gatekeeper* financeiro.</p>
 
-                    <h4 class="sub-section-title">Passo 3.1: Análise e Simulação Orçamentária</h4>
+                    <h4 class="sub-section-title">Passo 3.1: Análise de Risco e Simulação Orçamentária</h4>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
                         <li>Em <strong>Aprovar Baixas</strong>, localize o pedido <span class="status-badge status-aguardando_aprovacao">Aguardando Aprovação</span>.</li>
-                        <li>Clique no botão <span class="btn-style" style="background: #0077B6;"><i data-feather="eye" class="w-4 h-4 mr-1"></i> Ver (Detalhes)</span>.</li>
-                        <li>O sistema carregará a <strong>Simulação Orçamentária</strong> (no topo do modal), mostrando o <strong>Saldo Atual</strong> e o <strong>Saldo Pós-Aprovação</strong> para as Linhas Orçamentárias afetadas.</li>
+                        <li>Clique no botão <span class="btn-style" style="background: #0077B6;"><i data-feather="eye" class="w-4 h-4 mr-1"></i> Ver (Detalhes)</span> para abrir a análise completa.</li>
+                        <li>**Simulação Preditiva (Diretoria):** O sistema carrega a <strong>Simulação Orçamentária</strong> (no topo do modal), projetando o impacto financeiro. É exibido o <strong>Saldo Atual</strong> e o crucial <strong>Saldo Pós-Aprovação</strong> para as Linhas Orçamentárias afetadas, permitindo uma tomada de decisão baseada em dados e risco.</li>
                     </ul>
                     <img src="detalhe.png" class="screenshot" alt="Modal de Detalhes da Solicitação com a Simulação Orçamentária em destaque.">
                     <div class="alert-box mt-4">
                         <i data-feather="dollar-sign" class="w-5 h-5 inline-block -mt-1 mr-2"></i>
-                        <strong>Verificação Crítica:</strong> A simulação é baseada no CGO (que está ligado à Linha Orçamentária) e garante que o Gestor autorize apenas pedidos com saldo orçamentário disponível.
+                        <strong>Governança de Custos:</strong> A simulação garante que o Gestor atue como *gatekeeper* do orçamento mensal. Se o Saldo Pós-Aprovação for negativo, o Gestor deve avaliar o risco de estourar a Linha Orçamentária e tomar a decisão estratégica de aprovar ou negar.
                     </div>
 
-                    <h4 class="sub-section-title">Passo 3.2: Ação Final e Próxima Etapa</h4>
+                    <h4 class="sub-section-title">Passo 3.2: Decisão e Desencadeamento do Fluxo</h4>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                        <li>Clique em <span class="btn-style"><i data-feather="check" class="w-4 h-4 mr-1"></i> Aprovar</span>: O status do pedido muda para <span class="status-badge status-aprovada">Aprovada</span>. Um e-mail é enviado à <strong>Prevenção</strong> para execução.</li>
-                        <li>Clique em <span class="btn-style" style="background: #D62828;"><i data-feather="x" class="w-4 h-4 mr-1"></i> Negar</span>: O status do pedido muda para <span class="status-badge status-negada">Negada</span>.</li>
+                        <li>Clique em <span class="btn-style"><i data-feather="check" class="w-4 h-4 mr-1"></i> Aprovar</span>: O status do pedido e seus itens muda para <span class="status-badge status-aprovada">Aprovada</span>. Um e-mail é enviado à <strong>Prevenção</strong> para execução.</li>
+                        <li>Clique em <span class="btn-style" style="background: #D62828;"><i data-feather="x" class="w-4 h-4 mr-1"></i> Negar</span>: O Gestor é obrigado a informar o motivo de forma clara e auditável. O status muda para <span class="status-badge status-negada">Negada</span>, e o ciclo é encerrado para este pedido.</li>
                     </ul>
                 </div>
 
                 <!-- 4. PREVENÇÃO: EXECUTAR BAIXA (Antiga Etapa 3) -->
                 <div class="content-card" id="prevencao-executar">
-                    <h2 class="step-title" style="border-left-color: var(--primary);">4. Prevenção: Executar Baixa</h2>
-                    <p class="text-gray-700 text-lg">Responsável pela baixa física e registro da movimentação sistêmica.</p>
+                    <h2 class="step-title" style="border-left-color: var(--primary);">4. Prevenção: Execução Física e Rastreabilidade Contábil</h2>
+                    <p class="text-gray-700 text-lg">Responsável pela **baixa física do item** e pelo registro preciso da **movimentação sistêmica** (CGO), que alimenta o realizado orçamentário com valores reais.</p>
 
-                    <h4 class="sub-section-title">Passo 4.1: Preparação da Execução</h4>
+                    <h4 class="sub-section-title">Passo 4.1: Preparação e Identificação</h4>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                        <li>Em <strong>Executar Baixas</strong>, localize o pedido <span class="status-badge status-aprovada">Aprovada</span> ou <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span> (se for execução parcial).</li>
+                        <li>Em <strong>Executar Baixas</strong>, localize o pedido <span class="status-badge status-aprovada">Aprovada</span> (início da execução) ou <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span> (para execuções parciais subsequentes).</li>
                         <li>Clique em <span class="btn-style" style="background: #F77F00;"><i data-feather="tool" class="w-4 h-4 mr-1"></i> Executar</span>.</li>
                     </ul>
                     <img src="executar.png" class="screenshot" alt="Tabela de Baixas Aprovadas com destaque para o botão Executar.">
@@ -298,9 +307,9 @@
                     <h4 class="sub-section-title">Passo 4.2: Registro da Movimentação (CGO e Real)</h4>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
                         <li>Selecione os itens que serão baixados agora (pode ser parcial).</li>
-                        <li><strong>Ajuste de Valores:</strong> Se a quantidade ou o valor real do item for diferente do solicitado, corrija os campos <strong>Qtd. Real</strong> e <strong>Valor Unit. Real</strong>.</li>
-                        <li><strong>CGO:</strong> O dropdown <strong>CGO (Cód. Movimentação)</strong> lista APENAS os códigos válidos que são comuns a <strong>todos os itens selecionados</strong> e ao <strong>Tipo de Baixa</strong>.</li>
-                        <li>Preencha a <strong>Justificativa</strong> (obrigatória) e anexe comprovantes de estoque (opcional).</li>
+                        <li>**Ajuste de Valores:** É crucial que os campos <strong>Qtd. Real</strong> e <strong>Valor Unit. Real</strong> reflitam exatamente o que foi movimentado em estoque, caso difiram do solicitado.</li>
+                        <li>**Vinculação Contábil (CGO):** O dropdown <strong>CGO (Cód. Movimentação)</strong> lista APENAS os códigos válidos que são comuns a <strong>todos os itens selecionados</strong> e ao **Tipo de Baixa**, garantindo a correta alocação da despesa na contabilidade.</li>
+                        <li>Preencha a <strong>Justificativa</strong> (obrigatória) e anexe comprovantes de estoque (opcional) para o registro da execução.</li>
                     </ul>
                     <img src="cgo.png" class="screenshot" alt="Modal de Execução, mostrando o ajuste de quantidade e o filtro de CGO.">
 
@@ -308,54 +317,54 @@
                     <p class="mb-4 text-gray-700">Ao confirmar, o status dos itens muda para <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span>.</p>
                     <div class="alert-box mt-4">
                         <i data-feather="mail" class="w-5 h-5 inline-block -mt-1 mr-2"></i>
-                        <strong>Notificação:</strong> O solicitante e o Gestor são avisados por e-mail que o item está <strong>Pronto para Retirada</strong> pela Operação.
+                        <strong>Notificação:</strong> O solicitante e o Gestor são avisados por e-mail que o item está <strong>Pronto para Retirada</strong> pela Operação, que deve prosseguir com a próxima etapa.
                     </div>
                 </div>
 
                 <!-- 5. OPERAÇÃO: FINALIZAR RETIRADA (Antiga Etapa 4) -->
                 <div class="content-card" id="operacao-retirada">
-                    <h2 class="step-title" style="border-left-color: var(--primary);">5. Operação: Finalizar Retirada</h2>
-                    <p class="text-gray-700 text-lg">Etapa de confirmação do recebimento físico e geração do <strong>Laudo Final</strong>.</p>
+                    <h2 class="step-title" style="border-left-color: var(--primary);">5. Operação: Fechamento de Ciclo e Evidência Final</h2>
+                    <p class="text-gray-700 text-lg">Última etapa do ciclo de baixa. Garante a **prova final de recebimento/uso** e encerra o processo, fornecendo a última camada de compliance.</p>
 
-                    <h4 class="sub-section-title">Passo 5.1: Localizar e Iniciar</h4>
+                    <h4 class="sub-section-title">Passo 5.1: Verificação e Início da Finalização</h4>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
                         <li>Em <strong>Minhas Solicitações</strong>, localize o pedido no status <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span>.</li>
-                        <li>Clique no botão <span class="btn-style"><i data-feather="check-circle" class="w-4 h-4 mr-1"></i> Confirmar Retirada</span> (o mesmo usado para solicitar na Etapa 2).</li>
+                        <li>Clique no botão <span class="btn-style"><i data-feather="check-circle" class="w-4 h-4 mr-1"></i> Confirmar Retirada</span>.</li>
                     </ul>
 
-                    <h4 class="sub-section-title">Passo 5.2: Comprovante e Finalização</h4>
+                    <h4 class="sub-section-title">Passo 5.2: Compliance Fotográfico e Fechamento</h4>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                        <li><strong>Anexo de Retirada:</strong> Anexe uma ou mais fotos/anexos do produto ou do local após o uso (comprovante visual). Este campo é <strong>obrigatório</strong>.</li>
+                        <li>**Evidência de Compliance:** Anexe uma ou mais fotos/anexos do produto ou do local após o uso (comprovante visual). Este campo é <strong>obrigatório</strong> e essencial para a trilha de auditoria.</li>
                         <li>Clique em <span class="btn-style"><i data-feather="save" class="w-4 h-4 mr-1"></i> Confirmar Retirada dos Itens Selecionados</span>.</li>
-                        <li><strong>Status Final:</strong> Os itens são alterados para <span class="status-badge status-finalizada">Finalizada</span>.</li>
+                        <li><strong>Status Final:</strong> Os itens selecionados são alterados para <span class="status-badge status-finalizada">Finalizada</span>, concluindo seu ciclo.</li>
                     </ul>
                      <div class="alert-box mt-4">
                         <i data-feather="mail" class="w-5 h-5 inline-block -mt-1 mr-2"></i>
-                        <strong>Laudo Final:</strong> Um e-mail de <strong>Baixa de Item Finalizada</strong> é enviado a todos os envolvidos (Solicitante, Gestor e Prevenção), contendo o resumo da execução e os anexos de retirada.
+                        <strong>Laudo Final (Auditoria):</strong> Um e-mail de <strong>Baixa de Item Finalizada</strong> é enviado a todos os *stakeholders* (Solicitante, Gestor e Prevenção), contendo o resumo detalhado da execução e os anexos de retirada, servindo como documento final de auditoria.
                     </div>
                 </div>
                 
                 <!-- 6. GESTOR/FINANCEIRO: LANÇAMENTO NF -->
                 <div class="content-card" id="gestor-nf">
-                    <h2 class="step-title" style="border-left-color: var(--accent);">6. Lançar Despesa Externa (NF)</h2>
-                    <p class="text-gray-700 text-lg">Ferramenta para o Gestor registrar gastos externos que impactam a Linha Orçamentária.</p>
+                    <h2 class="step-title" style="border-left-color: var(--accent);">6. Lançamento de Despesa Externa (NF)</h2>
+                    <p class="text-gray-700 text-lg">Funcionalidade dedicada ao Gestor para registrar formalmente gastos externos (via Nota Fiscal) que impactam diretamente a Linha Orçamentária e o cálculo do Realizado, garantindo a visão financeira completa.</p>
 
-                    <h4 class="sub-section-title">Passo 6.1: Registro e Itens</h4>
+                    <h4 class="sub-section-title">Passo 6.1: Registro e Comprovação Fiscal</h4>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                        <li>Em <strong>Lançar Despesa (NF)</strong>, preencha <strong>Nº NF</strong>, <strong>Data NF</strong> e anexe o <strong>Comprovante (PDF/Imagem)</strong>.</li>
-                        <li>Adicione os itens da nota com <strong>Descrição</strong>, <strong>Quantidade</strong> e <strong>Valor Unitário</strong>.</li>
+                        <li>Em <strong>Lançar Despesa (NF)</strong>, preencha o <strong>Nº NF</strong>, a <strong>Data NF</strong> (crucial para o realizado) e anexe o <strong>Comprovante (PDF/Imagem)</strong>.</li>
+                        <li>Adicione os itens da nota (Descrição, Quantidade e Valor Unitário) na tabela de itens.</li>
                     </ul>
                     <img src="nf.png" class="screenshot" alt="Formulário de Lançamento de Nota Fiscal, com campos de dados da nota e itens.">
 
-                    <h4 class="sub-section-title">Passo 6.2: Alocação Orçamentária e Conclusão</h4>
+                    <h4 class="sub-section-title">Passo 6.2: Alocação Orçamentária e Validação Financeira</h4>
                     <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                        <li>Selecione a <strong>Linha Orçamentária</strong> para a qual o valor da NF será debitado.</li>
-                        <li>O sistema exibe a <strong>Simulação de Saldo Pós-Lançamento</strong> para esta linha.</li>
+                        <li>Selecione a <strong>Linha Orçamentária</strong> para a qual o valor total da NF será debitado. Esta alocação é permanente.</li>
+                        <li>O sistema exibe imediatamente a <strong>Simulação de Saldo Pós-Lançamento</strong> para esta Linha, permitindo a verificação de conformidade orçamentária antes do registro final.</li>
                         <li>Clique em <span class="btn-style"><i data-feather="save" class="w-4 h-4 mr-1"></i> Salvar Lançamento de Despesa</span>.</li>
                     </ul>
                     <p class="alert-box mt-4">
                         <i data-feather="calendar" class="w-5 h-5 inline-block -mt-1 mr-2"></i>
-                        <strong>Impacto no Realizado:</strong> Este valor será somado ao <strong>Realizado</strong> da Linha Orçamentária no mês correspondente à <strong>Data da NF</strong> (e não à data de lançamento).
+                        <strong>Contabilização do Realizado:</strong> Este valor é incorporado ao <strong>Realizado</strong> da Linha Orçamentária no mês correspondente à <strong>Data da NF</strong>. Garanta que a data fiscal esteja correta para a precisão dos relatórios gerenciais e gráficos.
                     </p>
                 </div>
 
@@ -421,3 +430,4 @@
     </script>
 </body>
 </html>
+
