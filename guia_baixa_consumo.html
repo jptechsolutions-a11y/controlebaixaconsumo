@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guia de Consulta: Controle de Baixas de Consumo</title>
+    <title>Guia de Consulta Profissional: Controle de Baixas de Consumo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+    <!-- Usando a mesma fonte do Index -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -22,58 +23,63 @@
             background-color: #f4f7fa;
             color: var(--dark);
         }
+        /* Alinhamento visual com o Index */
         .header-bg {
             background-color: var(--darker);
             border-bottom: 4px solid var(--primary);
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
         }
         .sidebar-index {
-            background-color: #fff;
-            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
-            background: var(--darker);
+            background-color: var(--darker);
             color: white;
             border-right: 4px solid var(--primary);
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
         }
         .content-card {
             background-color: white;
             border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); /* Sombra mais destacada */
             padding: 2.5rem;
+            transition: all 0.3s ease;
         }
         .step-title {
             color: var(--accent);
-            border-left: 4px solid var(--secondary);
-            padding-left: 12px;
-            font-size: 1.5rem;
-            font-weight: 700;
+            border-left: 5px solid var(--primary); /* Destaque mais forte */
+            padding-left: 15px;
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
         }
         .action-highlight {
+            /* Estilo que imita um botão desabilitado do sistema */
             background-color: #e0f2f1; 
             border-radius: 6px;
-            padding: 0.5rem 1rem;
+            padding: 0.4rem 0.8rem;
             display: inline-block;
-            font-weight: 600;
+            font-weight: 700;
             color: var(--dark);
             border: 1px solid var(--primary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
         }
         .alert-box {
-            background-color: #fef3c7; /* Amarelo claro - Warning */
-            border-left: 4px solid #F77F00; /* Laranja */
-            padding: 1rem;
+            background-color: #fef3c7; 
+            border-left: 4px solid #F77F00; 
+            padding: 1.2rem;
             border-radius: 8px;
-            margin: 1rem 0;
+            margin: 1.5rem 0;
             color: #92400e;
+            font-weight: 500;
         }
         .screenshot {
             display: block;
-            margin: 20px auto;
+            margin: 30px auto;
             max-width: 100%;
             height: auto;
-            border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            border: 1px solid #ddd;
+            border-radius: 10px; /* Borda mais suave */
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15); /* Sombra mais escura */
+            border: 2px solid #ddd;
         }
-        /* Estilo para links do índice no modo dark */
         .index-link {
             transition: all 0.2s ease;
             color: #ccc;
@@ -83,8 +89,20 @@
         .index-link:hover, .index-link.active {
             background-color: rgba(0, 180, 216, 0.2);
             border-left: 4px solid var(--primary);
-            color: var(--primary);
+            color: white; /* Cor da fonte branca no hover do sidebar dark */
             font-weight: 600;
+        }
+        .index-link.active {
+             color: var(--primary); /* Mantém o primary para dar destaque no ativo */
+        }
+        .sub-section-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #eee;
         }
         /* Responsividade */
         @media (min-width: 1024px) {
@@ -95,7 +113,8 @@
                 overflow-y: auto;
             }
         }
-        /* Cores de status replicadas do sistema */
+        
+        /* Cores de status replicadas do sistema para o guia */
         .status-badge { 
              padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; display: inline-block; text-align: center;
         }
@@ -104,94 +123,29 @@
         .status-negada { background-color: #fee2e2; color: #991b1b; }
         .status-aguardando_retirada { background-color: #fef3c7; color: #92400e; }
         .status-finalizada { background-color: #d1fae5; color: #065f46; }
-
-        /* ADDED: Estilos para o Botão Flutuante de Suporte/Índice 2 */
-        #floatingSupportButton {
-            position: fixed;
-            bottom: 25px;
-            right: 25px;
-            width: 56px;
-            height: 56px;
-            background: var(--primary-gradient); /* Usando o gradiente principal */
+        
+        /* Estilo para links de botões no guia */
+        .btn-style {
+            background: linear-gradient(135deg, #00D4AA, #0077B6);
             color: white;
-            border-radius: 50%;
-            border: none;
-            display: flex;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-weight: 600;
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 15px rgba(0, 212, 170, 0.4);
-            cursor: pointer;
-            z-index: 1000; /* Acima do conteúdo principal */
-            transition: all 0.3s ease;
-        }
-        #floatingSupportButton:hover {
-            transform: scale(1.05) translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0, 212, 170, 0.5);
-        }
-        @media (max-width: 1023px) {
-            #floatingSupportButton {
-                right: 15px;
-                bottom: 15px;
-                width: 48px;
-                height: 48px;
-            }
-        }
-
-        /* ADDED: Estilos para o Mini-Índice/Painel de Suporte */
-        #supportMiniIndex {
-            position: fixed;
-            bottom: 90px;
-            right: 25px;
-            width: 250px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-            padding: 15px;
-            z-index: 999;
-            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
-            transform: translateY(10px) scale(0.95);
-            opacity: 0;
-            pointer-events: none; /* Inicia invisível e desativado */
-            transform-origin: bottom right;
-            border: 2px solid var(--secondary);
-            /* Importante para a função JS: */
-            display: none; 
-        }
-        #supportMiniIndex.open {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-            pointer-events: all;
-        }
-        .support-link {
-            display: flex;
-            align-items: center;
-            padding: 8px 10px;
-            border-radius: 8px;
-            color: var(--dark);
-            font-weight: 500;
-            transition: background-color 0.2s, color 0.2s;
-        }
-        .support-link:hover {
-            background-color: var(--secondary);
-            color: white;
-        }
-        /* Ocultar em telas pequenas para evitar conflito com o índice lateral */
-        @media (max-width: 768px) {
-            #supportMiniIndex, #floatingSupportButton {
-                display: none !important; 
-            }
+            font-size: 0.9rem;
+            margin-left: 5px;
         }
     </style>
 </head>
 <body>
 
     <!-- Header Fixo (Inspirado no sistema) -->
-    <header class="header-bg fixed top-0 left-0 right-0 h-20 z-10 flex items-center shadow-lg">
+    <header class="header-bg fixed top-0 left-0 right-0 h-20 z-20 flex items-center shadow-lg">
         <div class="container mx-auto px-6 flex items-center justify-between">
             <div class="flex items-center">
-                 <!-- Substitua por sua logo real -->
                  <img src="icon.png" class="h-8 object-contain" alt="Logo JP Tech Solutions">
-                <h1 class="text-xl font-extrabold text-white ml-6 hidden md:block">GUIA DE CONSULTA: BAIXA DE CONSUMO</h1>
+                <h1 class="text-xl font-extrabold text-white ml-6 hidden md:block">GUIA DE CONSULTA PROFISSIONAL</h1>
             </div>
             <a href="#indice" class="lg:hidden text-white font-semibold flex items-center">
                 <i data-feather="menu" class="w-5 h-5 mr-2"></i>
@@ -203,291 +157,210 @@
     <div class="flex pt-20"> 
 
         <!-- Índice Lateral (Sidebar) -->
-        <aside id="indice" class="sidebar-index w-full lg:w-64 p-4 lg:p-6 flex-shrink-0">
+        <aside id="indice" class="sidebar-index w-full lg:w-64 p-4 lg:p-6 flex-shrink-0 z-10">
             <h2 class="text-lg font-bold mb-4 text-white uppercase tracking-wider hidden lg:block">Índice do Guia</h2>
             <nav class="space-y-1">
                 <a href="#fluxo-geral" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
-                    <i data-feather="repeat" class="w-4 h-4 mr-2"></i> Fluxo Geral (4 Etapas)
+                    <i data-feather="repeat" class="w-4 h-4 mr-2"></i> Fluxo Central (4 Etapas)
                 </a>
                 <a href="#acesso-login" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
-                    <i data-feather="log-in" class="w-4 h-4 mr-2"></i> 1. Acesso e Login
+                    <i data-feather="log-in" class="w-4 h-4 mr-2"></i> 1. Acesso ao Sistema
                 </a>
                 <a href="#operacao-solicitar" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
-                    <i data-feather="shopping-cart" class="w-4 h-4 mr-2"></i> 2. Operação: Criar Solicitação
-                </a>
-                <a href="#operacao-retirada" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
-                    <i data-feather="check-circle" class="w-4 h-4 mr-2"></i> 2. Operação: Confirmar Retirada
+                    <i data-feather="plus-circle" class="w-4 h-4 mr-2"></i> 2. Operação: Criar Pedido
                 </a>
                 <a href="#gestor-aprovar" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
-                    <i data-feather="shield" class="w-4 h-4 mr-2"></i> 3. Gestor: Aprovar ou Negar
-                </a>
-                <a href="#gestor-nf" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
-                    <i data-feather="file-text" class="w-4 h-4 mr-2"></i> 3. Gestor: Lançar Despesa (NF)
+                    <i data-feather="check-square" class="w-4 h-4 mr-2"></i> 3. Gestor: Aprovar/Negar
                 </a>
                 <a href="#prevencao-executar" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
                     <i data-feather="tool" class="w-4 h-4 mr-2"></i> 4. Prevenção: Executar Baixa
                 </a>
-                <a href="#admin-config" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
-                    <i data-feather="settings" class="w-4 h-4 mr-2"></i> 5. Admin (Config.)
+                <a href="#operacao-retirada" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
+                    <i data-feather="package" class="w-4 h-4 mr-2"></i> 5. Operação: Finalizar Retirada
+                </a>
+                <a href="#gestor-nf" class="index-link p-3 rounded-lg mb-1" onclick="setActiveLink(this)">
+                    <i data-feather="file-text" class="w-4 h-4 mr-2"></i> 6. Lançar Despesa (NF)
                 </a>
             </nav>
         </aside>
 
         <!-- Conteúdo Principal -->
         <main class="flex-1 p-6 lg:ml-64">
-            <div class="max-w-4xl mx-auto space-y-8">
+            <div class="max-w-5xl mx-auto space-y-10">
 
                 <div class="content-card" id="fluxo-geral">
-                    <h2 class="text-3xl font-extrabold mb-4 text-gray-800">Manual de Instruções: Fluxo Detalhado do Sistema</h2>
-                    <p class="text-lg text-gray-600 mb-6 border-b pb-4">
-                        Este guia detalha o uso da ferramenta **Controle de Baixas de Consumo**, garantindo precisão e rastreabilidade em todo o processo.
+                    <h2 class="text-3xl font-extrabold mb-4 text-gray-800">Manual de Instruções: Fluxo de Baixas de Consumo</h2>
+                    <p class="text-xl text-gray-600 mb-6 border-b pb-4">
+                        Este guia detalha o fluxo <strong>4 Etapas</strong> para o <strong>Controle de Baixas de Consumo</strong>, garantindo total rastreabilidade, controle orçamentário e conformidade.
                     </p>
 
-                    <h3 class="step-title mb-4">O Fluxo Principal é dividido em 4 Etapas:</h3>
-                    <ol class="list-decimal list-inside space-y-3 ml-4 text-gray-700 font-medium">
-                        <li><strong style="color: var(--dark);">Solicitação:</strong> <span class="action-highlight">Operação</span> registra a necessidade de baixa.</li>
-                        <li><strong style="color: var(--dark);">Aprovação:</strong> <span class="action-highlight" style="background-color: #dbeafe; border-color: #1e40af;">Gestor</span> autoriza ou nega o pedido.</li>
-                        <li><strong style="color: var(--dark);">Execução:</strong> <span class="action-highlight" style="background-color: #e0f2f1;">Prevenção</span> realiza a baixa física e anexa comprovantes.</li>
-                        <li><strong style="color: var(--dark);">Retirada/Finalização:</strong> <span class="action-highlight">Operação</span> confirma o recebimento dos itens e anexa foto final.</li>
+                    <h3 class="step-title">O Fluxo Principal de Baixa (Consumo/Quebra)</h3>
+                    <ol class="list-decimal list-inside space-y-4 ml-4 text-gray-700 font-medium text-lg">
+                        <li class="p-2 border-l-4 border-gray-400 pl-4"><strong style="color: var(--dark);">1. Solicitação:</strong> <span class="action-highlight">Operação</span> registra a necessidade de materiais.</li>
+                        <li class="p-2 border-l-4 border-gray-400 pl-4"><strong style="color: var(--dark);">2. Aprovação:</strong> <span class="action-highlight" style="background-color: #dbeafe; border-color: #1e40af;">Gestor</span> avalia o impacto orçamentário e <strong>autoriza</strong> ou <strong>nega</strong> o pedido.</li>
+                        <li class="p-2 border-l-4 border-gray-400 pl-4"><strong style="color: var(--dark);">3. Execução:</strong> <span class="action-highlight" style="background-color: #e0f2f1;">Prevenção</span> realiza a baixa sistêmica e <strong>anexa comprovantes de estoque/movimentação</strong>.</li>
+                        <li class="p-2 border-l-4 border-gray-400 pl-4"><strong style="color: var(--dark);">4. Retirada/Finalização:</strong> <span class="action-highlight">Operação</span> confirma o recebimento físico dos itens e <strong>anexa fotos finais do produto/local</strong>.</li>
                     </ol>
+                    <div class="alert-box mt-6">
+                        <i data-feather="info" class="w-5 h-5 inline-block -mt-1 mr-2"></i>
+                        <strong>Foco no Orçamento:</strong> A principal mudança é a inserção da <strong>Aprovação (Etapa 2)</strong> como *gating factor*. Sem a aprovação do Gestor, o pedido não avança para a Execução.
+                    </div>
                 </div>
                 
                 <!-- 1. ACESSO E LOGIN -->
                 <div class="content-card" id="acesso-login">
-                    <h2 class="step-title mb-6">1. Acesso e Login</h2>
+                    <h2 class="step-title">1. Acesso e Login</h2>
 
-                    <h4 class="text-xl font-semibold mt-6 mb-3 flex items-center">
-                        <i data-feather="user" class="w-6 h-6 mr-2 text-blue-500"></i>
-                        Login Inicial
+                    <h4 class="sub-section-title flex items-center">
+                        <i data-feather="log-in" class="w-6 h-6 mr-2 text-blue-500"></i>
+                        Credenciais e Autenticação
                     </h4>
-                    <p class="mb-4">
-                        Na tela inicial (conforme Imagem 1), insira seu **E-mail** e **Senha**.
+                    <p class="mb-4 text-gray-700">
+                        Insira seu E-mail e Senha. Caso seu usuário tenha acesso a mais de uma filial, o sistema solicitará a escolha da filial de trabalho após a autenticação.
                     </p>
-                    <img src="login.png" class="screenshot" alt="Tela de Login do sistema de Baixa de Consumo">
+                    <img src="login.png" class="screenshot" alt="Tela de Login do sistema de Baixa de Consumo, com destaque para a área de credenciais.">
 
-                    <h4 class="text-xl font-semibold mt-6 mb-3 flex items-center">
-                        <i data-feather="users" class="w-6 h-6 mr-2 text-blue-500"></i>
-                        Seleção de Filial (se aplicável)
+                    <h4 class="sub-section-title flex items-center">
+                        <i data-feather="menu" class="w-6 h-6 mr-2 text-blue-500"></i>
+                        Filtragem de Menu
                     </h4>
-                    <p class="mb-4">
-                        Se seu usuário estiver associado a múltiplas filiais, você será solicitado a selecionar a filial de trabalho através do dropdown (conforme Imagem 2). Clique em *CONFIRMAR FILIAL*.
-                    </p>
-                    <img src="filial.png" alt="Tela de Seleção de Filial">
-
-                    <h4 class="text-xl font-semibold mt-6 mb-3 flex items-center">
-                        <i data-feather="eye" class="w-6 h-6 mr-2 text-blue-500"></i>
-                        Visualização do Menu
-                    </h4>
-                    <p class="mb-4">
-                        O menu lateral será automaticamente filtrado para exibir apenas as opções correspondentes ao seu **Grupo**: <span class="status-badge status-aguardando_retirada">Operação</span>, <span class="status-badge status-aprovada">Gestor</span>, <span class="status-badge status-aguardando_aprovacao">Prevenção</span> ou <span class="status-badge status-negada">Admin</span>.
+                    <p class="mb-4 text-gray-700">
+                        O menu lateral é dinâmico, exibindo apenas as opções correspondentes ao seu <strong>Grupo (Role)</strong>: <span class="status-badge status-aguardando_retirada">Operação</span>, <span class="status-badge status-aprovada">Gestor</span>, <span class="status-badge status-aguardando_aprovacao">Prevenção</span> ou <span class="status-badge status-negada">Admin</span>.
                     </p>
                 </div>
 
-                <!-- 2. FLUXO DA OPERAÇÃO (SOLICITANTE) -->
+                <!-- 2. OPERAÇÃO: CRIAR SOLICITAÇÃO (Antiga Etapa 1) -->
                 <div class="content-card" id="operacao-solicitar">
-                    <h2 class="step-title mb-6" style="border-left-color: var(--primary);">2. Fluxo da Operação (Solicitante)</h2>
-                    <p class="text-gray-700">A Operação inicia e finaliza o processo.</p>
+                    <h2 class="step-title" style="border-left-color: var(--primary);">2. Operação: Criar Nova Solicitação</h2>
+                    <p class="text-gray-700 text-lg">Função principal do grupo <strong>Operação</strong> é dar início ao ciclo.</p>
 
-                    <h3 class="text-2xl font-bold mt-6 mb-4">Tarefa A: Criar Nova Solicitação</h3>
-                    <p class="mb-4">Navegue até a tela **Nova Solicitação** no menu lateral.</p>
-                    
-                    <div class="space-y-4">
-                        <div class="p-4 bg-gray-50 rounded-lg border">
-                            <h4 class="font-semibold text-lg">Passo 1: Intenção da Baixa</h4>
-                            <p class="text-gray-600 mb-2">Selecione o **Tipo de Baixa** (ex: Quebra, Baixa para Cozinha, Filme Stretch). Esta seleção define as regras de CGO e produto válidas para o pedido.</p>
-                            <img src="tipobaixa.png" class="screenshot max-w-sm" alt="Dropdown de seleção do tipo de baixa.">
-                        </div>
+                    <h4 class="sub-section-title">Passo 2.1: Definição da Intenção (Tipo de Baixa)</h4>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li>Em <strong>Nova Solicitação</strong>, o campo <strong>Tipo de Baixa</strong> é o primeiro e mais importante filtro.</li>
+                        <li><strong>Regra Mestra:</strong> O Tipo de Baixa (Ex: QUEBRA) define quais <strong>Produtos</strong> e, consequentemente, quais <strong>CGOs</strong> serão válidos.</li>
+                        <li>Selecione o tipo que mais se aplica à sua necessidade.</li>
+                    </ul>
+                    <img src="tipobaixa.png" class="screenshot max-w-md" alt="Dropdown de seleção do tipo de baixa, indicando a regra de compatibilidade.">
 
-                        <div class="p-4 bg-gray-50 rounded-lg border">
-                            <h4 class="font-semibold text-lg">Passo 2: Adicionar Itens</h4>
-                            <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                                <li>Insira o **Código do Produto**. O sistema buscará a descrição e verificará a compatibilidade.</li>
-                                <li>**Atenção:** Se o item não for compatível com o **Tipo de Baixa** (ex: tentar baixar Etiqueta em Baixa de Cozinha), o item será **bloqueado** e uma mensagem de erro aparecerá (conforme Imagem 5).</li>
-                                <li>Insira a **Quantidade** e o **Valor Unitário**. O sistema calcula o Valor Total.</li>
-                                <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #0077B6); color: white;">Adicionar Item ao Pedido</span>.</li>
-                            </ul>
-                            <img src="adicionar.png" class="screenshot" alt="Formulário de adição de itens.">
-                            <p class="alert-box">
-                                <i data-feather="alert-triangle" class="w-4 h-4 inline-block -mt-1 mr-2"></i>
-                                **Regra de Bloqueio:** O sistema só permite adicionar itens que possuam **CGOs compatíveis** com o **Tipo de Baixa** selecionado. Se bloqueado, revise o Tipo ou o Código.
-                            </p>
-                        </div>
-                        
-                        <div class="p-4 bg-gray-50 rounded-lg border">
-                            <h4 class="font-semibold text-lg">Passo 3: Enviar Pedido e Notificação</h4>
-                            <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                                <li>Revise os itens na tabela.</li>
-                                <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Enviar Solicitação</span>.</li>
-                                <li>O pedido recebe o status inicial: <span class="status-badge status-aguardando_aprovacao">Aguardando Aprovação</span>.</li>
-                                <li>**Notificação:** Um e-mail é enviado ao(s) **Gestor(es)** da filial e ao **Solicitante**.</li>
-                            </ul>
-                            <img src="email.png" class="screenshot" alt="Exemplo de e-mail de notificação de nova solicitação.">
-                        </div>
-                    </div>
+                    <h4 class="sub-section-title">Passo 2.2: Adição dos Itens</h4>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li>Insira o <strong>Código do Produto</strong> e o sistema carregará a descrição (se cadastrado).</li>
+                        <li>Se o produto não for compatível com o Tipo de Baixa (conflito de CGOs permitidos), a descrição ficará <strong>bloqueada</strong> e o item não poderá ser adicionado.</li>
+                        <li>Preencha <strong>Quantidade</strong> e <strong>Valor Unitário</strong> (o Valor Total é calculado automaticamente).</li>
+                        <li>Clique em <span class="btn-style"><i data-feather="plus" class="w-4 h-4 mr-1"></i> Adicionar Item ao Pedido</span>.</li>
+                    </ul>
+                    <img src="adicionar.png" class="screenshot" alt="Formulário de adição de itens com campos para código, quantidade e valor.">
+
+                    <h4 class="sub-section-title">Passo 2.3: Envio e Notificação</h4>
+                    <p class="mb-4 text-gray-700">Após revisar a lista de itens, clique em <span class="btn-style"><i data-feather="send" class="w-4 h-4 mr-1"></i> Enviar Solicitação</span>.</p>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li><strong>Status:</strong> O pedido muda para <span class="status-badge status-aguardando_aprovacao">Aguardando Aprovação</span>.</li>
+                        <li><strong>Ação:</strong> O Gestor da filial recebe um e-mail de notificação.</li>
+                    </ul>
                 </div>
 
-                <div class="content-card" id="operacao-retirada">
-                    <h3 class="text-2xl font-bold mt-2 mb-4">Tarefa B: Confirmar Retirada dos Itens (Em Lote)</h3>
-                    <p class="mb-4">Esta etapa ocorre após a baixa ser **Aprovada** e **Executada** pela Prevenção.</p>
-
-                    <div class="p-4 bg-gray-50 rounded-lg border">
-                        <h4 class="font-semibold text-lg">Localizar e Ação</h4>
-                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                            <li>Navegue até a tela **Minhas Solicitações**.</li>
-                            <li>Localize a solicitação que está no status <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span> (execução parcial ou total realizada).</li>
-                            <li>Clique no botão <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Confirmar Retirada</span>.</li>
-                        </ul>
-                    </div>
-
-                    <div class="p-4 bg-gray-50 rounded-lg border mt-4">
-                        <h4 class="font-semibold text-lg">Modal de Retirada</h4>
-                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                            <li>Selecione os itens que você está confirmando o recebimento (pode ser em lote).</li>
-                            <li>**Anexe** uma ou mais fotos/anexos de retirada ou tire uma foto (**obrigatório**). Estes anexos serão ligados aos itens selecionados.</li>
-                            <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Confirmar Retirada dos Itens Selecionados</span>.</li>
-                        </ul>
-                    </div>
-
-                    <p class="mt-4">**Finalização:** Os itens selecionados têm o status alterado para <span class="status-badge status-finalizada">Finalizada</span>. Se todos os itens do pedido estiverem finalizados ou negados, o pedido (cabeçalho) também é finalizado.</p>
-                    <p class="alert-box mt-4">
-                        <i data-feather="mail" class="w-4 h-4 inline-block -mt-1 mr-2"></i>
-                        **Notificação:** Um e-mail de **Baixa de Item Finalizada (Laudo)** é enviado ao Executor, Aprovador, Solicitante e Gestor.
-                    </p>
-                </div>
-
-                <!-- 3. FLUXO DO GESTOR/FINANCEIRO -->
+                <!-- 3. GESTOR: APROVAR OU NEGAR (Antiga Etapa 2) -->
                 <div class="content-card" id="gestor-aprovar">
-                    <h2 class="step-title mb-6" style="border-left-color: var(--accent);">3. Fluxo do Gestor/Financeiro</h2>
-                    <p class="text-gray-700">O Gestor atua na aprovação e no acompanhamento orçamentário.</p>
+                    <h2 class="step-title" style="border-left-color: var(--accent);">3. Gestor: Aprovar ou Negar</h2>
+                    <p class="text-gray-700 text-lg">Responsável pela validação e pelo <strong>controle orçamentário</strong>.</p>
 
-                    <h3 class="text-2xl font-bold mt-6 mb-4">Tarefa A: Aprovar ou Negar Baixas</h3>
-                    <p class="mb-4">Navegue até a tela **Aprovar Baixas**.</p>
-                    
-                    <div class="p-4 bg-gray-50 rounded-lg border">
-                        <h4 class="font-semibold text-lg">Análise e Simulação Orçamentária</h4>
-                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                            <li>Clique em <span class="action-highlight" style="background-color: #dbeafe; border-color: #1e40af; color: #1e40af;">Ver (Detalhes)</span> para analisar a solicitação.</li>
-                            <li>O sistema exibirá a **Simulação Orçamentária** para cada linha afetada, mostrando o <strong style="color: #10b981;">Saldo Pós-Aprovação</strong> do orçamento mensal (conforme Imagem 13).</li>
-                        </ul>
-                        <img src="detalhe.png" class="screenshot" alt="Modal de Detalhes com Simulação Orçamentária">
+                    <h4 class="sub-section-title">Passo 3.1: Análise e Simulação Orçamentária</h4>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li>Em <strong>Aprovar Baixas</strong>, localize o pedido <span class="status-badge status-aguardando_aprovacao">Aguardando Aprovação</span>.</li>
+                        <li>Clique no botão <span class="btn-style" style="background: #0077B6;"><i data-feather="eye" class="w-4 h-4 mr-1"></i> Ver (Detalhes)</span>.</li>
+                        <li>O sistema carregará a <strong>Simulação Orçamentária</strong> (no topo do modal), mostrando o <strong>Saldo Atual</strong> e o <strong>Saldo Pós-Aprovação</strong> para as Linhas Orçamentárias afetadas.</li>
+                    </ul>
+                    <img src="detalhe.png" class="screenshot" alt="Modal de Detalhes da Solicitação com a Simulação Orçamentária em destaque.">
+                    <div class="alert-box mt-4">
+                        <i data-feather="dollar-sign" class="w-5 h-5 inline-block -mt-1 mr-2"></i>
+                        <strong>Verificação Crítica:</strong> A simulação é baseada no CGO (que está ligado à Linha Orçamentária) e garante que o Gestor autorize apenas pedidos com saldo orçamentário disponível.
                     </div>
 
-                    <div class="p-4 bg-gray-50 rounded-lg border mt-4">
-                        <h4 class="font-semibold text-lg">Ação e Notificação</h4>
-                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                            <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Aprovar</span>: O status do pedido e **todos** os itens é alterado para <span class="status-badge status-aprovada">Aprovada</span>.</li>
-                            <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #D62828, #F77F00); color: white;">Negar</span>: Informe o motivo. O status é alterado para <span class="status-badge status-negada">Negada</span>.</li>
-                        </ul>
-                    </div>
-                    <p class="alert-box mt-4">
-                        <i data-feather="mail" class="w-4 h-4 inline-block -mt-1 mr-2"></i>
-                        **Notificação:** E-mail enviado ao **Solicitante** e (no caso de aprovação) ao grupo de **Prevenção**.
-                    </p>
+                    <h4 class="sub-section-title">Passo 3.2: Ação Final e Próxima Etapa</h4>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li>Clique em <span class="btn-style"><i data-feather="check" class="w-4 h-4 mr-1"></i> Aprovar</span>: O status do pedido muda para <span class="status-badge status-aprovada">Aprovada</span>. Um e-mail é enviado à <strong>Prevenção</strong> para execução.</li>
+                        <li>Clique em <span class="btn-style" style="background: #D62828;"><i data-feather="x" class="w-4 h-4 mr-1"></i> Negar</span>: O status do pedido muda para <span class="status-badge status-negada">Negada</span>.</li>
+                    </ul>
                 </div>
 
-                <div class="content-card" id="gestor-nf">
-                    <h3 class="text-2xl font-bold mt-6 mb-4">Tarefa B: Lançar Despesa Externa (NF)</h3>
-                    <p class="mb-4">Navegue até a tela **Lançar Despesa (NF)** para registrar gastos externos que afetam o orçamento.</p>
-
-                    <div class="space-y-4">
-                         <div class="p-4 bg-gray-50 rounded-lg border">
-                            <h4 class="font-semibold text-lg">Passo 1 & 2: Dados e Itens</h4>
-                             <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                                <li>Preencha **Número da NF**, **Data da NF** e anexe o **Anexo da NF** (PDF/Imagem).</li>
-                                <li>Adicione os itens da nota (Descrição, Quantidade e Valor Unitário) na tabela.</li>
-                            </ul>
-                            <img src="nf.png" class="screenshot" alt="Formulário de Lançamento de Nota Fiscal">
-                        </div>
-                        
-                        <div class="p-4 bg-gray-50 rounded-lg border">
-                            <h4 class="font-semibold text-lg">Passo 3: Impacto Orçamentário</h4>
-                             <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                                <li>Selecione a **Linha Orçamentária** a ser debitada.</li>
-                                <li>O sistema exibirá a **Simulação de Saldo Pós-Lançamento** para esta Linha Orçamentária.</li>
-                                <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Salvar Lançamento de Despesa</span>.</li>
-                            </ul>
-                            <p class="mt-4 text-sm text-gray-500">O valor é considerado no cálculo do **Realizado** da Linha Orçamentária a partir da **Data da NF**.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 4. FLUXO DA PREVENÇÃO (EXECUTOR) -->
+                <!-- 4. PREVENÇÃO: EXECUTAR BAIXA (Antiga Etapa 3) -->
                 <div class="content-card" id="prevencao-executar">
-                    <h2 class="step-title mb-6" style="border-left-color: var(--primary);">4. Fluxo da Prevenção (Executor)</h2>
-                    <p class="text-gray-700">A Prevenção é responsável por realizar a baixa física e registrar a execução.</p>
+                    <h2 class="step-title" style="border-left-color: var(--primary);">4. Prevenção: Executar Baixa</h2>
+                    <p class="text-gray-700 text-lg">Responsável pela baixa física e registro da movimentação sistêmica.</p>
 
-                    <h3 class="text-2xl font-bold mt-6 mb-4">Tarefa A: Executar Baixas Aprovadas</h3>
-                    <p class="mb-4">Navegue até a tela **Executar Baixas**.</p>
-                    
-                    <div class="p-4 bg-gray-50 rounded-lg border">
-                        <h4 class="font-semibold text-lg">Ação na Tabela</h4>
-                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                            <li>Localize um pedido com status <span class="status-badge status-aprovada">Aprovada</span> ou <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span> (execução parcial).</li>
-                            <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #F77F00, #FCBF49); color: white;">Executar</span>.</li>
-                        </ul>
-                        <img src="executar.png" class="screenshot" alt="Tabela de Baixas Aprovadas com botão Executar.">
-                    </div>
-                    
-                    <div class="p-4 bg-gray-50 rounded-lg border mt-4">
-                        <h4 class="font-semibold text-lg">Modal de Execução</h4>
-                        <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
-                            <li>Selecione os itens que serão executados **neste momento**.</li>
-                            <li>Ajuste a **Qtd. Real** e o **Valor Unit. Real** (se necessário).</li>
-                            <li>**CGO (Cód. Movimentação):** O dropdown mostrará **apenas** os CGOs válidos para os itens e o Tipo de Baixa do pedido.</li>
-                            <li>Preencha a **Justificativa** (**obrigatória**) e anexe **Anexos** (opcional).</li>
-                            <li>Clique em <span class="action-highlight" style="background: linear-gradient(135deg, #00D4AA, #00B4D8); color: white;">Confirmar Execução dos Itens Selecionados</span>.</li>
-                        </ul>
-                        <img src="cgo.png" class="screenshot" alt="Modal de Execução com campos de Quantidade Real e seleção de CGO.">
-                    </div>
+                    <h4 class="sub-section-title">Passo 4.1: Preparação da Execução</h4>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li>Em <strong>Executar Baixas</strong>, localize o pedido <span class="status-badge status-aprovada">Aprovada</span> ou <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span> (se for execução parcial).</li>
+                        <li>Clique em <span class="btn-style" style="background: #F77F00;"><i data-feather="tool" class="w-4 h-4 mr-1"></i> Executar</span>.</li>
+                    </ul>
+                    <img src="executar.png" class="screenshot" alt="Tabela de Baixas Aprovadas com destaque para o botão Executar.">
 
-                    <p class="mt-4">**Status Update:** Os itens executados têm seu status alterado para <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span>.</p>
-                    <p class="alert-box mt-4">
-                        <i data-feather="mail" class="w-4 h-4 inline-block -mt-1 mr-2"></i>
-                        **Notificação:** Um e-mail de **Item Pronto para Retirada** é enviado ao **Solicitante** e **Gestor**.
-                    </p>
+                    <h4 class="sub-section-title">Passo 4.2: Registro da Movimentação (CGO e Real)</h4>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li>Selecione os itens que serão baixados agora (pode ser parcial).</li>
+                        <li><strong>Ajuste de Valores:</strong> Se a quantidade ou o valor real do item for diferente do solicitado, corrija os campos <strong>Qtd. Real</strong> e <strong>Valor Unit. Real</strong>.</li>
+                        <li><strong>CGO:</strong> O dropdown <strong>CGO (Cód. Movimentação)</strong> lista APENAS os códigos válidos que são comuns a <strong>todos os itens selecionados</strong> e ao <strong>Tipo de Baixa</strong>.</li>
+                        <li>Preencha a <strong>Justificativa</strong> (obrigatória) e anexe comprovantes de estoque (opcional).</li>
+                    </ul>
+                    <img src="cgo.png" class="screenshot" alt="Modal de Execução, mostrando o ajuste de quantidade e o filtro de CGO.">
+
+                    <h4 class="sub-section-title">Passo 4.3: Conclusão da Execução</h4>
+                    <p class="mb-4 text-gray-700">Ao confirmar, o status dos itens muda para <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span>.</p>
+                    <div class="alert-box mt-4">
+                        <i data-feather="mail" class="w-5 h-5 inline-block -mt-1 mr-2"></i>
+                        <strong>Notificação:</strong> O solicitante e o Gestor são avisados por e-mail que o item está <strong>Pronto para Retirada</strong> pela Operação.
+                    </div>
+                </div>
+
+                <!-- 5. OPERAÇÃO: FINALIZAR RETIRADA (Antiga Etapa 4) -->
+                <div class="content-card" id="operacao-retirada">
+                    <h2 class="step-title" style="border-left-color: var(--primary);">5. Operação: Finalizar Retirada</h2>
+                    <p class="text-gray-700 text-lg">Etapa de confirmação do recebimento físico e geração do <strong>Laudo Final</strong>.</p>
+
+                    <h4 class="sub-section-title">Passo 5.1: Localizar e Iniciar</h4>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li>Em <strong>Minhas Solicitações</strong>, localize o pedido no status <span class="status-badge status-aguardando_retirada">Aguardando Retirada</span>.</li>
+                        <li>Clique no botão <span class="btn-style"><i data-feather="check-circle" class="w-4 h-4 mr-1"></i> Confirmar Retirada</span> (o mesmo usado para solicitar na Etapa 2).</li>
+                    </ul>
+
+                    <h4 class="sub-section-title">Passo 5.2: Comprovante e Finalização</h4>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li><strong>Anexo de Retirada:</strong> Anexe uma ou mais fotos/anexos do produto ou do local após o uso (comprovante visual). Este campo é <strong>obrigatório</strong>.</li>
+                        <li>Clique em <span class="btn-style"><i data-feather="save" class="w-4 h-4 mr-1"></i> Confirmar Retirada dos Itens Selecionados</span>.</li>
+                        <li><strong>Status Final:</strong> Os itens são alterados para <span class="status-badge status-finalizada">Finalizada</span>.</li>
+                    </ul>
+                     <div class="alert-box mt-4">
+                        <i data-feather="mail" class="w-5 h-5 inline-block -mt-1 mr-2"></i>
+                        <strong>Laudo Final:</strong> Um e-mail de <strong>Baixa de Item Finalizada</strong> é enviado a todos os envolvidos (Solicitante, Gestor e Prevenção), contendo o resumo da execução e os anexos de retirada.
+                    </div>
                 </div>
                 
-                <!-- 5. FLUXO DO ADMINISTRADOR (CONFIGURAÇÃO) -->
-                <div class="content-card" id="admin-config">
-                    <h2 class="step-title mb-6" style="border-left-color: #D62828;">5. Fluxo do Administrador (Configuração)</h2>
-                    <p class="text-gray-700">O Administrador é responsável por configurar as chaves mestras do sistema (Usuários, Filiais, Produtos, CGOs, Tipos de Baixa, Linhas Orçamentárias e Orçamentos).</p>
+                <!-- 6. GESTOR/FINANCEIRO: LANÇAMENTO NF -->
+                <div class="content-card" id="gestor-nf">
+                    <h2 class="step-title" style="border-left-color: var(--accent);">6. Lançar Despesa Externa (NF)</h2>
+                    <p class="text-gray-700 text-lg">Ferramenta para o Gestor registrar gastos externos que impactam a Linha Orçamentária.</p>
 
-                    <h3 class="text-2xl font-bold mt-6 mb-4">Botão de Ajuda Flutuante (Todos os Usuários)</h3>
-                    <p class="mb-4">Em qualquer tela, o botão flutuante **Consultar CGOs** (canto inferior direito do **sistema principal**) permite pesquisar rapidamente por códigos, descrições ou observações de CGOs ativos. Use-o para tirar dúvidas rápidas sobre a movimentação correta.</p>
-                     <p class="flex items-center mt-4">
-                        <span class="action-highlight mr-2" style="background: linear-gradient(135deg, #00D4AA, #0077B6); color: white; border: none;">Consultar CGOs</span>
-                        <i data-feather="help-circle" class="w-6 h-6 text-gray-600"></i>
+                    <h4 class="sub-section-title">Passo 6.1: Registro e Itens</h4>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li>Em <strong>Lançar Despesa (NF)</strong>, preencha <strong>Nº NF</strong>, <strong>Data NF</strong> e anexe o <strong>Comprovante (PDF/Imagem)</strong>.</li>
+                        <li>Adicione os itens da nota com <strong>Descrição</strong>, <strong>Quantidade</strong> e <strong>Valor Unitário</strong>.</li>
+                    </ul>
+                    <img src="nf.png" class="screenshot" alt="Formulário de Lançamento de Nota Fiscal, com campos de dados da nota e itens.">
+
+                    <h4 class="sub-section-title">Passo 6.2: Alocação Orçamentária e Conclusão</h4>
+                    <ul class="list-disc list-inside ml-4 text-gray-700 space-y-2">
+                        <li>Selecione a <strong>Linha Orçamentária</strong> para a qual o valor da NF será debitado.</li>
+                        <li>O sistema exibe a <strong>Simulação de Saldo Pós-Lançamento</strong> para esta linha.</li>
+                        <li>Clique em <span class="btn-style"><i data-feather="save" class="w-4 h-4 mr-1"></i> Salvar Lançamento de Despesa</span>.</li>
+                    </ul>
+                    <p class="alert-box mt-4">
+                        <i data-feather="calendar" class="w-5 h-5 inline-block -mt-1 mr-2"></i>
+                        <strong>Impacto no Realizado:</strong> Este valor será somado ao <strong>Realizado</strong> da Linha Orçamentária no mês correspondente à <strong>Data da NF</strong> (e não à data de lançamento).
                     </p>
                 </div>
 
             </div>
         </main>
-    </div>
-
-    <!-- ADDED: Botão Flutuante de Suporte/Índice 2 (Balão) -->
-    <button id="floatingSupportButton" title="Suporte e Ajuda Rápida" onclick="toggleSupportPanel()">
-        <i data-feather="message-circle" class="w-7 h-7"></i>
-    </button>
-
-    <!-- ADDED: Mini-Índice de Suporte (Mini-Index 2) -->
-    <div id="supportMiniIndex">
-        <h4 class="font-bold text-lg mb-3 border-b pb-2 text-gray-700">Central de Ajuda Rápida</h4>
-        <nav class="space-y-2">
-            <!-- Os links usam scrollToSection para scroll suave e o toggle para fechar o balão -->
-            <a href="#fluxo-geral" class="support-link" onclick="toggleSupportPanel(); scrollToSection(event)">
-                <i data-feather="repeat" class="w-4 h-4 mr-3"></i> Fluxo Geral (4 Etapas)
-            </a>
-            <a href="#gestor-aprovar" class="support-link" onclick="toggleSupportPanel(); scrollToSection(event)">
-                <i data-feather="shield" class="w-4 h-4 mr-3"></i> 3. Gestor: Aprovar
-            </a>
-            <a href="#prevencao-executar" class="support-link" onclick="toggleSupportPanel(); scrollToSection(event)">
-                <i data-feather="tool" class="w-4 h-4 mr-3"></i> 4. Prevenção: Executar
-            </a>
-            <!-- Este link pode ser alterado para o e-mail real da JP Tech Solutions -->
-            <a href="mailto:suporte@jptech.com.br" class="support-link bg-red-100 hover:bg-red-500 hover:text-white" target="_blank">
-                <i data-feather="mail" class="w-4 h-4 mr-3"></i> Falar com Suporte
-            </a>
-        </nav>
     </div>
 
     <!-- JavaScript para interatividade (Feather Icons e Scroll Spy simples) -->
@@ -511,8 +384,8 @@
             window.addEventListener('scroll', () => {
                 let current = '';
                 sections.forEach(section => {
-                    // Ajuste o offset para 1/3 da altura da tela
-                    const offset = window.innerHeight / 3;
+                    // Ajuste o offset para a altura do header + 40px
+                    const offset = 120;
                     const sectionTop = section.offsetTop - offset; 
                     
                     if (scrollY >= sectionTop) {
@@ -529,39 +402,22 @@
             });
         }
         
-        // ADDED: Função para alternar o Mini-Índice de Suporte (Mini-Index 2)
-        function toggleSupportPanel() {
-            const panel = document.getElementById('supportMiniIndex');
-            if (!panel) return;
-            
-            const isOpen = panel.classList.contains('open');
+        // Adiciona um listener para focar no primeiro link ao carregar a página
+        window.addEventListener('load', () => {
+            const firstLink = document.querySelector('.index-link');
+            if (firstLink) {
+                 // Rola suavemente para o início do conteúdo, com um pequeno offset.
+                const targetElement = document.querySelector(firstLink.getAttribute('href'));
+                if(targetElement) {
+                     window.scrollTo({
+                        top: targetElement.offsetTop - 100, 
+                        behavior: 'smooth'
+                    });
+                }
+                setActiveLink(firstLink);
+            }
+        });
 
-            if (isOpen) {
-                panel.classList.remove('open');
-                // Timeout para garantir que a animação termine antes de esconder
-                setTimeout(() => { panel.style.display = 'none'; }, 300); 
-            } else {
-                panel.style.display = 'block';
-                // Usa requestAnimationFrame para garantir que a transição ocorra
-                requestAnimationFrame(() => {
-                    panel.classList.add('open');
-                });
-            }
-        }
-        
-        // ADDED: Função para scroll suave (usada no mini-index)
-        function scrollToSection(event) {
-            event.preventDefault();
-            const targetId = event.currentTarget.getAttribute('href');
-            const targetElement = document.querySelector(targetId);
-            
-            if (targetElement) {
-                window.scrollTo({
-                    top: targetElement.offsetTop - 100, // Offset do header fixo
-                    behavior: 'smooth'
-                });
-            }
-        }
     </script>
 </body>
 </html>
